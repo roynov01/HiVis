@@ -4,27 +4,30 @@ Created on Sun Sep 15 13:28:30 2024
 
 @author: royno
 """
-# general libraries
+# General libraries
 import importlib
-# import types
 import warnings
 import sys
 import os
 import dill
 from tqdm import tqdm
 from copy import deepcopy
-# data libraries
-
+from subprocess import Popen, PIPE
+# Data libraries
 import json
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 import scanpy as sc
 import math
-# Image libraries
+# Plotting libraries
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib import colormaps
+import plotly.express as px
+import seaborn as sns
+from adjustText import adjust_text
+# Image processing libraries
 from PIL import Image
 import tifffile
 
@@ -37,6 +40,7 @@ HIGHRES_THRESH = 3000
 PAD_CONSTANT = 0.3
 # DEFAULT_COLOR = "lightgray"
 DEFAULT_COLOR ='None'
+chrome_path = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
 
 class ViziumHD:
     def __init__(self, path_input_fullres_image, path_input_data, path_output, name, properties: dict = None, on_tissue_only=True):
@@ -361,7 +365,7 @@ class ViziumHD:
             ax.imshow(self.image_cropped)
 
         if what: 
-            values = self[what]
+            values = self.get(what, cropped=True)
             if np.issubdtype(values.dtype, np.number):  # Filter values that are 0
                 mask = values > 0
             else:
@@ -397,11 +401,12 @@ class ViziumHD:
         return ax
     
     def hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,
-             save=False, figsize=(8,8), cmap=None, color="blue"):
+             save=False, figsize=(8,8), cmap=None, color="blue",reset_crop=True):
         
         title = what if title is None else title
-        self.crop() # resets adata_cropped to full image
-        to_plot = pd.Series(self[what])
+        if reset_crop:
+            self.crop() # resets adata_cropped to full image
+        to_plot = pd.Series(self.get(what, cropped=True))
         ax = plot_hist(to_plot,bins=bins,xlim=xlim,title=title,figsize=figsize,
                        cmap=cmap,color=color,ylab=ylab,xlab=xlab)            
         self.current_ax = ax
@@ -416,7 +421,7 @@ class ViziumHD:
             self.adata.obs.to_parquet(path.replace("_viziumHD.h5ad","_spots_metadata.parquet"),index=False)    
         return path
 
-    def aggregate(self, category):
+    def aggregate_sc(self, category):
         if self.sc:
             if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
                 return
@@ -424,32 +429,37 @@ class ViziumHD:
     def assign_clusters_from_sc(self):
         pass
     
-
-    
-    def __getitem__(self, what):
-        '''
-        Retrieves the values of the adata_cropped. to get full values, run self.crop() prior.
-        '''
+    def get(self, what, cropped=False):
+        ''''''
+        adata = self.adata_cropped if cropped else self.adata
         if isinstance(what, str): # easy acess to data or metadata arrays
-            if what in self.adata_cropped.obs.columns: # Metadata
-                return self.adata_cropped.obs[what].values
-            if what in self.adata_cropped.var.index: # A gene
-                return np.array(self.adata_cropped[:, what].X.todense().ravel()).flatten() 
-            if what.lower() in self.adata_cropped.obs.columns.str.lower(): 
-                return self.adata_cropped.obs[what.lower()].values
-            if self.organism == "mouse" and (what.lower().capitalize() in self.adata_cropped.var.index):
-                return np.array(self.adata_cropped[:, what.lower().capitalize()].X.todense().ravel()).flatten() 
-            if self.organism == "human" and (what.upper() in self.adata_cropped.var.index):
-                return np.array(self.adata_cropped[:, what.upper()].X.todense().ravel()).flatten() 
-            raise KeyError(f"[{what}] isn't in data or metadata")
+            if what in adata.obs.columns: # Metadata
+                return adata.obs[what].values
+            if what in adata.var.index: # A gene
+                return np.array(adata[:, what].X.todense().ravel()).flatten() 
+            if what in adata.var.columns: # Gene metadata
+                return adata.var[what].values
+            if what.lower() in adata.obs.columns.str.lower(): 
+                return adata.obs[what.lower()].values
+            if self.organism == "mouse" and (what.lower().capitalize() in adata.var.index):
+                return np.array(adata[:, what.lower().capitalize()].X.todense().ravel()).flatten() 
+            if self.organism == "human" and (what.upper() in adata.var.index):
+                return np.array(adata[:, what.upper()].X.todense().ravel()).flatten() 
+            if what.lower() in adata.var.columns.str.lower(): 
+                return adata.var[what.lower()].values
         else:
             copy = self.copy()
             copy.adata = copy.adata[what]
             copy.var, copy.obs = copy.adata.var, copy.adata.obs 
             copy.__init_img()
             return copy
+        
+    def __getitem__(self, what):
+        item = self.get(what, cropped=False)
+        if item is None:
+            raise KeyError(f"[{what}] isn't in data or metadatas")
+        return item
             
-
     def __str__(self):
         s = f"# {self.name} #\n\n"
         if hasattr(self, "organism"): s += f"\tOrganism: {self.organism}\n"
@@ -464,15 +474,21 @@ class ViziumHD:
         s = self.__str__()
         s += '\nobs: '
         s += ', '.join(list(self.adata.obs.columns))
+        
+        s += '\n\nvar: '
+        s += ', '.join(list(self.adata.var.columns))
+        
         return s
     
     def __delitem__(self, key):
         if isinstance(key, str):
             if key in self.adata.obs:
                 del self.adata.obs[key]
-                self.__init_img()
+            elif key in self.adata.var:
+                del self.adata.var[key]
             else:
                 raise KeyError(f"'{key}' not found in adata.obs")
+            self.__init_img()
         else:
             raise TypeError(f"Key must be a string, not {type(key).__name__}")
     
@@ -691,9 +707,87 @@ def set_axis_ticks(ax, length_in_pixels, adjusted_microns_per_pixel, axis='x', n
     else:
         raise ValueError("Axis must be 'x' or 'y'")
 
+def matnorm(df):
+    if isinstance(df, pd.core.series.Series):
+        return df.div(df.sum())
+    if isinstance(df, (np.ndarray, np.matrix)):
+        column_sums = df.sum(axis=0)
+        column_sums[column_sums == 0] = 1
+        return df / column_sums
+    if isinstance(df, pd.core.frame.DataFrame):
+        numeric_columns = df.select_dtypes(include='number')
+        column_sums = numeric_columns.sum(axis=0)
+        column_sums[column_sums == 0] = 1  # Avoid division by zero
+        normalized_df = numeric_columns.divide(column_sums, axis=1)
+        return normalized_df.astype(np.float32)
+    if isinstance(df, list):
+        return (pd.Series(df) / sum(df)).tolist()
+    else: # pandas
+        raise ValueError("df is not a list,numpy or a dataframe")
+        
+def open_html(html_file,chrome_path=chrome_path):
+    process = Popen(['cmd.exe', '/c', chrome_path, html_file], stdout=PIPE, stderr=PIPE)
+
+def scatter(df,x,y,save_path,text="gene",color=None,size=None,xlab=None,ylab=None,title=None,open_fig=True,legend_title=None):
+    if color:
+        if size:
+            legend_title = [color, size] if not legend_title else legend_title
+            fig = px.scatter(df, x=x, y=y,hover_data=[text],color=color,size=size, labels={color: legend_title[0],size: legend_title[1]})
+        else:
+            legend_title = color if not legend_title else legend_title
+            fig = px.scatter(df, x=x, y=y,hover_data=[text],color=color, labels={color: legend_title})
+    else:
+        fig = px.scatter(df, x=x, y=y,hover_data=[text],color=color,size=size)
+    fig.update_traces(marker_size=10, 
+        hoverinfo='text+x+y',
+        # text=df[text], 
+        mode='markers+text')
+    if legend_title is None:
+        legend_title = color
+    fig.update_layout(template="simple_white",
+        title=title,
+        xaxis_title=xlab,
+        yaxis_title=ylab,
+        title_font=dict(size=30, family="Arial", color="Black"),
+        xaxis_title_font=dict(size=24, family="Arial", color="Black"),
+        yaxis_title_font=dict(size=24, family="Arial", color="Black"))
+    fig.write_html(save_path) 
+    if open_fig:
+        open_html(save_path)    
+    
+def scatter_seaborn(df,x_col,y_col,genes=None,figsize=(8,8),size=10,legend=False,
+                    ax=None,xlab=None,ylab=None,out_path=None):
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, layout='constrained')
+    df['type'] = ""
+    
+    sns.scatterplot(data=df[df['type'] == ''], x=x_col, y=y_col,s=size,legend=legend,
+                    ax=ax,color="blue",edgecolor=None)
+    ax.axhline(y=0,color="k",linestyle="--")
+    if genes:
+        df.loc[df['gene'].isin(genes),"type"] = "selected"
+        subplot = df[df['type'] != '']
+        if not subplot.empty:
+            sns.scatterplot(data=subplot, x=x_col, y=y_col,color="red",
+                            s=size,legend=False,ax=ax,edgecolor="k")
+        texts = [ax.text(
+            subplot[x_col].iloc[i], 
+            subplot[y_col].iloc[i], 
+            subplot['gene'].iloc[i],
+            color="red",
+            fontsize=14,
+            ) for i in range(len(subplot))]
+        adjust_text(texts, arrowprops=dict(arrowstyle='-', color='black', lw=0.5),
+                    force_text=(0.6, 0.6))
+    
+    ax.set_xlabel(xlab, fontsize=14)
+    ax.set_ylabel(ylab, fontsize=14)
+    if out_path:
+        if not out_path.endswith(".png"):
+            out_path += ".png"
+        plt.savefig(out_path, format='png', dpi=300, bbox_inches='tight')
+    
+    return ax
+    
 
         
-    
-    
-    
-    
