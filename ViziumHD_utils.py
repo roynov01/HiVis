@@ -31,19 +31,59 @@ from adjustText import adjust_text
 from PIL import Image
 import tifffile
 
-Image.MAX_IMAGE_PIXELS = 1063425001 # Enable large images
-FULLRES_MAX_PLOT_SIZE = 2500 # in fullres pixels
+Image.MAX_IMAGE_PIXELS = 1063425001 # Enable large images loading
 POINTS_PER_INCH = 72
 MAX_BARS = 30 # in barplot
-FULLRES_THRESH = 800
-HIGHRES_THRESH = 3000
-PAD_CONSTANT = 0.3
-# DEFAULT_COLOR = "lightgray"
-DEFAULT_COLOR ='None'
-chrome_path = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
+FULLRES_THRESH = 1000 # in microns, below which, a full-res image will be plotted
+HIGHRES_THRESH = 3000 # in microns, below which, a high-res image will be plotted
+PAD_CONSTANT = 0.3 # padding of squares in scatterplot
+DEFAULT_COLOR ='None' # for plotting categorical
+chrome_path = r'C:\Program Files\Google\Chrome\Application\chrome.exe' # to open HTML plots
 
 class ViziumHD:
-    def __init__(self, path_input_fullres_image, path_input_data, path_output, name, properties: dict = None, on_tissue_only=True):
+    '''
+    A class for storage of VisiumHD data.
+    Data methods:
+        * add_mask() - assigns each spot a value based on mask (image)
+        * add_annotations() - assigns each spot a value based on annotations (geogson)
+        * find_markers() - runs differential gene expression analysis between two groups
+        * add_meta() - adds a vector to metadata (obs or var)
+        * update_meta() - renames metadata (obs or var)
+        * export_h5() - exports data and metadata s h5 file
+        * get() - get a vector of data or metadata (gene, obs or var)
+    plotting methods:
+        * plot_qc () - plots nUMI and mitochondrial %
+        * plot_spatial() - plots image and/or spatial maps of data or metadata 
+        * plot_hist() - histogram for numerical data or metadata, barplot for categorical
+        * save_fig() - saves a figure
+    general methods:
+        * save() - exports the instance as pickle
+        * loadViziumHD() - classmethod. loads instance from pickle file
+        * update() - updates the instance methods
+        * copy() - creates a copy of the instance
+        * head() - returns the head of the obs
+    dunder methods:
+        * del - deletes metadata
+        * getitem - get a vector of data or metadata (gene, obs or var)
+    '''
+    def __init__(self, path_input_fullres_image:str, path_input_data:str, path_output:str,
+                 name:str, properties: dict = None, on_tissue_only=True,min_reads_in_spot=1,
+                 min_reads_gene=10):
+        '''
+        - Loads images (fullres, highres, lowres)
+        - Loads data and metadata
+        - croppes the images based on the data
+        - initializes the connection from the data and metadata to the images coordinates
+        - performs basic QC (nUMI, mitochondrial %)
+        parameters:
+            * path_input_fullres_image - path for the fullres image
+            * path_input_data - folder with outs of the Visium. typically square_002um
+                                (with h5 files and with folders filtered_feature_bc_matrix, spatial)
+            * path_output - path where to save plots and files
+            * name - name of the instance
+            * properties - dict of properties, such as organism, organ, sample_id
+            * on_tissue_only - remove spots that are not classified as "on tissue"?
+        '''
         self.sc = None
         self.name, self.path_output, self.properties = name, path_output, properties if properties else {}
         properties = {} if properties is None else properties
@@ -53,7 +93,15 @@ class ViziumHD:
         
         if not os.path.exists(path_output):
             os.makedirs(path_output)
-            
+        
+        hires_image_path = path_input_data + "/spatial/tissue_hires_image.png"
+        lowres_image_path = path_input_data + "/spatial/tissue_lowres_image.png"
+        json_path = path_input_data + "/spatial/scalefactors_json.json"
+        metadata_path = path_input_data + "/spatial/tissue_positions.parquet"
+        
+        # validate paths of metadata and images
+        validate_exists([path_input_fullres_image,hires_image_path,lowres_image_path,json_path,metadata_path])
+        
         # load images
         print("[Loading images]")
         image_fullres = tifffile.imread(path_input_fullres_image)
@@ -63,31 +111,20 @@ class ViziumHD:
             axes_order.append(axes_order.pop(rgb_dim))  # Move the RGB dim to the last position
             image_fullres = image_fullres.transpose(axes_order)
         self.image_fullres = image_fullres
-        
-        hires_image_path = path_input_data + "/spatial/tissue_hires_image.png"
         self.image_highres = plt.imread(hires_image_path)
-        lowres_image_path = path_input_data + "/spatial/tissue_lowres_image.png"
         self.image_lowres = plt.imread(lowres_image_path)
         
-        
         # load json
-        json_path = path_input_data + "/spatial/scalefactors_json.json"
+        
         with open(json_path) as file:
             self.json = json.load(file)
         
         # load metadata      
-        print("[Loading metadata]")
-        metadata_path = path_input_data + "/spatial/tissue_positions.csv"
-        if not os.path.isfile(metadata_path):
-            metadata = pd.read_parquet(metadata_path.replace(".csv",".parquet"))
-            metadata.to_csv(metadata_path, index=False)
-        else:
-            metadata = pd.read_csv(metadata_path)
+        print("[Loading metadata]")        
+        metadata = pd.read_parquet(metadata_path)
         del metadata["array_row"]
         del metadata["array_col"]
         
-
-                
         # load data
         print("[Loading data]")
         with warnings.catch_warnings():
@@ -98,33 +135,57 @@ class ViziumHD:
         if on_tissue_only: # filter spots that are classified to be under tissue
             metadata = metadata.loc[metadata['in_tissue'] == 1,]
             self.adata = self.adata[self.adata.obs['in_tissue'] == 1]
-        del metadata["in_tissue"]    
+        del metadata["in_tissue"] 
+        
         # merge data and metadata
         metadata = metadata[~metadata.index.duplicated(keep='first')]
         metadata.set_index('barcode', inplace=True)
         self.adata.obs = self.adata.obs.join(metadata, how='left')
-        self.adata.obs["nUMI"] = np.array(self.adata.X.sum(axis=1).flatten())[0]
-                
+        
+        # crop images and initiates micron to pixel conversions for plotting
         self.__crop_img_permenent()
         self.__export_images(path_input_fullres_image, hires_image_path, lowres_image_path)
         
         self.adata.obs["pxl_col_in_lowres"] = self.adata.obs["pxl_col_in_fullres"] * self.json["tissue_lowres_scalef"]
         self.adata.obs["pxl_row_in_lowres"] = self.adata.obs["pxl_row_in_fullres"] * self.json["tissue_lowres_scalef"]
-
         self.adata.obs["pxl_col_in_highres"] = self.adata.obs["pxl_col_in_fullres"] * self.json["tissue_hires_scalef"]
         self.adata.obs["pxl_row_in_highres"] = self.adata.obs["pxl_row_in_fullres"] * self.json["tissue_hires_scalef"]
-
         self.adata.obs["um_x"] = self.adata.obs["pxl_col_in_fullres"] * self.json["microns_per_pixel"]
         self.adata.obs["um_y"] = self.adata.obs["pxl_row_in_fullres"] * self.json["microns_per_pixel"]
-        
         self.xlim_max = (self.adata.obs['um_x'].min(), self.adata.obs['um_x'].max())
         self.ylim_max = (self.adata.obs['um_y'].min(), self.adata.obs['um_y'].max())
         self.__init_img()
         
-        # Plot quality control - number of UMIs:
-        self.hist("nUMI", title="Number of UMIs", save=True, xlab="Number of unique reads")
+        # Quality control - number of UMIs and mitochondrial %
+        self.adata.obs["nUMI"] = np.array(self.adata.X.sum(axis=1).flatten())[0]
+        self.adata.var["nUMI"] = np.array(self.adata.X.sum(axis=0).flatten())[0]
+        mito_name_prefix = "MT-" if self.properties["organism"] == "human" else "mt-"
+        mito_genes = self.adata.var_names[self.adata.var_names.str.startswith(mito_name_prefix)].values
+        mito_sum = self.adata[:,self.adata.var.index.isin(mito_genes)].X.sum(axis=1).A1
+        mito_percentage = (mito_sum / self.adata.obs["nUMI"]) * 100
+        self.add_meta("mito_sum", mito_sum)
+        self.add_meta("mito_percent", mito_percentage)
+        
+        # plot QC
+        self.plot_qc(save=True)
+        
+        # filter low quality spots and lowly expressed genes
+        self.adata = self.adata[self.adata.obs["nUMI"] >= min_reads_in_spot, :]
+        self.adata = self.adata[:, self.adata.var["nUMI"] >= min_reads_gene]
+        self.__init_img()
+        
+    def plot_qc(self, save=False,figsize=(10, 5)):
+        '''plots basic QC (nUMI, mitochondrial %)'''
+        fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=figsize)
+        ax1 = self.plot_hist("mito_percent", title="Mito %", save=save, xlab="Mito %",ax=ax1)
+        ax2 = self.plot_hist("nUMI", title="Number of UMIs", save=save, xlab="Number of unique reads",ax=ax2)
+        plt.tight_layout()
+        plt.title("QC - before filtration")
+        if save:
+            self.save_fig(filename="QC", fig=fig)
     
     def __init_img(self):
+        '''resets the cropped image and updates the cropped adata'''
         self.image_cropped = None
         self.ax_current = None # stores the last plot that was made
         self.xlim_cur, self.pixel_x, self.ylim_cur, self.pixel_y = None, None, None, None
@@ -132,6 +193,11 @@ class ViziumHD:
         self.crop() # creates self.adata_cropped & self.image_cropped
         
     def __crop_img_permenent(self):
+        '''
+        crops the images, based on the coordinates from the metadata. 
+        shifts the metadata to start at x=0, y=0.
+        at first run, will save the cropped images.
+        '''
         pxl_col_in_fullres = self.adata.obs["pxl_col_in_fullres"].values
         pxl_row_in_fullres = self.adata.obs["pxl_row_in_fullres"].values
         
@@ -140,9 +206,7 @@ class ViziumHD:
         # Ensure the limits are within the image boundaries
         xlim_pixels_fullres = [max(0, xlim_pixels_fullres[0]), min(self.image_fullres.shape[1], xlim_pixels_fullres[1])]
         ylim_pixels_fullres = [max(0, ylim_pixels_fullres[0]), min(self.image_fullres.shape[0], ylim_pixels_fullres[1])]
-        # print(f"BEFORE:\n\t{self.image_fullres.shape}\n\t{self.image_highres.shape}\n\t{self.image_lowres.shape}\n" \
-        #       f"\t{self.adata.obs['pxl_col_in_fullres'].min()},{self.adata.obs['pxl_col_in_fullres'].max()}\n\t{self.adata.obs['pxl_row_in_fullres'].min()},{self.adata.obs['pxl_row_in_fullres'].max()}")
-        
+
         # Crop the full-resolution image
         self.image_fullres = self.image_fullres[ylim_pixels_fullres[0]:ylim_pixels_fullres[1],
                                                xlim_pixels_fullres[0]:xlim_pixels_fullres[1],:]
@@ -168,10 +232,9 @@ class ViziumHD:
         # Shift the metadata to the new poisition
         self.adata.obs["pxl_col_in_fullres"] = self.adata.obs["pxl_col_in_fullres"] - xlim_pixels_fullres[0]
         self.adata.obs["pxl_row_in_fullres"] = self.adata.obs["pxl_row_in_fullres"] - ylim_pixels_fullres[0]
-        # print(f"BEFORE:\n\t{self.image_fullres.shape}\n\t{self.image_highres.shape}\n\t{self.image_lowres.shape}\n" \
-        #       f"\t{self.adata.obs['pxl_col_in_fullres'].min()},{self.adata.obs['pxl_col_in_fullres'].max()}\n\t{self.adata.obs['pxl_row_in_fullres'].min()},{self.adata.obs['pxl_row_in_fullres'].max()}")
-    
+
     def __export_images(self, path_input_fullres_image, hires_image_path, lowres_image_path):
+        '''helper method for __crop_img_permenent(). saves cropped images'''
         print("[Saving cropped images]")
         images = [self.image_fullres, self.image_highres, self.image_lowres]
         paths = [path_input_fullres_image, hires_image_path, lowres_image_path]
@@ -184,7 +247,16 @@ class ViziumHD:
                 image = Image.fromarray(im)
                 image.save(save_path, format='TIFF')
     
-    def add_mask(self, mask_path, name, plot=True, cmap="Paired"):
+    def add_mask(self, mask_path:str, name:str, plot=True, cmap="Paired"):
+        '''
+        assigns each spot a value based on mask (image).
+        parameters:
+            * mask_path - path to mask image
+            * name - name of the mask (that will be called in the metadata)
+            * plot - plot the mask?
+            * cmap - colormap for plotting
+        '''
+        validate_exists(mask_path)
         mask_array = self.__import_mask(mask_path)
         if plot:
             self.__plot_mask(mask_array, cmap=cmap)
@@ -194,6 +266,7 @@ class ViziumHD:
         return mask_array
     
     def __plot_mask(self, mask_array, cmap):
+        '''helper method for add_mask(). plots the mask'''
         plt.figure(figsize=(8, 8))
         plt.imshow(mask_array, cmap=cmap)
         num_colors = len(np.unique(mask_array[~np.isnan(mask_array)]))
@@ -203,12 +276,14 @@ class ViziumHD:
         plt.show()
         
     def __import_mask(self, mask_path):
+        '''helper method for add_mask(). imports the mask'''
         print("[Importing mask]")
         mask = Image.open(mask_path)
         mask_array = np.array(mask)
         return mask_array
     
     def __assign_spots(self, mask_array, name):
+        '''helper method for add_mask(). assigns each spot a value from the mask'''
         def get_mask_value(mask_array, x, y):
             if (0 <= x < mask_array.shape[1]) and (0 <= y < mask_array.shape[0]):
                 return mask_array[y, x]
@@ -225,8 +300,14 @@ class ViziumHD:
         self.adata.obs[name] = self.adata.obs.progress_apply(
             get_spot_identity, axis=1)
         
-    def add_annotations(self, path, name):
-        '''Adds annotations made in Qupath (json), returns colormap that can be used as plot() cmap parameter'''
+    def add_annotations(self, path:str, name:str):
+        '''
+        Adds annotations made in Qupath (geojson)
+        parameters:
+            * path - path to geojson file
+            * name -  name of the annotation (that will be called in the metadata)
+        '''
+        validate_exists(path)
         annotations = gpd.read_file(path)
         if "classification" in annotations.columns:
             annotations[name] = [x["name"] for x in annotations["classification"]]
@@ -243,34 +324,127 @@ class ViziumHD:
         merged_obs = merged_obs[~merged_obs.index.duplicated(keep="first")]
         self.adata.obs = self.adata.obs.join(pd.DataFrame(merged_obs[[name]]),how="left")
         self.__init_img()
+    
         
-    def add_col(self, name, values):
-        if name in self.adata.obs.columns:
-            print(f"[{name}] allready present in adata.obs")
-            return
-        self.adata.obs[name] = values
+    def find_markers(self, column, group1, group2=None, method="wilcox"):
+        '''
+        Runs differential gene expression analysis between two groups.
+        Values will be saved in self.var: expression_mean, log2fc, pval
+        parameters:
+            * column - which column in obs has the groups classification
+            * group1 - specific value in the "column"
+            * group2 - specific value in the "column". 
+                       if None,will run agains all other values, and will be called "rest"
+            * method - either "wilcox" or "t_test"
+        '''
+        # Get the expression of the two groups
+        group1_exp = self.adata[self.adata.obs[column] == group1].copy()
+        group1_exp = group1_exp[group1_exp.X.sum(axis=1) > 1]  # delete empty spots
+        group1_exp.X = group1_exp.X / group1_exp.X.sum(axis=1).A1[:, None]  # matnorm
+        group1_exp = group1_exp.X.todense()
+        self.adata.var[group1] = group1_exp.mean(axis=0).A1  # save avarage expression of group1 to vars
+
+        if group2 is None:
+            group2_exp = self.adata[(self.adata.obs[column] != group1) & ~self.adata.obs[column].isna()].copy()
+            group2 = "rest"
+        else:
+            group2_exp = self.adata[self.adata.obs[column] == group2].copy()
+        group2_exp = group2_exp[group2_exp.X.sum(axis=1) > 1]  # delete empty spots
+        group2_exp.X = group2_exp.X / group2_exp.X.sum(axis=1).A1[:, None]  # matnorm
+        group2_exp = group2_exp.X.todense()
+        self.adata.var[group2] = group2_exp.mean(axis=0).A1  # save avarage expression of group2 to vars
+        
+        # Calculate mean expression in each group and log2(group1/group2)
+        self.adata.var[f"expression_mean_{column}"] = self.adata.var[[group1,group2]].mean(axis=1)
+        pn = self.adata.var[f"expression_mean_{column}"][self.adata.var[f"expression_mean_{column}"]>0].min()
+        self.adata.var[f"log2fc_{column}"] = (self.adata.var[group1] + pn) / (self.adata.var[group2] + pn)
+        self.adata.var[f"log2fc_{column}"] = np.log2(self.adata.var[f"log2fc_{column}"])  
+        
+        # Wilcoxon rank-sum test
+        self.adata.var[f"pval_{column}"] = np.nan
+        for j, gene in enumerate(tqdm(self.adata.var.index, desc=f"Running wilcoxon on [{self.name}][{column}]")):
+            if (self.adata.var.loc[gene,group1] == 0) and (self.adata.var.loc[gene,group2] == 0):
+                p_value = np.nan
+            else:
+                cur_gene_group1 = group1_exp[:,j]
+                cur_gene_group2 = group2_exp[:,j]
+                if method == "wilcox":
+                    from scipy.stats import mannwhitneyu
+                    _, p_value = mannwhitneyu(cur_gene_group1, cur_gene_group2, alternative="two-sided")
+                elif method == "t_test":
+                    from scipy.stats import ttest_ind
+                    _, p_value = ttest_ind(cur_gene_group1, cur_gene_group2, alternative="two-sided")
+            self.adata.var.loc[gene,f"pval_{column}"] = p_value
+    
+    def add_meta(self, name:str, values, type_="obs"):
+        '''
+        adds a vector to metadata (obs or var)
+        parameters:
+            * name - name of metadata
+            * values (array like) - values to add
+            * type_ - either "obs" or "var"
+        '''
+        if type_ == "obs":
+            if name in self.adata.obs.columns:
+                raise ValueError(f"[{name}] allready present in adata.obs")
+            self.adata.obs[name] = values
+        elif type_ == "var":
+            if name in self.adata.var.columns:
+                raise ValueError(f"[{name}] allready present in adata.var")
+            self.adata.var[name] = values
         self.__init_img()
     
-    def update_meta(self, name, values):
-        if name not in self.adata.obs.columns:
-            raise ValueError(f"No metadata called [{name}]")
-        self.adata.obs[name] = self.adata.obs[name].replace(values)
+    def update_meta(self, name:str, values:dict, type_="obs"):
+        '''
+        updates values in metadata (obs or var)
+        parameters:
+            * name - name of metadata
+            * values - dict, {old_value:new_value}
+            * type_ - either "obs" or "var"
+        '''
+        if type_ == "obs":
+            if name not in self.adata.obs.columns:
+                raise ValueError(f"No metadata called [{name}]")
+            if pd.api.types.is_categorical_dtype(self.adata.obs[name]):
+                self.adata.obs[name] = self.adata.obs[name].cat.rename_categories(values)
+            else:
+                self.adata.obs[name] = self.adata.obs[name].replace(values)
+        elif type_ == "var":
+            if name not in self.adata.var.columns:
+                raise ValueError(f"No metadata called [{name}]")   
+            if pd.api.types.is_categorical_dtype(self.adata.var[name]):
+                self.adata.var[name] = self.adata.var[name].cat.rename_categories(values)
+            else:
+                self.adata.var[name] = self.adata.var[name].replace(values)
         self.__init_img()
+        
      
-    def save_fig(self, filename, ax=None, open_file=False, format='png', dpi=300):
-        if ax is None:
-            if self.current_ax is None:
-                print(f"No ax present in {self.name}")
-                return
-            ax = self.current_ax
-        fig = ax.get_figure()
-        path = f"{self.path_output}/{filename}.png"
-        fig.savefig(path, format='png', dpi=300, bbox_inches='tight')
+    def save_fig(self, filename:str, fig=None, ax=None, open_file=False, format='png', dpi=300):
+        '''
+        saves a figure or ax. 
+        parameters:
+            * filename - name of plot
+            * fig (optional) - plt.Figure object to save.
+            * ax - ax to save. if not passed, will use self.current_ax
+            * open_file - open the file?
+            * format - format of file
+        '''
+        if fig is None:
+            if ax is None:
+                if self.current_ax is None:
+                    print(f"No ax present in {self.name}")
+                    return
+                ax = self.current_ax
+            fig = ax.get_figure()
+        path = f"{self.path_output}/{self.name}_{filename}.{format}"
+        fig.savefig(path, format=format, dpi=dpi, bbox_inches='tight')
         if open_file:
             os.startfile(path)
 
     def crop(self, xlim=None, ylim=None):
-        '''Crops the image and adata based on xlim and ylim in microns.
+        '''
+        Crops the images and adata based on xlim and ylim in microns. 
+        saves it in self.adata_cropped and self.image_cropped
         xlim, ylim: tuple of two values, in microns
         '''
         microns_per_pixel = self.json['microns_per_pixel'] 
@@ -335,7 +509,8 @@ class ViziumHD:
     
         return xlim, ylim, adjusted_microns_per_pixel 
     
-    def __get_dot_size(self, adjusted_microns_per_pixel):
+    def __get_dot_size(self, adjusted_microns_per_pixel:float):
+        '''gets the size of spots, depending on adjusted_microns_per_pixel'''
         bin_size_pixels = self.json['bin_size_um'] / adjusted_microns_per_pixel 
         dpi = plt.gcf().get_dpi()
         # dpi = mpl.rcParams['figure.dpi']
@@ -343,12 +518,23 @@ class ViziumHD:
         dot_size = bin_size_pixels * points_per_pixels 
         return dot_size
         
-    
-    def plot(self, what=None, image=True, title=None, cmap="viridis",
+    def plot_spatial(self, what=None, image=True, ax=None, title=None, cmap="viridis", 
                   legend=True, alpha=1, figsize=(8, 8), save=False,
                   xlim=None, ylim=None, legend_title=None, axis_labels=True, pad=False):
         '''
-        limits are in microns
+        plots the image, and/or data/metadata (spatial plot)
+        parameters:
+            * what - what to plot. can be metadata (obs/var colnames or a gene)
+            * image - plot image?
+            * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
+            * cmap - colorbar to use
+            * title, legend_title, axis_labels - strings
+            * legend - show legend?
+            * xlim - two values, in microns
+            * ylim - two values, in microns
+            * pad - scale the size of dots to be smaller
+            * alpha - transparency of scatterplot. value between 0 and 1
+            * save - save the image?
         '''
         title = what if title is None else title
         if legend_title is None:
@@ -358,7 +544,9 @@ class ViziumHD:
         size = self.__get_dot_size(adjusted_microns_per_pixel)
         if pad:
             size *= PAD_CONSTANT
-        fig, ax = plt.subplots(figsize=figsize)
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+
 
         if image: # Plot image
             # ax.imshow(self.image_cropped, extent=[xlim[0], xlim[1], ylim[1], ylim[0]])
@@ -387,6 +575,8 @@ class ViziumHD:
         if axis_labels:
             ax.set_xlabel("Spatial 1 (µm)")
             ax.set_ylabel("Spatial 2 (µm)")
+        if title:
+            ax.set_title(title)    
             
         height, width = self.image_cropped.shape[:2]  
         set_axis_ticks(ax, width, adjusted_microns_per_pixel, axis='x')
@@ -400,37 +590,59 @@ class ViziumHD:
             self.save_fig(f"{what}_SPATIAL")
         return ax
     
-    def hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,
-             save=False, figsize=(8,8), cmap=None, color="blue",reset_crop=True):
-        
+    def plot_hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,ax=None,
+             save=False, figsize=(8,8), cmap=None, color="blue"):
+        '''
+        plots histogram of data or metadata. if categorical, will plot barplot
+        parameters:
+            * what - what to plot. can be metadata (obs/var colnames or a gene)
+            * bins - number of bins of the histogram
+            * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
+            * cmap - colorbar to use. overrides the color argument for barplot
+            * color - color of the histogram
+            * title, xlab, ylab - strings
+            * xlim - two values, where to crop the x axis
+            * save - save the image?
+        '''
         title = what if title is None else title
-        if reset_crop:
-            self.crop() # resets adata_cropped to full image
+        self.crop() # resets adata_cropped to full image
         to_plot = pd.Series(self.get(what, cropped=True))
-        ax = plot_hist(to_plot,bins=bins,xlim=xlim,title=title,figsize=figsize,
-                       cmap=cmap,color=color,ylab=ylab,xlab=xlab)            
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        ax = plot_histogram(to_plot,bins=bins,xlim=xlim,title=title,figsize=figsize,
+                       cmap=cmap,color=color,ylab=ylab,xlab=xlab,ax=ax)            
         self.current_ax = ax
         if save:
             self.save_fig(f"{what}_HIST")
         return ax
             
-    def export_h5(self, save_parquet=True):
-        path = f"{self.path_output}/{self.name}_viziumHD.h5ad"
+    def export_h5(self, path=None):
+        '''exports the adata. can also save the obs as parquet'''
+        if not path:
+            path = f"{self.path_output}/{self.name}_viziumHD.h5ad"
         self.adata.write(path)
-        if save_parquet:
-            self.adata.obs.to_parquet(path.replace("_viziumHD.h5ad","_spots_metadata.parquet"),index=False)    
         return path
 
-    def aggregate_sc(self, category):
+    def sc_create(self, category):
         if self.sc:
             if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
                 return
+        params = []
+        self.sc = SingleCell(self, params)
 
-    def assign_clusters_from_sc(self):
+    def sc_transfer_meta(self, what:str):
+        '''transfers metadata assignment from the single-cell to the spots'''
         pass
     
     def get(self, what, cropped=False):
-        ''''''
+        '''
+        get a vector from data (a gene) or metadata (from obs or var). or subset the object.
+        parameters:
+            * what - if string, will get data or metadata. 
+                     else, will return a new ViziumHD object that is spliced.
+                     the splicing is passed to the self.adata
+            * cropped - get the data from the adata_cropped after crop() or plotting methods?
+        '''
         adata = self.adata_cropped if cropped else self.adata
         if isinstance(what, str): # easy acess to data or metadata arrays
             if what in adata.obs.columns: # Metadata
@@ -450,41 +662,40 @@ class ViziumHD:
         else:
             copy = self.copy()
             copy.adata = copy.adata[what]
-            copy.var, copy.obs = copy.adata.var, copy.adata.obs 
             copy.__init_img()
             return copy
         
     def __getitem__(self, what):
+        '''get a vector from data (a gene) or metadata (from obs or var). or subset the object.'''
         item = self.get(what, cropped=False)
         if item is None:
             raise KeyError(f"[{what}] isn't in data or metadatas")
         return item
             
     def __str__(self):
-        s = f"# {self.name} #\n\n"
+        s = f"# {self.name} #\n"
         if hasattr(self, "organism"): s += f"\tOrganism: {self.organism}\n"
         if hasattr(self, "organ"): s += f"\tOrgan: {self.organ}\n"
         if hasattr(self, "sample_id"): s += f"\tID: {self.sample_id}\n"
         s += f"\tSize: {self.adata.shape[0]} x {self.adata.shape[1]}\n"
+        s += '\nobs: '
+        s += ', '.join(list(self.adata.obs.columns))
+        s += '\n\nvar: '
+        s += ', '.join(list(self.adata.var.columns))
         if self.sc is not None:
             s += f"\tSingle cells shape: {self.sc.adata.shape[0]} x {self.sc.adata.shape[1]}"
         return s
     
     def __repr__(self):
-        s = self.__str__()
-        s += '\nobs: '
-        s += ', '.join(list(self.adata.obs.columns))
-        
-        s += '\n\nvar: '
-        s += ', '.join(list(self.adata.var.columns))
-        
+        s = f"ViziumHD[{self.name}]"
         return s
     
     def __delitem__(self, key):
+        '''deletes metadata'''
         if isinstance(key, str):
             if key in self.adata.obs:
                 del self.adata.obs[key]
-            elif key in self.adata.var:
+            elif key in self.adata.var.columns:
                 del self.adata.var[key]
             else:
                 raise KeyError(f"'{key}' not found in adata.obs")
@@ -500,6 +711,7 @@ class ViziumHD:
         return self.adata.shape
     
     def update(self):
+        '''updates the methods in the instance'''
         update_instance_methods(self)
         self.__init_img()
         # update also the sc
@@ -510,6 +722,7 @@ class ViziumHD:
         return deepcopy(self)
     
     def save(self, path=None):
+        '''saves the instance in pickle format'''
         if not path:
             path = f"{self.path_output}/{self.name}.pkl"
         else:
@@ -521,10 +734,12 @@ class ViziumHD:
 
     @classmethod
     def load_ViziumHD(cls, filename, directory=''):
+        '''loads an instance from a pickle format'''
         if not filename.endswith(".pkl"):
             filename = filename + ".pkl"
         if directory:
             filename = f"{directory}/{filename}"
+        validate_exists(filename)
         with open(filename, "rb") as f:
             instance = dill.load(f)
         return instance
@@ -532,13 +747,18 @@ class ViziumHD:
 
     
 class SingleCell:
-     def __init__(self, ):
+     def __init__(self, vizium_instance):
+         self.viz = vizium_instance
          self.adata = None
+         self.path_output = self.viz.path_output + "/single_cell"
 
+     def __init_img(self):
+         pass
      
-     def plot_spatial(self, column, cells=False, celltypes=None, image=None, title=None, cmap=None, 
-                   legend=False, alpha=True, figsize=(8, 8), 
-                   xlim=None, ylim=None):
+     def crop(self):
+         pass
+     
+     def plot_spatial(self, ):
          pass
      
      def plot_cells(self, column, celltypes=None, image=None, title=None, cmap=None, 
@@ -551,17 +771,48 @@ class SingleCell:
               figsize=(8,8),file_type='png',legend_loc='right margin'):
          pass
      
+     def plot_hist(self):
+         pass
+     
      
      def export_h5(self, path=None):
-         pass
+         if not path:
+             path = f"{self.path_output}/{self.name}_viziumHD.h5ad"
+         self.adata.write(path)
+         return path
     
      @property
      def shape(self):
          return self.adata.shape
      
-     def copy(self):
-         return deepcopy(self)
-        
+     def __str__(self):
+         s = f"# single-cells # {self.viz.name} #\n"
+         s += f"\tSize: {self.adata.shape[0]} x {self.adata.shape[1]}\n"
+         s += '\nobs: '
+         s += ', '.join(list(self.adata.obs.columns))
+         s += '\n\nvar: '
+         s += ', '.join(list(self.adata.var.columns))
+         return s
+     
+     def __repr__(self):
+         s = f"SingleCell[{self.viz.name}]"
+         return s
+     
+     def __delitem__(self, key):
+         '''deletes metadata'''
+         if isinstance(key, str):
+             if key in self.adata.obs:
+                 del self.adata.obs[key]
+             elif key in self.adata.var:
+                 del self.adata.var[key]
+             else:
+                 raise KeyError(f"'{key}' not found in adata.obs")
+             self.__init_img()
+         else:
+             raise TypeError(f"Key must be a string, not {type(key).__name__}")
+     
+     def head(self, n=5):
+         return self.adata.obs.head(n)   
         
 def update_instance_methods(instance):
     '''reloads the methods in an instance'''
@@ -586,10 +837,12 @@ def update_instance_methods(instance):
                 setattr(instance.__class__, dunder_method, attr)
    
 
-def plot_hist(values, bins=10, show_zeroes=False, xlim=None, title=None, figsize=(8,8), 
-              cmap=None, color="blue", ylab="Count",xlab=None):
+def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, figsize=(8,8), 
+              cmap=None, color="blue", ylab="Count",xlab=None,ax=None):
     '''values: pd.Series'''
-    fig, ax = plt.subplots(figsize=figsize)
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, layout='constrained')
 
     if np.issubdtype(values.dtype, np.number):
         if not show_zeroes:
@@ -789,5 +1042,21 @@ def scatter_seaborn(df,x_col,y_col,genes=None,figsize=(8,8),size=10,legend=False
     
     return ax
     
-
-        
+def validate_exists(file_path):
+    if isinstance(file_path, (list, tuple)):
+        for path in file_path:
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"No such file or directory:\n\t{path}")
+    else:
+         if not os.path.exists(file_path):
+             raise FileNotFoundError(f"No such file or directory:\n\t{file_path}")    
+             
+def fisher_method(pvalues):
+    from scipy.stats import chi2
+    pvalues = pvalues.dropna()
+    k = len(pvalues)
+    if k == 0:
+        return np.nan
+    chi_stat = -2 * np.sum(np.log(pvalues))
+    p_combined = 1 - chi2.cdf(chi_stat, 2 * k)
+    return p_combined
