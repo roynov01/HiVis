@@ -315,18 +315,21 @@ class ViziumHD:
             annotations[name] = annotations.index
         del annotations["id"]
         del annotations["objectType"]
-
+        if name in self.adata.obs.columns:
+            del self.adata.obs[name]
         obs = gpd.GeoDataFrame(self.adata.obs, 
               geometry=gpd.points_from_xy(self.adata.obs["pxl_col_in_fullres"],
                                           self.adata.obs["pxl_row_in_fullres"]))        
         
         merged_obs = gpd.sjoin(obs,annotations,how="left",predicate="within")
         merged_obs = merged_obs[~merged_obs.index.duplicated(keep="first")]
+        
         self.adata.obs = self.adata.obs.join(pd.DataFrame(merged_obs[[name]]),how="left")
         self.__init_img()
     
         
-    def find_markers(self, column, group1, group2=None, method="wilcox"):
+    def find_markers(self, column, group1, group2=None, umi_thresh=1,
+                     method="wilcox",alternative="two-sided",inplace=False):
         '''
         Runs differential gene expression analysis between two groups.
         Values will be saved in self.var: expression_mean, log2fc, pval
@@ -336,45 +339,13 @@ class ViziumHD:
             * group2 - specific value in the "column". 
                        if None,will run agains all other values, and will be called "rest"
             * method - either "wilcox" or "t_test"
+            * alternative - {"two-sided", "less", "greater"}
+            * umi_thresh - use only spots with more UMIs than this number
+            * inplace - modify the adata.var with log2fc, pval and expression columns?
         '''
-        # Get the expression of the two groups
-        group1_exp = self.adata[self.adata.obs[column] == group1].copy()
-        group1_exp = group1_exp[group1_exp.X.sum(axis=1) > 1]  # delete empty spots
-        group1_exp.X = group1_exp.X / group1_exp.X.sum(axis=1).A1[:, None]  # matnorm
-        group1_exp = group1_exp.X.todense()
-        self.adata.var[group1] = group1_exp.mean(axis=0).A1  # save avarage expression of group1 to vars
-
-        if group2 is None:
-            group2_exp = self.adata[(self.adata.obs[column] != group1) & ~self.adata.obs[column].isna()].copy()
-            group2 = "rest"
-        else:
-            group2_exp = self.adata[self.adata.obs[column] == group2].copy()
-        group2_exp = group2_exp[group2_exp.X.sum(axis=1) > 1]  # delete empty spots
-        group2_exp.X = group2_exp.X / group2_exp.X.sum(axis=1).A1[:, None]  # matnorm
-        group2_exp = group2_exp.X.todense()
-        self.adata.var[group2] = group2_exp.mean(axis=0).A1  # save avarage expression of group2 to vars
-        
-        # Calculate mean expression in each group and log2(group1/group2)
-        self.adata.var[f"expression_mean_{column}"] = self.adata.var[[group1,group2]].mean(axis=1)
-        pn = self.adata.var[f"expression_mean_{column}"][self.adata.var[f"expression_mean_{column}"]>0].min()
-        self.adata.var[f"log2fc_{column}"] = (self.adata.var[group1] + pn) / (self.adata.var[group2] + pn)
-        self.adata.var[f"log2fc_{column}"] = np.log2(self.adata.var[f"log2fc_{column}"])  
-        
-        # Wilcoxon rank-sum test
-        self.adata.var[f"pval_{column}"] = np.nan
-        for j, gene in enumerate(tqdm(self.adata.var.index, desc=f"Running wilcoxon on [{self.name}][{column}]")):
-            if (self.adata.var.loc[gene,group1] == 0) and (self.adata.var.loc[gene,group2] == 0):
-                p_value = np.nan
-            else:
-                cur_gene_group1 = group1_exp[:,j]
-                cur_gene_group2 = group2_exp[:,j]
-                if method == "wilcox":
-                    from scipy.stats import mannwhitneyu
-                    _, p_value = mannwhitneyu(cur_gene_group1, cur_gene_group2, alternative="two-sided")
-                elif method == "t_test":
-                    from scipy.stats import ttest_ind
-                    _, p_value = ttest_ind(cur_gene_group1, cur_gene_group2, alternative="two-sided")
-            self.adata.var.loc[gene,f"pval_{column}"] = p_value
+        df = find_markers(self.adata,column, group1, group2,umi_thresh,
+                     method=method,alternative=alternative,inplace=inplace)
+        return df
     
     def add_meta(self, name:str, values, type_="obs"):
         '''
@@ -662,6 +633,7 @@ class ViziumHD:
         else:
             copy = self.copy()
             copy.adata = copy.adata[what]
+            copy.name += "_subset"
             copy.__init_img()
             return copy
         
@@ -873,6 +845,57 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
     return ax
 
 
+def plot_pie(series, figsize=(4,4),title=None,ax=None,cmap="Set1",capitalize=True):
+    from matplotlib.patches import Circle
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, layout='constrained')
+        
+    counts = series.value_counts()
+    categories = counts.index
+    if capitalize:
+        categories = categories.str.capitalize()
+    values = counts.values
+
+    if isinstance(cmap, dict):
+        if capitalize:
+            cmap = {k.capitalize(): v for k, v in cmap.items()}
+        colors = [cmap[category] for category in categories]
+    else:
+        colors = get_colors(values,cmap=cmap)
+
+    wedges, texts = ax.pie(values,
+        labels=values,          # Display counts as labels
+        labeldistance=1.05,      # Position labels outside the pie
+        startangle=90,          # Rotate pie chart for better orientation
+        colors=colors)
+    circle = Circle((0, 0), 0.5, color='white', zorder=2) 
+    ax.add_artist(circle)
+    handles = []
+    for w, category in zip(wedges, categories):
+        facecolor = w.get_facecolor()
+        handles.append(
+            plt.Line2D([0], [0],
+                marker='o',
+                color=facecolor,
+                label=category,
+                markersize=15,
+                linestyle='None'))
+
+    legend = ax.legend(
+        handles=handles,
+        title=title,
+        loc='center',
+        bbox_to_anchor=(0.5, 0.5),
+        bbox_transform=ax.transAxes,
+        frameon=False)
+    legend.set_zorder(3)
+
+    ax.axis('equal')  # Ensure pie chart is a circle
+    if title is not None:
+        ax.set_title(title)
+    return ax
+
 def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
                    cmap='viridis', figsize=(8, 8), alpha=1, legend_title=None, ax=None):
     if ax is None:
@@ -1008,7 +1031,7 @@ def scatter(df,x,y,save_path,text="gene",color=None,size=None,xlab=None,ylab=Non
     if open_fig:
         open_html(save_path)    
     
-def scatter_seaborn(df,x_col,y_col,genes=None,figsize=(8,8),size=10,legend=False,
+def scatter_seaborn(df,x_col,y_col,genes=None,text=True,figsize=(8,8),size=10,legend=False,
                     ax=None,xlab=None,ylab=None,out_path=None):
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
@@ -1023,16 +1046,16 @@ def scatter_seaborn(df,x_col,y_col,genes=None,figsize=(8,8),size=10,legend=False
         if not subplot.empty:
             sns.scatterplot(data=subplot, x=x_col, y=y_col,color="red",
                             s=size,legend=False,ax=ax,edgecolor="k")
-        texts = [ax.text(
-            subplot[x_col].iloc[i], 
-            subplot[y_col].iloc[i], 
-            subplot['gene'].iloc[i],
-            color="red",
-            fontsize=14,
-            ) for i in range(len(subplot))]
-        adjust_text(texts, arrowprops=dict(arrowstyle='-', color='black', lw=0.5),
-                    force_text=(0.6, 0.6))
-    
+            if text:
+                texts = [ax.text(
+                    subplot[x_col].iloc[i], 
+                    subplot[y_col].iloc[i], 
+                    subplot['gene'].iloc[i],
+                    color="red",
+                    fontsize=14,
+                    ) for i in range(len(subplot))]
+                adjust_text(texts, arrowprops=dict(arrowstyle='-', color='black', lw=0.5),
+                            force_text=(0.6, 0.6),ax=ax)
     ax.set_xlabel(xlab, fontsize=14)
     ax.set_ylabel(ylab, fontsize=14)
     if out_path:
@@ -1051,12 +1074,110 @@ def validate_exists(file_path):
          if not os.path.exists(file_path):
              raise FileNotFoundError(f"No such file or directory:\n\t{file_path}")    
              
-def fisher_method(pvalues):
-    from scipy.stats import chi2
-    pvalues = pvalues.dropna()
-    k = len(pvalues)
-    if k == 0:
-        return np.nan
-    chi_stat = -2 * np.sum(np.log(pvalues))
-    p_combined = 1 - chi2.cdf(chi_stat, 2 * k)
-    return p_combined
+             
+             
+def find_markers(adata, column, group1, group2=None, umi_thresh=0,
+                 method="wilcox",alternative="two-sided",inplace=False):
+    '''
+    Runs differential gene expression analysis between two groups.
+    Values will be saved in self.var: expression_mean, log2fc, pval
+    parameters:
+        * column - which column in obs has the groups classification
+        * group1 - specific value in the "column"
+        * group2 - specific value in the "column". 
+                   if None,will run agains all other values, and will be called "rest"
+        * method - either "wilcox" or "t_test"
+        * alternative - {"two-sided", "less", "greater"}
+        * umi_thresh - use only spots with more UMIs than this number
+        * inplace - modify the adata.var with log2fc, pval and expression columns?
+    '''
+    df = adata.var.copy()
+        
+    # Get the expression of the two groups
+    group1_exp = adata[adata.obs[column] == group1].copy()
+    group1_exp = group1_exp[group1_exp.X.sum(axis=1) > umi_thresh]  # delete low quality spots
+    print(f'normilizing "{group1}" spots')
+    group1_exp.X = group1_exp.X / group1_exp.X.sum(axis=1).A1[:, None]  # matnorm
+    group1_exp = group1_exp.X.todense()
+    df[group1] = group1_exp.mean(axis=0).A1  # save avarage expression of group1 to vars
+    
+    # df[group1 + "_med"] = np.median(group1_exp, axis=0).A1
+    
+    if group2 is None:
+        group2_exp = adata[(adata.obs[column] != group1) & ~adata.obs[column].isna()].copy()
+        group2 = "rest"
+    else:
+        group2_exp = adata[adata.obs[column] == group2].copy()
+    group2_exp = group2_exp[group2_exp.X.sum(axis=1) > umi_thresh]  # delete empty spots
+
+    print(f'normilizing "{group2}" spots')
+    group2_exp.X = group2_exp.X / group2_exp.X.sum(axis=1).A1[:, None]  # matnorm
+    group2_exp = group2_exp.X.todense()
+    df[group2] = group2_exp.mean(axis=0).A1  # save avarage expression of group2 to vars
+    # df[group2 + "_med"] = np.median(group2_exp, axis=0).A1
+    # df[group2+"_med"] = group2_exp.median(axis=0).A1  
+    print(f"Number of spots in group1: {group1_exp.shape}, in group2: {group2_exp.shape}")
+    # Calculate mean expression in each group and log2(group1/group2)
+    df[f"expression_mean_{column}"] = df[[group1,group2]].mean(axis=1)
+    pn = df[f"expression_mean_{column}"][df[f"expression_mean_{column}"]>0].min()
+    df[f"log2fc_{column}"] = (df[group1] + pn) / (df[group2] + pn)
+    df[f"log2fc_{column}"] = np.log2(df[f"log2fc_{column}"])  
+    
+    # df[f"log2fc_med_{column}"] = (df[group1+"_med"] + pn) / (df[group2+"_med"] + pn)
+    # df[f"log2fc_med_{column}"] = np.log2(df[f"log2fc_med_{column}"]) 
+    
+    # Wilcoxon rank-sum test
+    df[f"pval_{column}"] = np.nan
+    for j, gene in enumerate(tqdm(df.index, desc=f"Running wilcoxon on [{column}]")):
+        if (df.loc[gene,group1] == 0) and (df.loc[gene,group2] == 0):
+            p_value = np.nan
+        else:
+            cur_gene_group1 = group1_exp[:,j]
+            cur_gene_group2 = group2_exp[:,j]
+            if method == "wilcox":
+                from scipy.stats import mannwhitneyu
+                _, p_value = mannwhitneyu(cur_gene_group1, cur_gene_group2, alternative=alternative)
+            elif method == "t_test":
+                from scipy.stats import ttest_ind
+                _, p_value = ttest_ind(cur_gene_group1, cur_gene_group2, alternative=alternative)
+        df.loc[gene,f"pval_{column}"] = p_value
+    if inplace:
+        adata.var = df.copy()
+    return df
+
+def p_adjust(pvals, method="fdr_bh"):
+    from statsmodels.stats.multitest import multipletests
+    if isinstance(pvals, (list, np.ndarray)):
+        pvals = pd.Series(pvals)
+    elif not isinstance(pvals, pd.Series):
+        raise TypeError("Input should be a list, numpy array, or pandas Series.")
+
+    # Identify non-NaN indices and values
+    non_nan_mask = pvals.notna()
+    pvals_non_nan = pvals[non_nan_mask]
+
+    # Apply BH correction on non-NaN p-values
+    _, qvals_corrected, _, _ = multipletests(pvals_non_nan, method=method)
+    
+    # Create a Series with NaNs in original places and corrected values
+    qvals = pd.Series(np.nan, index=pvals.index)
+    qvals[non_nan_mask] = qvals_corrected
+
+    # Return qvals in the same format as input
+    if isinstance(pvals, pd.Series):
+        return qvals
+    elif isinstance(pvals, np.ndarray):
+        return qvals.values
+    else:
+        return qvals.tolist()
+
+
+# def fisher_method(pvalues):
+#     from scipy.stats import chi2
+#     pvalues = pvalues.dropna()
+#     k = len(pvalues)
+#     if k == 0:
+#         return np.nan
+#     chi_stat = -2 * np.sum(np.log(pvalues))
+#     p_combined = 1 - chi2.cdf(chi_stat, 2 * k)
+#     return p_combined
