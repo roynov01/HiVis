@@ -20,7 +20,7 @@ from subprocess import Popen, PIPE
 # from matplotlib import colormaps
 
 
-
+POINTS_PER_INCH = 72
 MAX_BARS = 30 # in barplot
 PAD_CONSTANT = 0.3 # padding of squares in scatterplot
 DEFAULT_COLOR ='None' # for plotting categorical
@@ -41,17 +41,31 @@ class PlotVizium:
             * open_file - open the file?
             * format - format of file
         '''
+        path = f"{self.main.path_output}/{self.main.name}_{filename}.{format}"
+        if isinstance(fig, pd.DataFrame):
+            fig.to_csv(path.replace(".png",".csv"))
+            return path
         if fig is None:
             if ax is None:
                 if self.current_ax is None:
-                    raise ValueError(f"No ax present in {self.name}")
+                    raise ValueError(f"No ax present in {self.main.name}")
                 ax = self.current_ax
             fig = ax.get_figure()
-        path = f"{self.path_output}/{self.name}_{filename}.{format}"
+        
         fig.savefig(path, format=format, dpi=dpi, bbox_inches='tight')
         if open_file:
             os.startfile(path)
         return path
+    
+    
+    def __get_dot_size(self, adjusted_microns_per_pixel:float):
+        '''gets the size of spots, depending on adjusted_microns_per_pixel'''
+        bin_size_pixels = self.main.json['bin_size_um'] / adjusted_microns_per_pixel 
+        dpi = plt.gcf().get_dpi()
+        # dpi = mpl.rcParams['figure.dpi']
+        points_per_pixels = POINTS_PER_INCH / dpi
+        dot_size = bin_size_pixels * points_per_pixels 
+        return dot_size
     
     def spatial(self, what=None, image=True, ax=None, title=None, cmap="viridis", 
                   legend=True, alpha=1, figsize=(8, 8), save=False,
@@ -76,7 +90,7 @@ class PlotVizium:
             legend_title = what.capitalize() if what and what==what.lower else None
             
         xlim, ylim, adjusted_microns_per_pixel = self.main.crop(xlim, ylim)
-        size = self.main.__get_dot_size(adjusted_microns_per_pixel)
+        size = self.__get_dot_size(adjusted_microns_per_pixel)
         if pad:
             size *= PAD_CONSTANT
         if ax is None:
@@ -156,7 +170,7 @@ class PlotVizium:
     
     def __repr__(self):
         s = f"Plots available for [{self.main.name}]:\n\tsave(), spatial(), hist()"
-        if self.main.sc:
+        if self.main.SC:
             s += "\n\nand for sc:\n\tsave(), spatial(), hist(), cells(), umpa()"
         return s
     

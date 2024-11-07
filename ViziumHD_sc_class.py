@@ -4,12 +4,17 @@ Created on Tue Nov  5 20:57:45 2024
 
 @author: royno
 """
+import ViziumHD_utils
+import ViziumHD_class
+import ViziumHD_plot
+
 
 class SingleCell:
      def __init__(self, vizium_instance):
          self.viz = vizium_instance
          self.adata = None
          self.path_output = self.viz.path_output + "/single_cell"
+         self.plot = ViziumHD_plot.plotSC(self)
 
      def __init_img(self):
          pass

@@ -20,15 +20,13 @@ import scanpy as sc
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
-# Image processing libraries
 from PIL import Image
-# import tifffile
 
 import ViziumHD_utils
 import ViziumHD_sc_class
+import ViziumHD_plot
 
 Image.MAX_IMAGE_PIXELS = 1063425001 # Enable large images loading
-POINTS_PER_INCH = 72
 FULLRES_THRESH = 1000 # in microns, below which, a full-res image will be plotted
 HIGHRES_THRESH = 3000 # in microns, below which, a high-res image will be plotted
 
@@ -38,10 +36,37 @@ HIGHRES_THRESH = 3000 # in microns, below which, a high-res image will be plotte
 # Add general function plot_MA(df, cond1, cond2, pval_col="pval", exp_thresh=0, qval_thresh=0.05).
 #   if not pval, then just plot all genes
 
+def load(filename, directory=''):
+    '''loads an instance from a pickle format'''
+    if not filename.endswith(".pkl"):
+        filename = filename + ".pkl"
+    if directory:
+        filename = f"{directory}/{filename}"
+    ViziumHD_utils.validate_exists(filename)
+    with open(filename, "rb") as f:
+        instance = dill.load(f)
+    return instance
+
 def new(path_image_fullres:str, path_input_data:str, path_output:str,
              name:str, properties: dict = None, on_tissue_only=True,min_reads_in_spot=1,
              min_reads_gene=10):
-    
+    '''
+    - Loads images (fullres, highres, lowres)
+    - Loads data and metadata
+    - croppes the images based on the data
+    - initializes the connection from the data and metadata to the images coordinates
+    - adds basic QC to the metadata (nUMI, mitochondrial %)
+    parameters:
+        * path_input_fullres_image - path for the fullres image
+        * path_input_data - folder with outs of the Visium. typically square_002um
+                            (with h5 files and with folders filtered_feature_bc_matrix, spatial)
+        * path_output - path where to save plots and files
+        * name - name of the instance
+        * properties - dict of properties, such as organism, organ, sample_id
+        * on_tissue_only - remove spots that are not classified as "on tissue"?
+        * min_reads_in_spot - filter out spots with less than X UMIs
+        * min_reads_gene - filter out gene that is present in less than X spots
+    '''
     if not os.path.exists(path_output):
         os.makedirs(path_output)
     path_image_highres = path_input_data + "/spatial/tissue_hires_image.png"
@@ -63,7 +88,7 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
     adata = ViziumHD_utils._import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_only)
     
     # Crop images and initiates micron to pixel conversions for plotting
-    adata, image_fullres, image_highres, image_lowres = ViziumHD_utils._crop_img_permenent(
+    adata, image_fullres, image_highres, image_lowres = ViziumHD_utils._crop_images_permenent(
         adata, image_fullres, image_highres, image_lowres, scalefactor_json)
     
     # Save cropped images
@@ -75,117 +100,44 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
     ViziumHD_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
 
     # Filter low quality spots and lowly expressed genes
-    adata = adata[adata.obs["nUMI"] >= min_reads_in_spot, :]
-    adata = adata[:, adata.var["nUMI"] >= min_reads_gene]
-    
-    return adata, image_fullres, image_highres, image_lowres, scalefactor_json, name, path_output, properties, sc
+    adata = adata[adata.obs["nUMI"] >= min_reads_in_spot, adata.var["nUMI"] >= min_reads_gene].copy()
+
+    return ViziumHD(adata, image_fullres, image_highres, image_lowres, scalefactor_json, name, path_output, properties, SC=None)
 
 
 class ViziumHD:
-    def __init__(self, adata, image_fullres, image_highres, image_lowres, scalefactor_json, name, path_output, properties=None, sc=None):
-        self.sc = sc
-        self.name, self.path_output, self.properties = name, path_output, properties if properties else {}
-        self.image_fullres = image_fullres
-        self.image_highres = image_highres
-        self.image_lowres = image_lowres
+    def __init__(self, adata, image_fullres, image_highres, image_lowres, scalefactor_json, name, path_output, properties=None, SC=None):
+        self.SC = SC
+        self.name, self.path_output = name, path_output 
+        self.properties = properties if properties else {}
+        self.organism = self.properties.get("organism")
+        self.image_fullres, self.image_highres, self.image_lowres = image_fullres, image_highres, image_lowres
         self.json = scalefactor_json
         self.adata = adata
+        adata.obs["pxl_col_in_lowres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
+        adata.obs["pxl_row_in_lowres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
+        adata.obs["pxl_col_in_highres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
+        adata.obs["pxl_row_in_highres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
+        adata.obs["um_x"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["microns_per_pixel"]
+        adata.obs["um_y"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["microns_per_pixel"]
+        self.xlim_max = (adata.obs['um_x'].min(), adata.obs['um_x'].max())
+        self.ylim_max = (adata.obs['um_y'].min(), adata.obs['um_y'].max())
         
-        self.xlim_max = (self.adata.obs['um_x'].min(), self.adata.obs['um_x'].max())
-        self.ylim_max = (self.adata.obs['um_y'].min(), self.adata.obs['um_y'].max())
+        self.plot = ViziumHD_plot.PlotVizium(self)
         self.__init_img()
-        
-        
-
-    
-    def __init2(self, path_input_fullres_image:str, path_input_data:str, path_output:str,
-                 name:str, properties: dict = None, on_tissue_only=True,min_reads_in_spot=1,
-                 min_reads_gene=10):
-        '''
-        - Loads images (fullres, highres, lowres)
-        - Loads data and metadata
-        - croppes the images based on the data
-        - initializes the connection from the data and metadata to the images coordinates
-        - performs basic QC (nUMI, mitochondrial %)
-        parameters:
-            * path_input_fullres_image - path for the fullres image
-            * path_input_data - folder with outs of the Visium. typically square_002um
-                                (with h5 files and with folders filtered_feature_bc_matrix, spatial)
-            * path_output - path where to save plots and files
-            * name - name of the instance
-            * properties - dict of properties, such as organism, organ, sample_id
-            * on_tissue_only - remove spots that are not classified as "on tissue"?
-        '''
-        
-        
-        
-            
-        print("[Loading metadata]")        
-        metadata = pd.read_parquet(metadata_path)
-        if not os.path.isfile(metadata_path.replace(".parquet",".csv")):
-            metadata.to_csv(metadata_path.replace(".parquet",".csv"),index=False)
-
-        del metadata["array_row"]
-        del metadata["array_col"]
-        
-        # load data
-        print("[Loading data]")
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="Variable names are not unique. To make them unique")
-            self.adata = sc.read_visium(path_input_data, source_image_path=path_input_fullres_image)
-        self.adata.var_names_make_unique()
-        
-        if on_tissue_only: # filter spots that are classified to be under tissue
-            metadata = metadata.loc[metadata['in_tissue'] == 1,]
-            self.adata = self.adata[self.adata.obs['in_tissue'] == 1]
-        del metadata["in_tissue"] 
-        
-        # merge data and metadata
-        metadata = metadata[~metadata.index.duplicated(keep='first')]
-        metadata.set_index('barcode', inplace=True)
-        self.adata.obs = self.adata.obs.join(metadata, how='left')
-        
-        # crop images and initiates micron to pixel conversions for plotting
-        self.__crop_img_permenent()
-        self.__export_images(path_input_fullres_image, hires_image_path, lowres_image_path)
-        
-        self.adata.obs["pxl_col_in_lowres"] = self.adata.obs["pxl_col_in_fullres"] * self.json["tissue_lowres_scalef"]
-        self.adata.obs["pxl_row_in_lowres"] = self.adata.obs["pxl_row_in_fullres"] * self.json["tissue_lowres_scalef"]
-        self.adata.obs["pxl_col_in_highres"] = self.adata.obs["pxl_col_in_fullres"] * self.json["tissue_hires_scalef"]
-        self.adata.obs["pxl_row_in_highres"] = self.adata.obs["pxl_row_in_fullres"] * self.json["tissue_hires_scalef"]
-        self.adata.obs["um_x"] = self.adata.obs["pxl_col_in_fullres"] * self.json["microns_per_pixel"]
-        self.adata.obs["um_y"] = self.adata.obs["pxl_row_in_fullres"] * self.json["microns_per_pixel"]
-        self.xlim_max = (self.adata.obs['um_x'].min(), self.adata.obs['um_x'].max())
-        self.ylim_max = (self.adata.obs['um_y'].min(), self.adata.obs['um_y'].max())
-        self.__init_img()
-        
-        # Quality control - number of UMIs and mitochondrial %
-        self.adata.obs["nUMI"] = np.array(self.adata.X.sum(axis=1).flatten())[0]
-        self.adata.var["nUMI"] = np.array(self.adata.X.sum(axis=0).flatten())[0]
-        mito_name_prefix = "MT-" if self.properties["organism"] == "human" else "mt-"
-        mito_genes = self.adata.var_names[self.adata.var_names.str.startswith(mito_name_prefix)].values
-        mito_sum = self.adata[:,self.adata.var.index.isin(mito_genes)].X.sum(axis=1).A1
-        mito_percentage = (mito_sum / self.adata.obs["nUMI"]) * 100
-        self.add_meta("mito_sum", mito_sum)
-        self.add_meta("mito_percent", mito_percentage)
-        
-        # plot QC
         self.qc(save=True)
+
         
-        # filter low quality spots and lowly expressed genes
-        self.adata = self.adata[self.adata.obs["nUMI"] >= min_reads_in_spot, :]
-        self.adata = self.adata[:, self.adata.var["nUMI"] >= min_reads_gene]
-        self.__init_img()
-        
-    def qc(self, save=False,figsize=(10, 5)):
+    def qc(self, save=False,figsize=(10, 10)):
         '''plots basic QC (nUMI, mitochondrial %)'''
-        fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=figsize)
-        ax1 = self.plot_hist("mito_percent", title="Mito %", save=save, xlab="Mito %",ax=ax1)
-        ax2 = self.plot_hist("nUMI", title="Number of UMIs", save=save, xlab="Number of unique reads",ax=ax2)
+        fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(ncols=2,nrows=2, figsize=figsize)
+        ax0 = self.plot.spatial(title=self.name, ax=ax0)
+        ax1 = self.plot.hist("mito_percent_log10", title="Mitochondrial content per spot", xlab="log10(Mito %)",ax=ax1)
+        ax2 = self.plot.hist("nUMI_log10", title="Number of UMIs per spot", xlab="log10(UMIs)",ax=ax2)
+        ax3 = self.plot.hist("nUMI_gene_log10", title="Number of UMIs per gene", xlab="log10(UMIs)",ax=ax3)
         plt.tight_layout()
-        plt.title("QC - before filtration")
         if save:
-            self.save_fig(filename="QC", fig=fig)
+            self.plot.save(filename="QC", fig=fig)
     
     def __init_img(self):
         '''resets the cropped image and updates the cropped adata'''
@@ -195,7 +147,6 @@ class ViziumHD:
         self.adata_cropped = self.adata
         self.crop() # creates self.adata_cropped & self.image_cropped
         
-
     
     def add_mask(self, mask_path:str, name:str, plot=True, cmap="Paired"):
         '''
@@ -207,49 +158,51 @@ class ViziumHD:
             * cmap - colormap for plotting
         '''
         ViziumHD_utils.validate_exists(mask_path)
-        mask_array = self.__import_mask(mask_path)
+        
+        def _import_mask(mask_path):
+            '''imports the mask'''
+            print("[Importing mask]")
+            mask = Image.open(mask_path)
+            mask_array = np.array(mask)
+            return mask_array
+        
+        def _plot_mask(mask_array, cmap):
+            '''plots the mask'''
+            plt.figure(figsize=(8, 8))
+            plt.imshow(mask_array, cmap=cmap)
+            num_colors = len(np.unique(mask_array[~np.isnan(mask_array)]))
+            cmap = plt.cm.get_cmap(cmap, num_colors) 
+            legend_elements = [Patch(facecolor=cmap(i), label=f'{i}') for i in range(num_colors)]
+            plt.legend(handles=legend_elements, loc='lower right', bbox_to_anchor=(1, 0.5))
+            plt.show()
+
+        def _assign_spots(mask_array, name):
+            '''assigns each spot a value from the mask'''
+            def _get_mask_value(mask_array, x, y):
+                if (0 <= x < mask_array.shape[1]) and (0 <= y < mask_array.shape[0]):
+                    return mask_array[y, x]
+                else:
+                    return None
+            def _get_spot_identity(row):
+                x = round(row['pxl_col_in_fullres'])
+                y = round(row['pxl_row_in_fullres'])
+                return _get_mask_value(mask_array, x, y)
+            
+            tqdm.pandas(desc=f"Assigning spots identity [{name}]")
+            
+            self.adata.obs[name] = np.nan
+            self.adata.obs[name] = self.adata.obs.progress_apply(
+                _get_spot_identity, axis=1)
+
+        mask_array = _import_mask(mask_path)
         if plot:
-            self.__plot_mask(mask_array, cmap=cmap)
-        self.__assign_spots(mask_array, name)
+            _plot_mask(mask_array, cmap=cmap)
+        _assign_spots(mask_array, name)
         self.__init_img()
         print(f"\nTo rename the values in the metadata, call the [update_meta] method with [{name}] and dictionary with current_name:new_name")
         return mask_array
     
-    def __plot_mask(self, mask_array, cmap):
-        '''helper method for add_mask(). plots the mask'''
-        plt.figure(figsize=(8, 8))
-        plt.imshow(mask_array, cmap=cmap)
-        num_colors = len(np.unique(mask_array[~np.isnan(mask_array)]))
-        cmap = plt.cm.get_cmap(cmap, num_colors) 
-        legend_elements = [Patch(facecolor=cmap(i), label=f'{i}') for i in range(num_colors)]
-        plt.legend(handles=legend_elements, loc='lower right', bbox_to_anchor=(1, 0.5))
-        plt.show()
-        
-    def __import_mask(self, mask_path):
-        '''helper method for add_mask(). imports the mask'''
-        print("[Importing mask]")
-        mask = Image.open(mask_path)
-        mask_array = np.array(mask)
-        return mask_array
-    
-    def __assign_spots(self, mask_array, name):
-        '''helper method for add_mask(). assigns each spot a value from the mask'''
-        def get_mask_value(mask_array, x, y):
-            if (0 <= x < mask_array.shape[1]) and (0 <= y < mask_array.shape[0]):
-                return mask_array[y, x]
-            else:
-                return None
-        def get_spot_identity(row):
-            x = round(row['pxl_col_in_fullres'])
-            y = round(row['pxl_row_in_fullres'])
-            return get_mask_value(mask_array, x, y)
-        
-        tqdm.pandas(desc=f"Assigning spots identity [{name}]")
-        
-        self.adata.obs[name] = np.nan
-        self.adata.obs[name] = self.adata.obs.progress_apply(
-            get_spot_identity, axis=1)
-        
+
     def add_annotations(self, path:str, name:str):
         '''
         Adds annotations made in Qupath (geojson)
@@ -340,6 +293,38 @@ class ViziumHD:
         self.__init_img()
         
 
+    
+    
+
+        
+            
+    def export_h5(self, path=None):
+        '''exports the adata. can also save the obs as parquet'''
+        if not path:
+            path = f"{self.path_output}/{self.name}_viziumHD.h5ad"
+        self.adata.write(path)
+        return path
+    
+    def export_images(self, fullres=True, highres=True, lowres=True):
+        if fullres:
+            ViziumHD_utils.export_image(self.image_fullres, self.path_output+"/fullres_image.tif")
+        if highres:
+            ViziumHD_utils.export_image(self.image_highres, self.path_output+"/highres_image.tif")
+        if lowres:
+            ViziumHD_utils.export_image(self.image_lowres, self.path_output+"/lowres_image.tif")
+
+    def sc_create(self, category):
+        if self.SC:
+            if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
+                return
+        params = []
+        self.SC = ViziumHD_sc_class.SingleCell(self, params)
+
+    def sc_transfer_meta(self, what:str):
+        '''transfers metadata assignment from the single-cell to the spots'''
+        pass
+    
+    
     def crop(self, xlim=None, ylim=None):
         '''
         Crops the images and adata based on xlim and ylim in microns. 
@@ -408,42 +393,6 @@ class ViziumHD:
     
         return xlim, ylim, adjusted_microns_per_pixel 
     
-    def __get_dot_size(self, adjusted_microns_per_pixel:float):
-        '''gets the size of spots, depending on adjusted_microns_per_pixel'''
-        bin_size_pixels = self.json['bin_size_um'] / adjusted_microns_per_pixel 
-        dpi = plt.gcf().get_dpi()
-        # dpi = mpl.rcParams['figure.dpi']
-        points_per_pixels = POINTS_PER_INCH / dpi
-        dot_size = bin_size_pixels * points_per_pixels 
-        return dot_size
-        
-            
-    def export_h5(self, path=None):
-        '''exports the adata. can also save the obs as parquet'''
-        if not path:
-            path = f"{self.path_output}/{self.name}_viziumHD.h5ad"
-        self.adata.write(path)
-        return path
-    
-    def export_images(self, fullres=True, highres=True, lowres=True):
-        if fullres:
-            ViziumHD_utils.export_image(self.image_fullres, self.path_output+"/fullres_image.tif")
-        if highres:
-            ViziumHD_utils.export_image(self.image_highres, self.path_output+"/highres_image.tif")
-        if lowres:
-            ViziumHD_utils.export_image(self.image_lowres, self.path_output+"/lowres_image.tif")
-
-    def sc_create(self, category):
-        if self.sc:
-            if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
-                return
-        params = []
-        self.sc = ViziumHD_sc_class.SingleCell(self, params)
-
-    def sc_transfer_meta(self, what:str):
-        '''transfers metadata assignment from the single-cell to the spots'''
-        pass
-    
     def get(self, what, cropped=False):
         '''
         get a vector from data (a gene) or metadata (from obs or var). or subset the object.
@@ -470,11 +419,45 @@ class ViziumHD:
             if what.lower() in adata.var.columns.str.lower(): 
                 return adata.var[what.lower()].values
         else:
-            copy = self.copy()
-            copy.adata = copy.adata[what]
-            copy.name += "_subset"
-            copy.__init_img()
-            return copy
+            # Create a new ViziumHD objects based on adata subsetting
+            adata = self.adata[what].copy()
+            adata_shifted, image_fullres_crop, image_highres_crop, image_lowres_crop = self.__crop_images(adata)
+            name = self.name + "_subset" if not self.name.endswith("_subset") else ""
+            new_obj = ViziumHD(adata_shifted, image_fullres_crop, image_highres_crop, 
+                               image_lowres_crop, self.json, name, self.path_output)
+            return new_obj
+   
+    def __crop_images(self, adata):
+        '''
+        Helper function for get().
+        Crops the images based on the spatial coordinates in a subsetted `adata` 
+        and adjusts the adata accordingly (shifts x, y)'''
+        # Crop images
+        def _crop_img(adata, img, col, row):
+            pxl_col = adata.obs[col].values
+            pxl_row = adata.obs[row].values
+            xlim_pixels = [int(np.floor(pxl_col.min())), int(np.ceil(pxl_col.max()))]
+            ylim_pixels = [int(np.floor(pxl_row.min())), int(np.ceil(pxl_row.max()))]
+            # Ensure the limits are within the image boundaries
+            xlim_pixels = [max(0, xlim_pixels[0]), min(img.shape[1], xlim_pixels[1])]
+            ylim_pixels = [max(0, ylim_pixels[0]), min(img.shape[0], ylim_pixels[1])]
+            if xlim_pixels[1] <= xlim_pixels[0] or ylim_pixels[1] <= ylim_pixels[0]:
+                raise ValueError("Invalid crop dimensions.")
+            img_crop = img[ylim_pixels[0]:ylim_pixels[1],xlim_pixels[0]:xlim_pixels[1],:].copy()
+            return img_crop, xlim_pixels, ylim_pixels
+        
+        image_fullres_crop, xlim_pixels_fullres, ylim_pixels_fullres = _crop_img(adata, self.image_fullres, "pxl_col_in_fullres", "pxl_row_in_fullres")
+        image_highres_crop , _ , _ = _crop_img(adata, self.image_highres, "pxl_col_in_highres", "pxl_row_in_highres")
+        image_lowres_crop , _ , _ = _crop_img(adata, self.image_lowres, "pxl_col_in_lowres", "pxl_row_in_lowres")
+
+        # Shift adata
+        adata_shifted = adata.copy()
+        drop_columns = ["pxl_col_in_lowres","pxl_row_in_lowres","pxl_col_in_highres",
+                        "pxl_row_in_highres","um_x","um_y"]
+        adata_shifted.obs.drop(columns=drop_columns, inplace=True)
+        adata_shifted.obs["pxl_col_in_fullres"] -= xlim_pixels_fullres[0]
+        adata_shifted.obs["pxl_row_in_fullres"] -= ylim_pixels_fullres[0]
+        return adata_shifted, image_fullres_crop, image_highres_crop, image_lowres_crop
         
     def __getitem__(self, what):
         '''get a vector from data (a gene) or metadata (from obs or var). or subset the object.'''
@@ -493,8 +476,8 @@ class ViziumHD:
         s += ', '.join(list(self.adata.obs.columns))
         s += '\n\nvar: '
         s += ', '.join(list(self.adata.var.columns))
-        if self.sc is not None:
-            s += f"\tSingle cells shape: {self.sc.adata.shape[0]} x {self.sc.adata.shape[1]}"
+        if self.SC is not None:
+            s += f"\tSingle cells shape: {self.SC.adata.shape[0]} x {self.SC.adata.shape[1]}"
         return s
     
     def __repr__(self):
@@ -526,10 +509,10 @@ class ViziumHD:
         ViziumHD_utils.update_instance_methods(self)
         ViziumHD_utils.update_instance_methods(self.plot)
         self.__init_img()
-        # update also the sc
-        if self.sc is not None:
-            ViziumHD_utils.update_instance_methods(self.sc)
-            ViziumHD_utils.update_instance_methods(self.sc.plot)
+        # update also the SC
+        if self.SC is not None:
+            ViziumHD_utils.update_instance_methods(self.SC)
+            ViziumHD_utils.update_instance_methods(self.SC.plot)
     
     def copy(self):
         return deepcopy(self)
@@ -544,18 +527,4 @@ class ViziumHD:
         with open(path, "wb") as f:
             dill.dump(self, f)
         return path
-
-    @classmethod
-    def load_ViziumHD(cls, filename, directory=''):
-        '''loads an instance from a pickle format'''
-        if not filename.endswith(".pkl"):
-            filename = filename + ".pkl"
-        if directory:
-            filename = f"{directory}/{filename}"
-        ViziumHD_utils.validate_exists(filename)
-        with open(filename, "rb") as f:
-            instance = dill.load(f)
-        return instance
-
-
 
