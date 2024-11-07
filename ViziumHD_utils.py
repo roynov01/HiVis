@@ -168,9 +168,31 @@ def find_markers(adata, column, group1, group2=None, umi_thresh=0,
     if inplace:
         adata.var = df.copy()
     return df
+
+
+def load_images(path_image_fullres, path_image_highres, path_image_lowres):
+    '''
+    Loads images.
+    '''
+    print("[Loading images]")
+    image_fullres = tifffile.imread(path_image_fullres)
+    rgb_dim = image_fullres.shape.index(3)
+    if rgb_dim != 2:  # If the RGB dimension is not already last
+        axes_order = list(range(image_fullres.ndim))  # Default axes order
+        axes_order.append(axes_order.pop(rgb_dim))  # Move the RGB dim to the last position
+        image_fullres = image_fullres.transpose(axes_order)
+    if path_image_highres.endswith(".png"):
+        image_highres = plt.imread(path_image_highres)
+    else:
+        image_highres = tifffile.imread(path_image_highres)
+    if path_image_lowres.endswith(".png"):
+        image_lowres = plt.imread(path_image_lowres)
+    else:
+        image_lowres = tifffile.imread(path_image_lowres)
+    return image_fullres, image_highres, image_lowres
     
 
-def _crop_images_permenent(self, adata, image_fullres, image_highres, image_lowres, scalefactor_json):
+def _crop_images_permenent(adata, image_fullres, image_highres, image_lowres, scalefactor_json):
     '''
     crops the images, based on the coordinates from the metadata. 
     shifts the metadata to start at x=0, y=0.
@@ -217,25 +239,21 @@ def _crop_images_permenent(self, adata, image_fullres, image_highres, image_lowr
 def _export_images(path_image_fullres, path_image_highres, path_image_lowres,
                     image_fullres, image_highres, image_lowres):
     '''Saves cropped images'''
+    def _export_image(img, path):
+        fileformat = "." + path.split(".")[1]
+        save_path = path.replace(fileformat, "_cropped.tif")
+        if not os.path.exists(save_path):
+            if img.max() <= 1:
+                img = (img * 255).astype(np.uint8)
+            image = Image.fromarray(img)
+            image.save(save_path, format='TIFF') 
+            
     print("[Saving cropped images]")
     images = [image_fullres, image_highres, image_lowres]
     paths = [path_image_fullres, path_image_highres, path_image_lowres]
     for img, path in zip(images, paths):
-        export_image(img, path)
-           
-
-def export_image(img, path):
-    fileformat = "." + path.split(".")[1]
-    save_path = path.replace(fileformat, "_cropped.tif")
-    if not os.path.exists(save_path):
-        if img.max() <= 1:
-            img = (img * 255).astype(np.uint8)
-        image = Image.fromarray(img)
-        image.save(save_path, format='TIFF') 
-        
-    
-    
-    
+        _export_image(img, path)
+              
 
 def _edit_adata(adata, scalefactor_json, mito_name_prefix):
     adata.obs["pxl_col_in_lowres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
@@ -247,20 +265,23 @@ def _edit_adata(adata, scalefactor_json, mito_name_prefix):
 
     # Quality control - number of UMIs and mitochondrial %
     adata.obs["nUMI"] = np.array(adata.X.sum(axis=1).flatten())[0]
-    adata.var["nUMI"] = np.array(adata.X.sum(axis=0).flatten())[0]
+    adata.var["nUMI_gene"] = np.array(adata.X.sum(axis=0).flatten())[0]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        adata.obs["nUMI_log10"] = np.log10(adata.obs["nUMI"])
+        adata.var["nUMI_gene_log10"] = np.log10(adata.var["nUMI_gene"])
     mito_genes = adata.var_names[adata.var_names.str.startswith(mito_name_prefix)].values
     adata.obs["mito_sum"] = adata[:,adata.var.index.isin(mito_genes)].X.sum(axis=1).A1
-    adata.obs["mito_percent"] = (adata.obs["mito_sum"] / adata.obs["nUMI"]) * 100
+    adata.obs["mito_percent_log10"] = np.log10((adata.obs["mito_sum"] / adata.obs["nUMI"]) * 100)
     return adata
 
 
 def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_only):
-    # load metadata  
+    # load metadata (and save as CSV)
     print("[Loading metadata]")        
     metadata = pd.read_parquet(metadata_path)
     if not os.path.isfile(metadata_path.replace(".parquet",".csv")):
         metadata.to_csv(metadata_path.replace(".parquet",".csv"),index=False)
-
     del metadata["array_row"]
     del metadata["array_col"]
     
@@ -270,8 +291,10 @@ def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_o
         warnings.filterwarnings("ignore", message="Variable names are not unique. To make them unique")
         adata = sc.read_visium(path_input_data, source_image_path=path_image_fullres)
     adata.var_names_make_unique()
+    del adata.uns["spatial"]
     
-    if on_tissue_only: # filter spots that are classified to be under tissue
+    # filter spots that are classified to be under tissue
+    if on_tissue_only: 
         metadata = metadata.loc[metadata['in_tissue'] == 1,]
         adata = adata[adata.obs['in_tissue'] == 1]
     del metadata["in_tissue"] 
@@ -283,21 +306,4 @@ def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_o
     return adata
 
 
-def load_images(path_image_fullres, path_image_highres, path_image_lowres):
-    print("[Loading images]")
-    image_fullres = tifffile.imread(path_image_fullres)
-    rgb_dim = image_fullres.shape.index(3)
-    if rgb_dim != 2:  # If the RGB dimension is not already last
-        axes_order = list(range(image_fullres.ndim))  # Default axes order
-        axes_order.append(axes_order.pop(rgb_dim))  # Move the RGB dim to the last position
-        image_fullres = image_fullres.transpose(axes_order)
-    if path_image_highres.endswith(".png"):
-        image_highres = plt.imread(path_image_highres)
-    else:
-        image_highres = tifffile.imread(path_image_highres)
-    if path_image_lowres.endswith(".png"):
-        image_lowres = plt.imread(path_image_lowres)
-    else:
-        image_lowres = tifffile.imread(path_image_lowres)
-    return image_fullres, image_highres, image_lowres
     
