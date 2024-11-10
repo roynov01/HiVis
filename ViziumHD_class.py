@@ -15,7 +15,6 @@ import json
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-import scanpy as sc
 # Plotting libraries
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -31,7 +30,6 @@ FULLRES_THRESH = 1000 # in microns, below which, a full-res image will be plotte
 HIGHRES_THRESH = 3000 # in microns, below which, a high-res image will be plotted
 
 # TODO add
-# Add find_celltype_merkers() - for example find epithelial markers
 # CELLPOSE
 # Add general function plot_MA(df, cond1, cond2, pval_col="pval", exp_thresh=0, qval_thresh=0.05).
 #   if not pval, then just plot all genes
@@ -100,7 +98,7 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
     ViziumHD_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
 
     # Filter low quality spots and lowly expressed genes
-    adata = adata[adata.obs["nUMI"] >= min_reads_in_spot, adata.var["nUMI"] >= min_reads_gene].copy()
+    adata = adata[adata.obs["nUMI"] >= min_reads_in_spot, adata.var["nUMI_gene"] >= min_reads_gene].copy()
 
     return ViziumHD(adata, image_fullres, image_highres, image_lowres, scalefactor_json, name, path_output, properties, SC=None)
 
@@ -231,7 +229,7 @@ class ViziumHD:
         self.__init_img()
     
         
-    def find_markers(self, column, group1, group2=None, umi_thresh=1,
+    def dge(self, column, group1, group2=None, umi_thresh=1,
                      method="wilcox",alternative="two-sided",inplace=False):
         '''
         Runs differential gene expression analysis between two groups.
@@ -246,7 +244,7 @@ class ViziumHD:
             * umi_thresh - use only spots with more UMIs than this number
             * inplace - modify the adata.var with log2fc, pval and expression columns?
         '''
-        df = ViziumHD_utils.find_markers(self.adata,column, group1, group2,umi_thresh,
+        df = ViziumHD_utils.dge(self.adata,column, group1, group2,umi_thresh,
                      method=method,alternative=alternative,inplace=inplace)
         return df
     

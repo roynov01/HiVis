@@ -243,14 +243,17 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
     return ax
     
 def plot_scatter_signif(df,x_col,y_col,genes=None,text=True,figsize=(8,8),size=10,legend=False,
-                    ax=None,xlab=None,ylab=None,out_path=None,color="blue",color_genes="red"):
+                    ax=None,xlab=None,ylab=None,out_path=None,color="blue",color_genes="red",x_line=None,y_line=None):
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
     df['type'] = ""
     
     sns.scatterplot(data=df[df['type'] == ''], x=x_col, y=y_col,s=size,legend=legend,
                     ax=ax,color=color,edgecolor=None)
-    ax.axhline(y=0,color="k",linestyle="--")
+    if y_line is not None:
+        ax.axhline(y=y_line if y_line is not True else 0,color="k",linestyle="--")
+    if x_line is not None:
+        ax.axvline(x=x_line if x_line is not True else 0,color="k",linestyle="--")
     if genes:
         df.loc[df['gene'].isin(genes),"type"] = "selected"
         subplot = df[df['type'] != '']
@@ -441,7 +444,6 @@ def set_axis_ticks(ax, length_in_pixels, adjusted_microns_per_pixel, axis='x', n
         ax.set_yticklabels([f"{int(tick)}" for tick in tick_labels_microns])
     else:
         raise ValueError("Axis must be 'x' or 'y'")
-
 
 
 

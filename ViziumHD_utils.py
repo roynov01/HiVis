@@ -17,6 +17,7 @@ import warnings
 import scanpy as sc
 import tifffile
 import matplotlib.pyplot as plt
+import ViziumHD_plot
 
 
 def update_instance_methods(instance):
@@ -100,7 +101,7 @@ def validate_exists(file_path):
              
              
              
-def find_markers(adata, column, group1, group2=None, umi_thresh=0,
+def dge(adata, column, group1, group2=None, umi_thresh=0,
                  method="wilcox",alternative="two-sided",inplace=False):
     '''
     Runs differential gene expression analysis between two groups.
@@ -191,6 +192,61 @@ def load_images(path_image_fullres, path_image_highres, path_image_lowres):
         image_lowres = tifffile.imread(path_image_lowres)
     return image_fullres, image_highres, image_lowres
     
+
+def find_markers(exp_df, celltypes=None, ratio_thresh=2, exp_thresh=0,
+                 chosen_fun="max",other_fun="max",ignore=None):
+    '''
+    Finds markers of celltype/s based on signature matrix:
+        * exp_df - dataframe, index are genes, columns are celltypes
+        * celltypes (str or list) - column name/names of the chosen celltype/s
+        * ratio_thresh - ratio is chosen/other 
+        * exp_thresh - process genes that are expressed above X in the chosen celltype/s
+        * chosen_fun, other_fun - either "mean" or "max"
+        * ignore (list) - list of celltypes to ignore in the "other" group
+    '''
+    if "gene" in exp_df.columns:
+        exp_df.index = exp_df["gene"]
+        del exp_df["gene"]
+    if not celltypes:
+        print(exp_df.columns)
+        return
+    exp_df = matnorm(exp_df)
+    chosen = exp_df[celltypes]
+    if isinstance(celltypes, list):
+        other_names = exp_df.columns[~exp_df.columns.isin(celltypes)]
+        if chosen_fun == "max":
+            chosen = chosen.max(axis=1)
+        elif chosen_fun == "mean":
+            chosen = chosen.mean(axis=1)
+    else:
+        other_names = exp_df.columns[exp_df.columns != celltypes]
+    if ignore:
+        other_names = [name for name in other_names if name not in ignore]
+    other = exp_df[other_names]
+    if other_fun == "max":
+        other = other.max(axis=1)
+    elif other_fun == "mean":
+        other = other.mean(axis=1)
+    
+    pn = chosen[chosen>0].min()
+    markers_df = pd.DataFrame({"chosen_cell":chosen,"other":other},index=exp_df.index.copy())
+    markers_df = markers_df.loc[markers_df["chosen_cell"] >= exp_thresh]
+    markers_df["ratio"] = (chosen+pn) / (other+pn)
+    markers_df["gene"] = markers_df.index
+    genes = markers_df.index[markers_df["ratio"] >= ratio_thresh].tolist()
+    plot = markers_df.copy()
+    plot["chosen_cell"] = np.log10(plot["chosen_cell"])
+    plot["other"] = np.log10(plot["other"])
+
+    text = True if len(genes) <= 120 else False
+    ax = ViziumHD_plot.plot_scatter_signif(plot, "chosen_cell", "other",
+                                           genes,text=text,color="lightgray",
+                                           xlab=f"log10({chosen_fun}({celltypes}))",
+                                           ylab=f"log10({other_fun}(other cellstypes))")
+    
+    return genes, markers_df, ax
+
+
 
 def _crop_images_permenent(adata, image_fullres, image_highres, image_lowres, scalefactor_json):
     '''
