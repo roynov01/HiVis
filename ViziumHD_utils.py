@@ -11,13 +11,14 @@ import importlib
 import os
 from tqdm import tqdm
 from statsmodels.stats.multitest import multipletests
-from PIL import Image
+# from PIL import Image
 import math
 import warnings
 import scanpy as sc
 import tifffile
 import matplotlib.pyplot as plt
 import ViziumHD_plot
+from matplotlib.colors import to_rgba
 
 
 def update_instance_methods(instance):
@@ -121,13 +122,11 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,
     # Get the expression of the two groups
     group1_exp = adata[adata.obs[column] == group1].copy()
     group1_exp = group1_exp[group1_exp.X.sum(axis=1) > umi_thresh]  # delete low quality spots
-    print(f'normilizing "{group1}" spots')
+    print(f'Normilizing "{group1}" spots')
     group1_exp.X = group1_exp.X / group1_exp.X.sum(axis=1).A1[:, None]  # matnorm
     group1_exp = group1_exp.X.todense()
     df[group1] = group1_exp.mean(axis=0).A1  # save avarage expression of group1 to vars
-    
-    # df[group1 + "_med"] = np.median(group1_exp, axis=0).A1
-    
+        
     if group2 is None:
         group2_exp = adata[(adata.obs[column] != group1) & ~adata.obs[column].isna()].copy()
         group2 = "rest"
@@ -135,7 +134,7 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,
         group2_exp = adata[adata.obs[column] == group2].copy()
     group2_exp = group2_exp[group2_exp.X.sum(axis=1) > umi_thresh]  # delete empty spots
 
-    print(f'normilizing "{group2}" spots')
+    print(f'Normilizing "{group2}" spots')
     group2_exp.X = group2_exp.X / group2_exp.X.sum(axis=1).A1[:, None]  # matnorm
     group2_exp = group2_exp.X.todense()
     df[group2] = group2_exp.mean(axis=0).A1  # save avarage expression of group2 to vars
@@ -147,10 +146,7 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,
     pn = df[f"expression_mean_{column}"][df[f"expression_mean_{column}"]>0].min()
     df[f"log2fc_{column}"] = (df[group1] + pn) / (df[group2] + pn)
     df[f"log2fc_{column}"] = np.log2(df[f"log2fc_{column}"])  
-    
-    # df[f"log2fc_med_{column}"] = (df[group1+"_med"] + pn) / (df[group2+"_med"] + pn)
-    # df[f"log2fc_med_{column}"] = np.log2(df[f"log2fc_med_{column}"]) 
-    
+
     # Wilcoxon rank-sum test
     df[f"pval_{column}"] = np.nan
     for j, gene in enumerate(tqdm(df.index, desc=f"Running wilcoxon on [{column}]")):
@@ -167,7 +163,7 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,
                 _, p_value = ttest_ind(cur_gene_group1, cur_gene_group2, alternative=alternative)
         df.loc[gene,f"pval_{column}"] = p_value
     if inplace:
-        adata.var = df.copy()
+        adata.var = adata.var.join(df, how="left")
     return df
 
 
@@ -177,8 +173,8 @@ def load_images(path_image_fullres, path_image_highres, path_image_lowres):
     '''
     print("[Loading images]")
     image_fullres = tifffile.imread(path_image_fullres)
-    rgb_dim = image_fullres.shape.index(3)
-    if rgb_dim != 2:  # If the RGB dimension is not already last
+    rgb_dim = image_fullres.shape.index(min(image_fullres.shape)) # Find color channel
+    if rgb_dim != 2:  # If the color dimension is not already last
         axes_order = list(range(image_fullres.ndim))  # Default axes order
         axes_order.append(axes_order.pop(rgb_dim))  # Move the RGB dim to the last position
         image_fullres = image_fullres.transpose(axes_order)
@@ -247,6 +243,39 @@ def find_markers(exp_df, celltypes=None, ratio_thresh=2, exp_thresh=0,
     return genes, markers_df, ax
 
 
+def fix_excel_gene_dates(df, handle_duplicates="mean"):
+    """
+    Fixes gene names in a DataFrame that Excel auto-converted to dates.
+        * df (pd.DataFrame): DataFrame containing gene names either in a column named "gene" or in the index.
+        * handle_duplicates (str): How to handle duplicates after conversion. Options: "mean" or "first".
+
+    """
+    date_to_gene = {
+        "1-Mar": "MARCH1", "2-Mar": "MARCH2", "3-Mar": "MARCH3", "4-Mar": "MARCH4", "5-Mar": "MARCH5",
+        "6-Mar": "MARCH6", "7-Mar": "MARCH7", "8-Mar": "MARCH8", "9-Mar": "MARCH9",
+        "1-Sep": "SEPT1", "2-Sep": "SEPT2", "3-Sep": "SEPT3", "4-Sep": "SEPT4", "5-Sep": "SEPT5",
+        "6-Sep": "SEPT6", "7-Sep": "SEPT7", "8-Sep": "SEPT8", "9-Sep": "SEPT9",
+        "10-Sep": "SEPT10", "11-Sep": "SEPT11", "12-Sep": "SEPT12", "15-Sep": "SEPT15",
+        "10-Mar": "MARCH10", "11-Mar": "MARCH11"
+    }  
+    
+    if 'gene' in df.columns:
+        df['gene'] = df['gene'].replace(date_to_gene)  # Replace values in 'gene' column
+    else:
+        df.index = df.index.to_series().replace(date_to_gene)  # Replace values in the index
+    if 'gene' in df.columns:
+        df = df.set_index('gene')
+    if handle_duplicates == "mean":
+        df = df.groupby(df.index).mean()
+    elif handle_duplicates == "first":
+        df = df[~df.index.duplicated(keep='first')]
+    if 'gene' in df.columns or 'gene' in df.index.names:
+        df = df.reset_index()
+    
+    return df
+
+
+
 
 def _crop_images_permenent(adata, image_fullres, image_highres, image_lowres, scalefactor_json):
     '''
@@ -301,8 +330,9 @@ def _export_images(path_image_fullres, path_image_highres, path_image_lowres,
         if not os.path.exists(save_path):
             if img.max() <= 1:
                 img = (img * 255).astype(np.uint8)
-            image = Image.fromarray(img)
-            image.save(save_path, format='TIFF') 
+            # image = Image.fromarray(img)
+            tifffile.imwrite(save_path, img)
+            # image.save(save_path, format='TIFF') 
             
     print("[Saving cropped images]")
     images = [image_fullres, image_highres, image_lowres]
@@ -332,11 +362,105 @@ def _edit_adata(adata, scalefactor_json, mito_name_prefix):
     return adata
 
 
+def _measure_fluorescence(adata, image_fullres, fluorescence, spot_diameter_fullres):
+    num_channels = image_fullres.shape[2]
+    if len(fluorescence) != num_channels:
+        raise ValueError(f"Length of 'fluorescence' should be number of channels in image ({num_channels})")
+    
+    half_size = int(spot_diameter_fullres / 2)
+    
+    # Extract the coordinates of the spot centers
+    centers_x = adata.obs['pxl_col_in_fullres'].values.astype(int)
+    centers_y = adata.obs['pxl_row_in_fullres'].values.astype(int)
+    
+    # Initialize an array to hold the fluorescence sums for each spot and each channel
+    fluorescence_sums = np.zeros((len(centers_x), num_channels))
+
+    # Loop over each channel
+    for i in range(num_channels):
+        # Sum pixels within each square region for this channel
+        for j, (cx, cy) in enumerate(tqdm(zip(centers_x, centers_y),total=len(centers_x),
+                                          desc=f"Calculating intensity per spot: {fluorescence[i]}")):
+            # Define the square bounding box
+            x_min, x_max = max(cx - half_size, 0), min(cx + half_size + 1, image_fullres.shape[1])
+            y_min, y_max = max(cy - half_size, 0), min(cy + half_size + 1, image_fullres.shape[0])
+
+            # Sum the pixels in this region for the current channel
+            fluorescence_sums[j, i] = image_fullres[y_min:y_max, x_min:x_max, i].sum()
+
+    # Assign the sums to adata.obs
+    for idx, channel in enumerate(fluorescence):
+        adata.obs[channel] = fluorescence_sums[:, idx]
+    
+def fluorescence_to_RGB(image, colors:list, normalization_method=None):
+    '''
+    Creates RGB image from a multichannel.
+    parameters:
+        * image - np.array of shape (y,x,c)
+        * colors - list of colors, some can be None
+        * normalization_method - {"percentile", "histogram","clahe","sqrt" or None for minmax}
+    '''
+    # Initialize an empty RGB image with the same spatial dimensions
+    image_shape = image.shape[:2]
+    image_rgb = np.zeros((*image_shape, 3))
+    # colors = list(fluorescence.values())
+    # Loop over the channels and apply the specified colors
+    for idx, color in enumerate(colors):
+        if color is None:
+            continue  # Ignore this channel
+        if idx >= image.shape[-1]:
+            break  # Prevent index errors if there are fewer channels than expected
+
+        # Get the fluorescence channel data
+        channel_data = image[..., idx]
+
+        # Normalize the channel data for visualization
+        normalized_channel = _normalize_channel(channel_data, normalization_method)
+        
+        # Convert color name or hex to RGB values
+        color_rgb = np.array(to_rgba(color)[:3])  # Extract RGB components
+
+        # Add the weighted channel to the RGB image
+        for i in range(3):  # For each RGB component
+            image_rgb[..., i] += normalized_channel * color_rgb[i]
+
+    # Clip the RGB values to be between 0 and 1
+    image_rgb = np.clip(image_rgb, 0, 1)
+
+    return image_rgb
+ 
+
+def _normalize_channel(channel_data, method="percentile"):
+    if method == "percentile":
+        p_min, p_max = np.percentile(channel_data, (1, 99))
+        normalized_channel = (channel_data - p_min) / (p_max - p_min)
+        normalized_channel = np.clip(normalized_channel, 0, 1)
+    elif method == "histogram":
+        from skimage import exposure
+        normalized_channel = exposure.equalize_hist(channel_data)
+    elif method == "clahe":
+        from skimage import exposure
+        normalized_channel = exposure.equalize_adapthist(channel_data, clip_limit=0.03)
+    elif method == "sqrt":
+        normalized_channel = np.sqrt(channel_data - channel_data.min())
+        normalized_channel /= normalized_channel.max()
+    else:
+        # Default to min-max scaling
+        channel_min = channel_data.min()
+        channel_max = channel_data.max()
+        if channel_max - channel_min > 0:
+            normalized_channel = (channel_data - channel_min) / (channel_max - channel_min)
+        else:
+            normalized_channel = channel_data
+    return normalized_channel
+   
+
 def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_only):
     # load metadata (and save as CSV)
     print("[Loading metadata]")        
     metadata = pd.read_parquet(metadata_path)
     if not os.path.isfile(metadata_path.replace(".parquet",".csv")):
+        print("[Writing metadata to CSV]")  
         metadata.to_csv(metadata_path.replace(".parquet",".csv"),index=False)
     del metadata["array_row"]
     del metadata["array_col"]

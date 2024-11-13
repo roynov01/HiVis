@@ -28,11 +28,11 @@ import ViziumHD_plot
 Image.MAX_IMAGE_PIXELS = 1063425001 # Enable large images loading
 FULLRES_THRESH = 1000 # in microns, below which, a full-res image will be plotted
 HIGHRES_THRESH = 3000 # in microns, below which, a high-res image will be plotted
+DEFAULT_COLORS = ["white","purple","blue","yellow","red"]
 
 # TODO add
 # CELLPOSE
-# Add general function plot_MA(df, cond1, cond2, pval_col="pval", exp_thresh=0, qval_thresh=0.05).
-#   if not pval, then just plot all genes
+
 
 def load(filename, directory=''):
     '''loads an instance from a pickle format'''
@@ -47,7 +47,7 @@ def load(filename, directory=''):
 
 def new(path_image_fullres:str, path_input_data:str, path_output:str,
              name:str, properties: dict = None, on_tissue_only=True,min_reads_in_spot=1,
-             min_reads_gene=10):
+             min_reads_gene=10, fluorescence=False):
     '''
     - Loads images (fullres, highres, lowres)
     - Loads data and metadata
@@ -64,15 +64,15 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
         * on_tissue_only - remove spots that are not classified as "on tissue"?
         * min_reads_in_spot - filter out spots with less than X UMIs
         * min_reads_gene - filter out gene that is present in less than X spots
+        * fluorescence - either False for H&E, or a dict of channel names and colors
     '''
+    # Validate paths of metadata and images
     if not os.path.exists(path_output):
         os.makedirs(path_output)
     path_image_highres = path_input_data + "/spatial/tissue_hires_image.png"
     path_image_lowres = path_input_data + "/spatial/tissue_lowres_image.png"
     json_path = path_input_data + "/spatial/scalefactors_json.json"
     metadata_path = path_input_data + "/spatial/tissue_positions.parquet"
-    
-    # Validate paths of metadata and images
     ViziumHD_utils.validate_exists([path_image_fullres,path_image_highres,path_image_lowres,json_path,metadata_path])
     
     # Load images
@@ -93,6 +93,9 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
     ViziumHD_utils._export_images(path_image_fullres, path_image_highres, path_image_lowres,
                         image_fullres, image_highres, image_lowres)
     
+    if fluorescence:
+        ViziumHD_utils._measure_fluorescence(adata, image_fullres, list(fluorescence.keys()), scalefactor_json["spot_diameter_fullres"])
+    
     # Add QC (nUMI, mito %) and unit transformation
     mito_name_prefix = "MT-" if properties.get("organism") == "human" else "mt-"
     ViziumHD_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
@@ -100,16 +103,22 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
     # Filter low quality spots and lowly expressed genes
     adata = adata[adata.obs["nUMI"] >= min_reads_in_spot, adata.var["nUMI_gene"] >= min_reads_gene].copy()
 
-    return ViziumHD(adata, image_fullres, image_highres, image_lowres, scalefactor_json, name, path_output, properties, SC=None)
+    return ViziumHD(adata, image_fullres, image_highres, image_lowres, scalefactor_json, 
+                    name, path_output, properties, SC=None, fluorescence=fluorescence)
 
 
 class ViziumHD:
-    def __init__(self, adata, image_fullres, image_highres, image_lowres, scalefactor_json, name, path_output, properties=None, SC=None):
+    def __init__(self, adata, image_fullres, image_highres, image_lowres,scalefactor_json, 
+                 name, path_output, properties=None, SC=None, fluorescence=False):
         self.SC = SC
         self.name, self.path_output = name, path_output 
         self.properties = properties if properties else {}
         self.organism = self.properties.get("organism")
         self.image_fullres, self.image_highres, self.image_lowres = image_fullres, image_highres, image_lowres
+        self.fluorescence = fluorescence
+        if fluorescence:
+            self.image_fullres_orig = self.image_fullres.copy()
+            self.recolor(fluorescence)
         self.json = scalefactor_json
         self.adata = adata
         adata.obs["pxl_col_in_lowres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
@@ -123,9 +132,35 @@ class ViziumHD:
         
         self.plot = ViziumHD_plot.PlotVizium(self)
         self.__init_img()
-        self.qc(save=True)
 
-        
+        self.qc(save=True)
+    
+    def recolor(self, fluorescence=None, normalization_method=None):
+        '''
+        Recolors a flurescence image
+        parameters:
+            * fluorescence is either list of colors or dict {channel: color...}
+            * normalization_method - {"percentile", "histogram","clahe","sqrt" or None for minmax}
+        '''
+        if not self.fluorescence:
+            raise ValueError("recolor() works for fluorescence visium only")
+        if not fluorescence:
+            print(f'Choose colors for flurescence: {self.fluorescence}\nNormalization methods:\n"percentile", "histogram","clahe","sqrt" or None for minmax')
+            return
+        channels = list(self.fluorescence.keys())    
+        if isinstance(fluorescence, list):
+            if len(fluorescence) != len(channels):
+                raise ValueError(f"Flurescence should include all channels: {channels}")
+            self.fluorescence = {channels[i]:fluorescence[i] for i in range(len(channels))}
+        elif isinstance(fluorescence, dict):
+            if list(fluorescence.keys()) != channels:
+                raise ValueError(f"Flurescence should include all channels: {channels}")
+            self.fluorescence = fluorescence
+        self.image_fullres = ViziumHD_utils.fluorescence_to_RGB(self.image_fullres_orig, 
+                                                                self.fluorescence.values(), 
+                                                                normalization_method)
+        self.__init_img()
+
     def qc(self, save=False,figsize=(10, 10)):
         '''plots basic QC (nUMI, mitochondrial %)'''
         fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(ncols=2,nrows=2, figsize=figsize)
@@ -229,8 +264,8 @@ class ViziumHD:
         self.__init_img()
     
         
-    def dge(self, column, group1, group2=None, umi_thresh=1,
-                     method="wilcox",alternative="two-sided",inplace=False):
+    def dge(self, column, group1, group2=None, method="wilcox", two_sided=False,
+            umi_thresh=0, inplace=False):
         '''
         Runs differential gene expression analysis between two groups.
         Values will be saved in self.var: expression_mean, log2fc, pval
@@ -240,12 +275,41 @@ class ViziumHD:
             * group2 - specific value in the "column". 
                        if None,will run agains all other values, and will be called "rest"
             * method - either "wilcox" or "t_test"
-            * alternative - {"two-sided", "less", "greater"}
+            * two_sided - if one sided, will give the pval for each group, 
+                          and the minimal of both groups (which will also be FDR adjusted)
             * umi_thresh - use only spots with more UMIs than this number
+            * expression - function F {mean, mean, max} F(mean(group1),mean(group2))
             * inplace - modify the adata.var with log2fc, pval and expression columns?
         '''
-        df = ViziumHD_utils.dge(self.adata,column, group1, group2,umi_thresh,
-                     method=method,alternative=alternative,inplace=inplace)
+        alternative = "two-sided" if two_sided else "greater"
+        df = ViziumHD_utils.dge(self.adata, column, group1, group2, umi_thresh,
+                     method=method, alternative=alternative, inplace=False)
+        df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
+        df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
+        if not two_sided:
+            df[f"pval_{group1}"] = 1 - df[f"pval_{column}"]
+            df[f"pval_{group2}"] = df[f"pval_{column}"]
+            df["pval"] = df[[f"pval_{group1}",f"pval_{group2}"]].min(axis=1)
+        else:
+            df["pval"] = df[f"pval_{column}"]
+        del df[f"pval_{column}"]
+        df["qval"] = ViziumHD_utils.p_adjust(df["pval"])
+        df["expression_mean"] = df[[group1, group2]].mean(axis=1)
+        df["expression_min"] = df[[group1, group2]].min(axis=1)
+        df["expression_max"] = df[[group1, group2]].max(axis=1)
+        df["gene"] = df.index
+        if inplace:
+            var = df.copy()
+            var.rename(columns={
+                "qval":f"qval_{column}",
+                "pval":f"pval_{column}",
+                "log2fc":f"log2fc_{column}",
+                "expression_mean":f"expression_mean_{column}",
+                "expression_min":f"expression_min_{column}",
+                "expression_max":f"expression_max_{column}",
+                },inplace=True)
+            del var["gene"]
+            self.adata.var = self.adata.var.join(var, how="left")
         return df
     
     def add_meta(self, name:str, values, type_="obs"):
@@ -517,6 +581,7 @@ class ViziumHD:
     
     def save(self, path=None):
         '''saves the instance in pickle format'''
+        print(f"SAVING [{self.name}]")
         if not path:
             path = f"{self.path_output}/{self.name}.pkl"
         else:

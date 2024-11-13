@@ -21,6 +21,7 @@ from subprocess import Popen, PIPE
 
 
 POINTS_PER_INCH = 72
+MAX_SQUARES_TO_DRAW_EXACT = 500 # how many squares to draw in perfect positions in spatial plot
 MAX_BARS = 30 # in barplot
 PAD_CONSTANT = 0.3 # padding of squares in scatterplot
 DEFAULT_COLOR ='None' # for plotting categorical
@@ -43,7 +44,8 @@ class PlotVizium:
         '''
         path = f"{self.main.path_output}/{self.main.name}_{filename}.{format}"
         if isinstance(fig, pd.DataFrame):
-            fig.to_csv(path.replace(".png",".csv"))
+            path = path.replace(".png",".csv")
+            fig.to_csv(path)
             return path
         if fig is None:
             if ax is None:
@@ -67,6 +69,7 @@ class PlotVizium:
         dot_size = bin_size_pixels * points_per_pixels 
         return dot_size
     
+    
     def spatial(self, what=None, image=True, ax=None, title=None, cmap="viridis", 
                   legend=True, alpha=1, figsize=(8, 8), save=False,
                   xlim=None, ylim=None, legend_title=None, axis_labels=True, pad=False):
@@ -85,21 +88,35 @@ class PlotVizium:
             * alpha - transparency of scatterplot. value between 0 and 1
             * save - save the image?
         '''
+        
+        
         title = what if title is None else title
         if legend_title is None:
             legend_title = what.capitalize() if what and what==what.lower else None
             
         xlim, ylim, adjusted_microns_per_pixel = self.main.crop(xlim, ylim)
-        size = self.__get_dot_size(adjusted_microns_per_pixel)
+        if (xlim[1] - xlim[0] + ylim[1] - ylim[0]) <= MAX_SQUARES_TO_DRAW_EXACT:
+            exact = True
+        else:
+            exact = False
+        if exact:
+            size = self.main.json['bin_size_um']/adjusted_microns_per_pixel
+        else: 
+            size = self.__get_dot_size(adjusted_microns_per_pixel)
+            
         if pad:
             size *= PAD_CONSTANT
+            
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
 
-
+        height, width = self.main.image_cropped.shape[:2]  
         if image: # Plot image
+            extent = None
             # ax.imshow(self.image_cropped, extent=[xlim[0], xlim[1], ylim[1], ylim[0]])
-            ax.imshow(self.main.image_cropped)
+            if exact:
+                extent = [0, width, height, 0]
+            ax.imshow(self.main.image_cropped, extent=extent)
 
         if what: 
             values = self.main.get(what, cropped=True)
@@ -116,18 +133,24 @@ class PlotVizium:
                 x, y, values = x.iloc[argsort_values], y.iloc[argsort_values], values[argsort_values]
             
             # Plot scatter:
-            ax = plot_scatter(x, y, values, size=size,title=title,
-                          figsize=figsize,alpha=alpha,cmap=cmap,ax=ax,
-                          legend=legend,xlab=None,ylab=None, 
-                          legend_title=legend_title)
-            
+            if exact:
+                ax = _plot_squares_exact(x, y, values, size=size,title=title,
+                              figsize=figsize,alpha=alpha,cmap=cmap,ax=ax,
+                              legend=legend,xlab=None,ylab=None, 
+                              legend_title=legend_title)
+                ax.set_aspect('equal')
+            else:
+                ax = plot_scatter(x, y, values, size=size,title=title,
+                              figsize=figsize,alpha=alpha,cmap=cmap,ax=ax,
+                              legend=legend,xlab=None,ylab=None, 
+                              legend_title=legend_title)
+
         if axis_labels:
             ax.set_xlabel("Spatial 1 (µm)")
             ax.set_ylabel("Spatial 2 (µm)")
         if title:
             ax.set_title(title)    
             
-        height, width = self.main.image_cropped.shape[:2]  
         set_axis_ticks(ax, width, adjusted_microns_per_pixel, axis='x')
         set_axis_ticks(ax, height, adjusted_microns_per_pixel, axis='y')    
         ax.set_xlim(0, width)
@@ -206,8 +229,15 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
                    cmap='viridis', figsize=(8, 8), alpha=1, legend_title=None, ax=None):
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
+    ax.set_aspect('equal')
     if legend_title is None:
         legend_title = title
+
+    # Ensure x, y, and values are numpy arrays
+    x = np.asarray(x)
+    y = np.asarray(y)
+    values = np.asarray(values)
+    
     if np.issubdtype(values.dtype, np.number): # Numeric case: Use colorbar
         scatter = plt.scatter(x, y, c=values, cmap=cmap, marker='s',
                               alpha=alpha, s=size,edgecolor='none')
@@ -242,7 +272,9 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
         ax.set_title(title)
     return ax
     
-def plot_scatter_signif(df,x_col,y_col,genes=None,text=True,figsize=(8,8),size=10,legend=False,
+
+
+def plot_scatter_signif(df,x_col,y_col,genes=None,text=True,figsize=(8,8),size=10,legend=False,title=None,
                     ax=None,xlab=None,ylab=None,out_path=None,color="blue",color_genes="red",x_line=None,y_line=None):
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
@@ -272,11 +304,30 @@ def plot_scatter_signif(df,x_col,y_col,genes=None,text=True,figsize=(8,8),size=1
                             force_text=(0.6, 0.6),ax=ax)
     ax.set_xlabel(xlab, fontsize=14)
     ax.set_ylabel(ylab, fontsize=14)
+    ax.set_title(title)
     if out_path:
         if not out_path.endswith(".png"):
             out_path += ".png"
         plt.savefig(out_path, format='png', dpi=300, bbox_inches='tight')
     return ax
+
+
+def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=None, title=None,
+            size=10, colname_exp="expression_mean",colname_qval="qval", 
+            colname_fc="log2fc", n_texts=130, ylab="log2(ratio)"):
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, layout='constrained')
+    plot = df.loc[df[colname_exp] >= exp_thresh].copy()
+    plot["exp"] = np.log10(plot[colname_exp])
+    plot["signif"] = (plot[colname_qval] <= qval_thresh) & (abs(plot[colname_fc]) >= fc_thresh)
+    signif_genes = plot.loc[plot["signif"]==True,"gene"].tolist()
+    text = True if len(signif_genes) < n_texts else False
+    ax = plot_scatter_signif(plot, "exp", colname_fc, genes=signif_genes,
+                             text=text, title=title,ax=ax,
+                             xlab=f"log10({colname_exp.replace('_',' ')})",
+                             ylab=ylab,y_line=0,color_genes="red", color="gray")
+    return ax
+
 
 def plot_scatter_html(df,x,y,save_path,text="gene",color=None,size=None,xlab=None,ylab=None,title=None,open_fig=True,legend_title=None):
 
@@ -446,11 +497,97 @@ def set_axis_ticks(ax, length_in_pixels, adjusted_microns_per_pixel, axis='x', n
         raise ValueError("Axis must be 'x' or 'y'")
 
 
+def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
+                 cmap='viridis', figsize=(8, 8), alpha=1, legend_title=None, ax=None):
+    '''plots sqares in the exact size'''
+    import matplotlib.patches as patches
+    import matplotlib.colors as mcolors
+    import matplotlib.cm as cm
+    from matplotlib.patches import Patch
 
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, layout='constrained')
+    if legend_title is None:
+        legend_title = title
 
+    # Ensure x, y, and values are numpy arrays
+    x = np.asarray(x)
+    y = np.asarray(y)
+    values = np.asarray(values)
 
+    # Set the aspect ratio to 'equal' to ensure squares remain squares
+    ax.set_aspect('equal')
 
+    if np.issubdtype(values.dtype, np.number):  # Numeric case: Use colorbar
+        # Normalize the values for the colormap
+        norm = mcolors.Normalize(vmin=np.min(values), vmax=np.max(values))
+        cmap_obj = cm.get_cmap(cmap)
 
+        # Add rectangles for each data point
+        for xi, yi, vi in zip(x, y, values):
+            # Calculate the lower-left corner position to center the square at (xi, yi)
+            ll_corner_x = xi - size / 2
+            ll_corner_y = yi - size / 2
 
+            # Create a rectangle (square) centered at (xi, yi)
+            square = patches.Rectangle(
+                (ll_corner_x, ll_corner_y),   # (x, y) of lower-left corner
+                size,                         # Width in data units
+                size,                         # Height in data units
+                facecolor=cmap_obj(norm(vi)),
+                edgecolor='none',
+                alpha=alpha
+            )
+            ax.add_patch(square)
+
+        # Create a ScalarMappable for the colorbar
+        sm = cm.ScalarMappable(cmap=cmap_obj, norm=norm)
+        sm.set_array([])
+        if legend:
+            cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
+            cbar.set_label(legend_title)
+
+    else:  # Categorical case: Use legend
+        unique_values = np.unique(values.astype(str))
+        unique_values = unique_values[unique_values != 'nan']
+        if isinstance(cmap, str):
+            colors = get_colors(unique_values, cmap)
+            color_map = {val: colors[i] for i, val in enumerate(unique_values)}  
+        elif isinstance(cmap, dict):
+            color_map = {val: cmap.get(val, 'gray') for val in unique_values}
+        else:
+            raise ValueError("cmap must be a string (colormap name) or a dictionary")
+        print(f"{cmap=},{unique_values=},{color_map=}")
+
+        # Add rectangles for each category
+        for val in unique_values:
+            mask = values == val
+            xi = x[mask]
+            yi = y[mask]
+            color = color_map[val]
+            for xj, yj in zip(xi, yi):
+                ll_corner_x = xj - size / 2
+                ll_corner_y = yj - size / 2
+                square = patches.Rectangle(
+                    (ll_corner_x, ll_corner_y),
+                    size,
+                    size,
+                    facecolor=color,
+                    edgecolor='none',
+                    alpha=alpha
+                )
+                ax.add_patch(square)
+
+        if legend:
+            legend_elements = [Patch(facecolor=color_map[val], label=str(val)) for val in unique_values]
+            ax.legend(handles=legend_elements, title=legend_title, loc='center left', bbox_to_anchor=(1, 0.5))
+
+    if xlab:
+        ax.set_xlabel(xlab)
+    if ylab:
+        ax.set_ylabel(ylab)
+    if title:
+        ax.set_title(title)
+    return ax
 
 
