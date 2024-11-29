@@ -70,14 +70,15 @@ class PlotVizium:
         return dot_size
     
     
-    def spatial(self, what=None, image=True, ax=None, title=None, cmap="viridis", 
-                  legend=True, alpha=1, figsize=(8, 8), save=False,
+    def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="viridis", 
+                  legend=True, alpha=1, figsize=(8, 8), save=False, exact=None,
                   xlim=None, ylim=None, legend_title=None, axis_labels=True, pad=False):
         '''
         plots the image, and/or data/metadata (spatial plot)
         parameters:
             * what - what to plot. can be metadata (obs/var colnames or a gene)
             * image - plot image?
+            * img_resolution - "low","high","full". If None, will determine automatically
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * cmap - colorbar to use
             * title, legend_title, axis_labels - strings
@@ -87,6 +88,7 @@ class PlotVizium:
             * pad - scale the size of dots to be smaller
             * alpha - transparency of scatterplot. value between 0 and 1
             * save - save the image?
+            * exact - plot the squares at the exact size? more time costly
         '''
         
         
@@ -94,18 +96,18 @@ class PlotVizium:
         if legend_title is None:
             legend_title = what.capitalize() if what and what==what.lower else None
             
-        xlim, ylim, adjusted_microns_per_pixel = self.main.crop(xlim, ylim)
-        if (xlim[1] - xlim[0] + ylim[1] - ylim[0]) <= MAX_SQUARES_TO_DRAW_EXACT:
-            exact = True
-        else:
-            exact = False
+        xlim, ylim, adjusted_microns_per_pixel = self.main.crop(xlim, ylim, resolution=img_resolution)
+        if exact is None:
+            if (xlim[1] - xlim[0] + ylim[1] - ylim[0]) <= MAX_SQUARES_TO_DRAW_EXACT:
+                exact = True
+            else:
+                exact = False
         if exact:
             size = self.main.json['bin_size_um']/adjusted_microns_per_pixel
         else: 
             size = self.__get_dot_size(adjusted_microns_per_pixel)
-            
-        if pad:
-            size *= PAD_CONSTANT
+            if pad:
+                size *= PAD_CONSTANT
             
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
@@ -320,6 +322,8 @@ def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=N
     plot = df.loc[df[colname_exp] >= exp_thresh].copy()
     plot["exp"] = np.log10(plot[colname_exp])
     plot["signif"] = (plot[colname_qval] <= qval_thresh) & (abs(plot[colname_fc]) >= fc_thresh)
+    if not "gene" in plot.columns:
+        plot["gene"] = plot.index
     signif_genes = plot.loc[plot["signif"]==True,"gene"].tolist()
     text = True if len(signif_genes) < n_texts else False
     ax = plot_scatter_signif(plot, "exp", colname_fc, genes=signif_genes,

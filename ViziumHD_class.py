@@ -35,7 +35,11 @@ DEFAULT_COLORS = ["white","purple","blue","yellow","red"]
 
 
 def load(filename, directory=''):
-    '''loads an instance from a pickle format'''
+    '''
+    loads an instance from a pickle format
+    parameters:
+        * filename - full path of pkl file, or just the filename if directory is specified
+    '''
     if not filename.endswith(".pkl"):
         filename = filename + ".pkl"
     if directory:
@@ -116,9 +120,7 @@ class ViziumHD:
         self.organism = self.properties.get("organism")
         self.image_fullres, self.image_highres, self.image_lowres = image_fullres, image_highres, image_lowres
         self.fluorescence = fluorescence
-        if fluorescence:
-            self.image_fullres_orig = self.image_fullres.copy()
-            self.recolor(fluorescence)
+        
         self.json = scalefactor_json
         self.adata = adata
         adata.obs["pxl_col_in_lowres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
@@ -131,11 +133,16 @@ class ViziumHD:
         self.ylim_max = (adata.obs['um_y'].min(), adata.obs['um_y'].max())
         
         self.plot = ViziumHD_plot.PlotVizium(self)
-        self.__init_img()
+        if fluorescence:
+            self.image_fullres_orig = self.image_fullres.copy()
+            self.recolor(fluorescence)
+            
+        else:
+            self.__init_img()
 
         self.qc(save=True)
     
-    def recolor(self, fluorescence=None, normalization_method=None):
+    def recolor(self, fluorescence=None, normalization_method="percentile"):
         '''
         Recolors a flurescence image
         parameters:
@@ -145,8 +152,10 @@ class ViziumHD:
         if not self.fluorescence:
             raise ValueError("recolor() works for fluorescence visium only")
         if not fluorescence:
-            print(f'Choose colors for flurescence: {self.fluorescence}\nNormalization methods:\n"percentile", "histogram","clahe","sqrt" or None for minmax')
-            return
+            fluorescence = self.fluorescence
+            if not normalization_method:
+                print(f'Choose colors for flurescence: {self.fluorescence}\nNormalization methods:\n"percentile", "histogram","clahe","sqrt" or None for minmax')
+                return
         channels = list(self.fluorescence.keys())    
         if isinstance(fluorescence, list):
             if len(fluorescence) != len(channels):
@@ -160,6 +169,7 @@ class ViziumHD:
                                                                 self.fluorescence.values(), 
                                                                 normalization_method)
         self.__init_img()
+
 
     def qc(self, save=False,figsize=(10, 10)):
         '''plots basic QC (nUMI, mitochondrial %)'''
@@ -340,24 +350,29 @@ class ViziumHD:
         '''
         if type_ == "obs":
             if name not in self.adata.obs.columns:
-                raise ValueError(f"No metadata called [{name}]")
-            if pd.api.types.is_categorical_dtype(self.adata.obs[name]):
-                self.adata.obs[name] = self.adata.obs[name].cat.rename_categories(values)
-            else:
-                self.adata.obs[name] = self.adata.obs[name].replace(values)
+                raise ValueError(f"No metadata called [{name}] in obs")
+            original_dtype = self.adata.obs[name].dtype
+            self.adata.obs[name] = self.adata.obs[name].apply(lambda x: values.get(x, x) if pd.notna(x) else x)
+            
+            # Convert back to original dtype if it was categorical
+            if pd.api.types.is_categorical_dtype(original_dtype):
+                self.adata.obs[name] = self.adata.obs[name].astype('category')
+                
         elif type_ == "var":
             if name not in self.adata.var.columns:
-                raise ValueError(f"No metadata called [{name}]")   
-            if pd.api.types.is_categorical_dtype(self.adata.var[name]):
-                self.adata.var[name] = self.adata.var[name].cat.rename_categories(values)
-            else:
-                self.adata.var[name] = self.adata.var[name].replace(values)
-        self.__init_img()
+                raise ValueError(f"No metadata called [{name}] in var")
+            original_dtype = self.adata.var[name].dtype
+            self.adata.var[name] = self.adata.var[name].apply(lambda x: values.get(x, x) if pd.notna(x) else x)
+            
+            # Convert back to original dtype if it was categorical
+            if pd.api.types.is_categorical_dtype(original_dtype):
+                self.adata.var[name] = self.adata.var[name].astype('category')
+                
+        else:
+            raise ValueError("type_ must be either 'obs' or 'var'")
         
-
-    
-    
-
+        # Call to initialize image if needed
+        self.__init_img()
         
             
     def export_h5(self, path=None):
@@ -368,6 +383,9 @@ class ViziumHD:
         return path
     
     def export_images(self, fullres=True, highres=True, lowres=True):
+        '''
+        exports full,high and low resolution images
+        '''
         if fullres:
             ViziumHD_utils.export_image(self.image_fullres, self.path_output+"/fullres_image.tif")
         if highres:
@@ -387,11 +405,12 @@ class ViziumHD:
         pass
     
     
-    def crop(self, xlim=None, ylim=None):
+    def crop(self, xlim=None, ylim=None, resolution=None):
         '''
         Crops the images and adata based on xlim and ylim in microns. 
         saves it in self.adata_cropped and self.image_cropped
         xlim, ylim: tuple of two values, in microns
+        resolution - if None, will determine automatically, other wise, "full","high" or "low"
         '''
         microns_per_pixel = self.json['microns_per_pixel'] 
     
@@ -405,28 +424,37 @@ class ViziumHD:
         x_range = xlim[1] - xlim[0]
         y_range = ylim[1] - ylim[0]
         lim_size = max(x_range, y_range)
-        if lim_size >= HIGHRES_THRESH: # Use low-resolution image
+        
+        if resolution == "full":
+            image = self.image_fullres
+            scalef = 1  # No scaling needed for full-resolution
+            pxl_col, pxl_row = 'pxl_col_in_fullres', 'pxl_row_in_fullres'
+        elif resolution == "high":
+            image = self.image_highres
+            scalef = self.json['tissue_hires_scalef']
+            pxl_col, pxl_row = 'pxl_col_in_highres', 'pxl_row_in_highres'
+        elif resolution == "low":
             image = self.image_lowres
-            scalef = self.json['tissue_lowres_scalef']  
-            pxl_col, pxl_row = 'pxl_col_in_lowres', 'pxl_row_in_lowres'
-            print("Low-res image selected")
+            scalef = self.json['tissue_lowres_scalef']
+            pxl_col, pxl_row = 'pxl_col_in_lowres', 'pxl_row_in_lowres'       
         elif lim_size <= FULLRES_THRESH: # Use full-resolution image
             image = self.image_fullres
             scalef = 1  # No scaling needed for full-resolution
             pxl_col, pxl_row = 'pxl_col_in_fullres', 'pxl_row_in_fullres'
             print("Full-res image selected")
-        else: # Use high-resolution image
+        elif lim_size <= HIGHRES_THRESH: # Use high-resolution image
             image = self.image_highres
             scalef = self.json['tissue_hires_scalef']  
             pxl_col, pxl_row = 'pxl_col_in_highres', 'pxl_row_in_highres'
             print("High-res image selected")
+        else: # Use low-resolution image
+            image = self.image_lowres
+            scalef = self.json['tissue_lowres_scalef']  
+            pxl_col, pxl_row = 'pxl_col_in_lowres', 'pxl_row_in_lowres'
+            print("Low-res image selected")
     
         adjusted_microns_per_pixel = microns_per_pixel / scalef
         # refresh the adata_cropped
-        
-        if len(self.adata.obs.columns) == len(self.adata_cropped.obs.columns):
-            if xlim == self.xlim_cur and ylim == self.ylim_cur: # Same values as last crop() call
-                return xlim, ylim, adjusted_microns_per_pixel 
         
         xlim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in xlim]
         ylim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in ylim]
