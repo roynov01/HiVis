@@ -405,7 +405,7 @@ def fluorescence_to_RGB(image, colors:list, normalization_method=None):
     image_rgb = np.zeros((*image_shape, 3))
     # colors = list(fluorescence.values())
     # Loop over the channels and apply the specified colors
-    for idx, color in enumerate(colors):
+    for idx, color in tqdm(enumerate(colors),total=len(colors),desc="Normilizing channels"):
         if color is None:
             continue  # Ignore this channel
         if idx >= image.shape[-1]:
@@ -486,4 +486,17 @@ def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_o
     return adata
 
 
-    
+
+
+def profile(func):
+    import cProfile
+    from functools import wraps
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        profiler = cProfile.Profile()
+        profiler.enable()  # Start profiling
+        result = func(*args, **kwargs)  # Run the function
+        profiler.disable()  # Stop profiling
+        profiler.print_stats()  # Print profiling results
+        return result  # Return the original function's result
+    return wrapper
