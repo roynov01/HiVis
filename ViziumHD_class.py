@@ -99,6 +99,7 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
     
     if fluorescence:
         ViziumHD_utils._measure_fluorescence(adata, image_fullres, list(fluorescence.keys()), scalefactor_json["spot_diameter_fullres"])
+
     
     # Add QC (nUMI, mito %) and unit transformation
     mito_name_prefix = "MT-" if properties.get("organism") == "human" else "mt-"
@@ -136,7 +137,6 @@ class ViziumHD:
         if fluorescence:
             self.image_fullres_orig = self.image_fullres.copy()
             self.recolor(fluorescence)
-            
         else:
             self.__init_img()
 
@@ -387,7 +387,10 @@ class ViziumHD:
         exports full,high and low resolution images
         '''
         if fullres:
-            ViziumHD_utils.export_image(self.image_fullres, self.path_output+"/fullres_image.tif")
+            if self.fluorescence:
+                ViziumHD_utils.export_image(self.image_fullres_orig, self.path_output+"/fullres_image.tif")
+            else:
+                ViziumHD_utils.export_image(self.image_fullres, self.path_output+"/fullres_image.tif")
         if highres:
             ViziumHD_utils.export_image(self.image_highres, self.path_output+"/highres_image.tif")
         if lowres:
@@ -497,31 +500,54 @@ class ViziumHD:
             if what in adata.obs.columns: # Metadata
                 return adata.obs[what].values
             if what in adata.var.index: # A gene
-                return np.array(adata[:, what].X.todense().ravel()).flatten() 
+                return np.array(adata[:, what].X.todense().ravel()).flatten()
             if what in adata.var.columns: # Gene metadata
                 return adata.var[what].values
-            if what.lower() in adata.obs.columns.str.lower(): 
-                return adata.obs[what.lower()].values
+            obs_cols_lower = adata.obs.columns.str.lower()
+            if what.lower() in obs_cols_lower:
+                col_name = adata.obs.columns[obs_cols_lower.get_loc(what.lower())]
+                return adata.obs[col_name].values
             if self.organism == "mouse" and (what.lower().capitalize() in adata.var.index):
-                return np.array(adata[:, what.lower().capitalize()].X.todense().ravel()).flatten() 
+                return np.array(adata[:, what.lower().capitalize()].X.todense()).flatten()
             if self.organism == "human" and (what.upper() in adata.var.index):
-                return np.array(adata[:, what.upper()].X.todense().ravel()).flatten() 
-            if what.lower() in adata.var.columns.str.lower(): 
-                return adata.var[what.lower()].values
+                return np.array(adata[:, what.upper()].X.todense()).flatten()
+            var_cols_lower = adata.var.columns.str.lower()
+            if what.lower() in var_cols_lower:
+                col_name = adata.var.columns[var_cols_lower.get_loc(what.lower())]
+                return adata.var[col_name].values
         else:
             # Create a new ViziumHD objects based on adata subsetting
-            adata = self.adata[what].copy()
-            adata_shifted, image_fullres_crop, image_highres_crop, image_lowres_crop = self.__crop_images(adata)
-            name = self.name + "_subset" if not self.name.endswith("_subset") else ""
-            new_obj = ViziumHD(adata_shifted, image_fullres_crop, image_highres_crop, 
-                               image_lowres_crop, self.json, name, self.path_output)
-            return new_obj
+            return self.subset(what, remove_empty_pixels=False)
+            
+    
+    def subset(self, what=(slice(None), slice(None)), remove_empty_pixels=False):
+        '''
+        Create a new ViziumHD objects based on adata subsetting.
+        parameters:
+            * remove_empty_pixels - if True, the images will only contain pixels under visium spots
+            * what - tuple of two elements. slicing instruction for adata. examples:
+                - (slice(None), slice(None)): Select all spots and all genes.
+                - ([0, 1, 2], slice(None)): Select the first three spots and all genes.
+                - (slice(None), ['GeneA', 'GeneB']): Select all spots and specific genes.
+                - (adata.obs['obs1'] == 'value', slice(None)): Select spots where 
+                  the 'obs1' column in adata.obs is 'value', and all genes.
+        '''
+        adata = self.adata[what].copy()
+        adata_shifted, image_fullres_crop, image_highres_crop, image_lowres_crop = self.__crop_images(adata, remove_empty_pixels)
+        name = self.name + "_subset" if not self.name.endswith("_subset") else ""
+        new_obj = ViziumHD(adata_shifted, image_fullres_crop, image_highres_crop, 
+                           image_lowres_crop, self.json, name, self.path_output,
+                           properties=self.properties.copy(),fluorescence=self.fluorescence.copy() if self.fluorescence else None)
+        return new_obj
+
    
-    def __crop_images(self, adata):
+    def __crop_images(self, adata, remove_empty_pixels):
         '''
         Helper function for get().
         Crops the images based on the spatial coordinates in a subsetted `adata` 
-        and adjusts the adata accordingly (shifts x, y)'''
+        and adjusts the adata accordingly (shifts x, y)
+        remove_empty_pixels
+        '''
         # Crop images
         def _crop_img(adata, img, col, row):
             pxl_col = adata.obs[col].values
@@ -534,9 +560,24 @@ class ViziumHD:
             if xlim_pixels[1] <= xlim_pixels[0] or ylim_pixels[1] <= ylim_pixels[0]:
                 raise ValueError("Invalid crop dimensions.")
             img_crop = img[ylim_pixels[0]:ylim_pixels[1],xlim_pixels[0]:xlim_pixels[1],:].copy()
+            
+            if remove_empty_pixels:
+                # remove pixels in images that don't have spots
+                pxl_cols_shifted = pxl_col - xlim_pixels[0]
+                pxl_rows_shifted = pxl_row - ylim_pixels[0]
+                mask = np.zeros((img_crop.shape[0], img_crop.shape[1]), dtype=bool)
+                for cx, cy in zip(pxl_cols_shifted, pxl_rows_shifted):
+                    # Ensure we only mark valid coordinates within the cropped image
+                    cx = int(cx)  
+                    cy = int(cy)
+                    if 0 <= cx < img_crop.shape[1] and 0 <= cy < img_crop.shape[0]:
+                        mask[cy, cx] = True
+                # Set non-adata remove pixels that are not covered by spots
+                background_value = 0 if self.fluorescence else 255 # black for fluorescence, white for RGB
+                img_crop[~mask] = background_value
             return img_crop, xlim_pixels, ylim_pixels
-        
-        image_fullres_crop, xlim_pixels_fullres, ylim_pixels_fullres = _crop_img(adata, self.image_fullres, "pxl_col_in_fullres", "pxl_row_in_fullres")
+                
+        image_fullres_crop, xlim_pixels_fullres, ylim_pixels_fullres = _crop_img(adata, self.image_fullres_orig, "pxl_col_in_fullres", "pxl_row_in_fullres")
         image_highres_crop , _ , _ = _crop_img(adata, self.image_highres, "pxl_col_in_highres", "pxl_row_in_highres")
         image_lowres_crop , _ , _ = _crop_img(adata, self.image_lowres, "pxl_col_in_lowres", "pxl_row_in_lowres")
 
@@ -555,7 +596,58 @@ class ViziumHD:
         if item is None:
             raise KeyError(f"[{what}] isn't in data or metadatas")
         return item
-            
+    
+    def remove_pixels(self, column: str, values: list):
+        '''
+        removes pixels in images, based on adata.obs[column].isin(values)
+        '''
+    
+        # Identify which pixels to remove based on the given condition
+        obs_values = self.adata.obs[column]
+        remove_mask = obs_values.isin([v for v in values if not pd.isna(v)])
+        if any(pd.isna(v) for v in values): # Handle NaNs
+            remove_mask |= obs_values.isna()
+    
+        # Determine the background color: Black (0) if fluorescence images, white (255) otherwise
+        if self.fluorescence:
+            img_fullres_new = self.image_fullres_orig.copy() if self.image_fullres_orig is not None else None
+            background_value = 0
+        else:
+            img_fullres_new = self.image_fullres.copy() if self.image_fullres is not None else None
+            background_value = 255
+        img_highres_new = self.image_highres.copy() if self.image_highres is not None else None
+        img_lowres_new = self.image_lowres.copy() if self.image_lowres is not None else None
+    
+        # Iterate over pixels to remove and set them to background
+        img_info = [(img_fullres_new, "pxl_col_in_fullres", "pxl_row_in_fullres"),
+                    (img_highres_new, "pxl_col_in_highres", "pxl_row_in_highres"),
+                    (img_lowres_new, "pxl_col_in_lowres", "pxl_row_in_lowres")]
+        
+        images = []
+        # Iterate over each image and modify pixels
+        for i, (img_new, col_name, row_name) in enumerate(img_info):
+            if img_new is not None:
+                pxl_cols = self.adata.obs[col_name].values.astype(int)
+                pxl_rows = self.adata.obs[row_name].values.astype(int)
+                # Update pixels
+                for idx, to_remove in enumerate(remove_mask):
+                    if to_remove:
+                        r = pxl_rows[idx]
+                        c = pxl_cols[idx]
+                        if 0 <= r < img_new.shape[0] and 0 <= c < img_new.shape[1]:
+                            img_new[r, c, :] = background_value
+            images.append(img_new)
+        
+        # Create a new object with the modified images
+        name = self.name + "_edited" if not self.name.endswith("_edited") else self.name
+        new_obj = ViziumHD(self.adata.copy(),images[0],images[1],
+                           images[2],self.json,name,self.path_output,
+                           properties=self.properties.copy(),
+                           fluorescence=self.fluorescence.copy() if self.fluorescence else None)
+    
+        return new_obj
+
+        
     def __str__(self):
         s = f"# {self.name} #\n"
         if hasattr(self, "organism"): s += f"\tOrganism: {self.organism}\n"

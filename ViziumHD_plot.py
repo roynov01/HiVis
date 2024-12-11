@@ -13,11 +13,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib import colormaps
+from matplotlib.colors import LinearSegmentedColormap
+import matplotlib.patches as patches
+import matplotlib.colors as mcolors
+import matplotlib.cm as cm
 import seaborn as sns
 from adjustText import adjust_text
 import plotly.express as px
 from subprocess import Popen, PIPE
-# from matplotlib import colormaps
 
 
 POINTS_PER_INCH = 72
@@ -70,7 +73,7 @@ class PlotVizium:
         return dot_size
     
     
-    def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="viridis", 
+    def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
                   legend=True, alpha=1, figsize=(8, 8), save=False, exact=None,
                   xlim=None, ylim=None, legend_title=None, axis_labels=True, pad=False):
         '''
@@ -228,7 +231,7 @@ class PlotSC:
 
 
 def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
-                   cmap='viridis', figsize=(8, 8), alpha=1, legend_title=None, ax=None):
+                   cmap='winter', figsize=(8, 8), alpha=1, legend_title=None, ax=None):
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
     ax.set_aspect('equal')
@@ -241,7 +244,11 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
     values = np.asarray(values)
     
     if np.issubdtype(values.dtype, np.number): # Numeric case: Use colorbar
-        scatter = plt.scatter(x, y, c=values, cmap=cmap, marker='s',
+        if isinstance(cmap, str):
+            cmap_obj = cm.get_cmap(cmap)
+        elif isinstance(cmap, list):
+            cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+        scatter = plt.scatter(x, y, c=values, cmap=cmap_obj, marker='s',
                               alpha=alpha, s=size,edgecolor='none')
         if legend:
             cbar = plt.colorbar(scatter, ax=ax, shrink=0.6)
@@ -458,7 +465,10 @@ def get_colors(values, cmap):
         unique_values = values.unique()
     else:
         unique_values = np.unique(values.astype(str))
-    cmap_obj = colormaps.get_cmap(cmap)
+    if isinstance(cmap, str):
+        cmap_obj = cm.get_cmap(cmap)
+    elif isinstance(cmap, list):
+        cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
     cmap_len = cmap_obj.N
     num_unique = len(unique_values)
     if num_unique <= cmap_len:
@@ -502,12 +512,9 @@ def set_axis_ticks(ax, length_in_pixels, adjusted_microns_per_pixel, axis='x', n
 
 
 def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
-                 cmap='viridis', figsize=(8, 8), alpha=1, legend_title=None, ax=None):
+                 cmap='winter', figsize=(8, 8), alpha=1, legend_title=None, ax=None):
     '''plots sqares in the exact size'''
-    import matplotlib.patches as patches
-    import matplotlib.colors as mcolors
-    import matplotlib.cm as cm
-    from matplotlib.patches import Patch
+
 
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
@@ -524,8 +531,11 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
 
     if np.issubdtype(values.dtype, np.number):  # Numeric case: Use colorbar
         # Normalize the values for the colormap
+        if isinstance(cmap, str):
+            cmap_obj = cm.get_cmap(cmap)
+        elif isinstance(cmap, list):
+            cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
         norm = mcolors.Normalize(vmin=np.min(values), vmax=np.max(values))
-        cmap_obj = cm.get_cmap(cmap)
 
         # Add rectangles for each data point
         for xi, yi, vi in zip(x, y, values):

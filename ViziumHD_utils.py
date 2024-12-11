@@ -186,6 +186,11 @@ def load_images(path_image_fullres, path_image_highres, path_image_lowres):
         image_lowres = plt.imread(path_image_lowres)
     else:
         image_lowres = tifffile.imread(path_image_lowres)
+    if len(image_highres.shape) == 2: # convert grayscale to RGB
+        image_lowres = _normalize_channel(image_lowres)
+        image_lowres = np.stack((image_lowres,)*3,axis=-1)
+        image_highres = _normalize_channel(image_highres)
+        image_highres = np.stack((image_highres,)*3,axis=-1)
     return image_fullres, image_highres, image_lowres
     
 
@@ -296,6 +301,11 @@ def _crop_images_permenent(adata, image_fullres, image_highres, image_lowres, sc
     image_fullres = image_fullres[ylim_pixels_fullres[0]:ylim_pixels_fullres[1],
                                            xlim_pixels_fullres[0]:xlim_pixels_fullres[1],:]
     
+    if len(image_highres.shape) == 2:
+        image_highres = np.repeat(image_highres[:, :, np.newaxis], 3, axis=2)
+    if len(image_lowres.shape) == 2:
+        image_lowres = np.repeat(image_lowres[:, :, np.newaxis], 3, axis=2)
+    
     # Adjust limits for high-resolution image and crop
     scaling_factor_hires = scalefactor_json["tissue_hires_scalef"]
     xlim_pixels_highres = [x*scaling_factor_hires for x in xlim_pixels_fullres]
@@ -373,24 +383,25 @@ def _measure_fluorescence(adata, image_fullres, fluorescence, spot_diameter_full
     centers_x = adata.obs['pxl_col_in_fullres'].values.astype(int)
     centers_y = adata.obs['pxl_row_in_fullres'].values.astype(int)
     
-    # Initialize an array to hold the fluorescence sums for each spot and each channel
-    fluorescence_sums = np.zeros((len(centers_x), num_channels))
-
     # Loop over each channel
-    for i in range(num_channels):
-        # Sum pixels within each square region for this channel
-        for j, (cx, cy) in enumerate(tqdm(zip(centers_x, centers_y),total=len(centers_x),
-                                          desc=f"Calculating intensity per spot: {fluorescence[i]}")):
+    for idx, channel in enumerate(fluorescence):
+        # Initialize an array to hold the fluorescence sums for this channel
+        if channel in adata.obs.columns:
+            continue
+        fluorescence_sums = np.zeros(len(centers_x))
+        
+        # Calculate fluorescence sums per spot for this channel
+        for j, (cx, cy) in enumerate(tqdm(zip(centers_x, centers_y), total=len(centers_x),
+                                           desc=f"Calculating intensity per spot: {channel}")):
             # Define the square bounding box
             x_min, x_max = max(cx - half_size, 0), min(cx + half_size + 1, image_fullres.shape[1])
             y_min, y_max = max(cy - half_size, 0), min(cy + half_size + 1, image_fullres.shape[0])
-
+    
             # Sum the pixels in this region for the current channel
-            fluorescence_sums[j, i] = image_fullres[y_min:y_max, x_min:x_max, i].sum()
-
-    # Assign the sums to adata.obs
-    for idx, channel in enumerate(fluorescence):
-        adata.obs[channel] = fluorescence_sums[:, idx]
+            fluorescence_sums[j] = image_fullres[y_min:y_max, x_min:x_max, idx].sum()
+    
+        # Assign the sums to adata.obs for this channel
+        adata.obs[channel] = fluorescence_sums
     
 def fluorescence_to_RGB(image, colors:list, normalization_method=None):
     '''
@@ -403,7 +414,7 @@ def fluorescence_to_RGB(image, colors:list, normalization_method=None):
     # Initialize an empty RGB image with the same spatial dimensions
     image_shape = image.shape[:2]
     image_rgb = np.zeros((*image_shape, 3))
-    # colors = list(fluorescence.values())
+    
     # Loop over the channels and apply the specified colors
     for idx, color in tqdm(enumerate(colors),total=len(colors),desc="Normilizing channels"):
         if color is None:
@@ -416,7 +427,7 @@ def fluorescence_to_RGB(image, colors:list, normalization_method=None):
 
         # Normalize the channel data for visualization
         normalized_channel = _normalize_channel(channel_data, normalization_method)
-        
+       
         # Convert color name or hex to RGB values
         color_rgb = np.array(to_rgba(color)[:3])  # Extract RGB components
 
@@ -433,26 +444,34 @@ def fluorescence_to_RGB(image, colors:list, normalization_method=None):
 def _normalize_channel(channel_data, method="percentile"):
     if method == "percentile":
         p_min, p_max = np.percentile(channel_data, (1, 99))
-        normalized_channel = (channel_data - p_min) / (p_max - p_min)
-        normalized_channel = np.clip(normalized_channel, 0, 1)
+        if p_max > p_min:
+            normalized = (channel_data - p_min) / (p_max - p_min)
+            normalized = np.clip(normalized, 0, 1)
+        else:
+            normalized = channel_data.copy()
     elif method == "histogram":
         from skimage import exposure
-        normalized_channel = exposure.equalize_hist(channel_data)
+        normalized = exposure.equalize_hist(channel_data)
     elif method == "clahe":
         from skimage import exposure
-        normalized_channel = exposure.equalize_adapthist(channel_data, clip_limit=0.03)
+        normalized = exposure.equalize_adapthist(channel_data, clip_limit=0.03)
     elif method == "sqrt":
-        normalized_channel = np.sqrt(channel_data - channel_data.min())
-        normalized_channel /= normalized_channel.max()
-    else:
-        # Default to min-max scaling
-        channel_min = channel_data.min()
-        channel_max = channel_data.max()
-        if channel_max - channel_min > 0:
-            normalized_channel = (channel_data - channel_min) / (channel_max - channel_min)
+        ch_min = channel_data.min()
+        shifted = channel_data - ch_min
+        max_val = shifted.max()
+        if max_val > 0:
+            normalized = np.sqrt(shifted) / np.sqrt(max_val)
         else:
-            normalized_channel = channel_data
-    return normalized_channel
+            normalized = channel_data.copy()
+    else: # Min-max scaling
+        ch_min = channel_data.min()
+        ch_max = channel_data.max()
+        diff = ch_max - ch_min
+        if diff > 0:
+            normalized = (channel_data - ch_min) / diff
+        else:
+            normalized = channel_data.copy()
+    return normalized
    
 
 def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_only):
@@ -485,18 +504,3 @@ def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_o
     adata.obs = adata.obs.join(metadata, how='left')
     return adata
 
-
-
-
-def profile(func):
-    import cProfile
-    from functools import wraps
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        profiler = cProfile.Profile()
-        profiler.enable()  # Start profiling
-        result = func(*args, **kwargs)  # Run the function
-        profiler.disable()  # Stop profiling
-        profiler.print_stats()  # Print profiling results
-        return result  # Return the original function's result
-    return wrapper
