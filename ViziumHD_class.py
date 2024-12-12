@@ -94,13 +94,16 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
         adata, image_fullres, image_highres, image_lowres, scalefactor_json)
     
     # Save cropped images
-    ViziumHD_utils._export_images(path_image_fullres, path_image_highres, path_image_lowres,
-                        image_fullres, image_highres, image_lowres)
+    path_image_fullres_cropped = path_image_fullres.replace("." + path_image_fullres.split(".")[-1], "_cropped.tif")
+    path_image_highres_cropped = path_image_highres.replace("." + path_image_highres.split(".")[-1], "_cropped.tif")
+    path_image_lowres_cropped = path_image_lowres.replace("." + path_image_lowres.split(".")[-1], "_cropped.tif")
+    ViziumHD_utils._export_images(path_image_fullres_cropped, path_image_highres_cropped, 
+                                  path_image_lowres_cropped,image_fullres,
+                                  image_highres, image_lowres)
     
     if fluorescence:
         ViziumHD_utils._measure_fluorescence(adata, image_fullres, list(fluorescence.keys()), scalefactor_json["spot_diameter_fullres"])
 
-    
     # Add QC (nUMI, mito %) and unit transformation
     mito_name_prefix = "MT-" if properties.get("organism") == "human" else "mt-"
     ViziumHD_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
@@ -113,16 +116,23 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
 
 
 class ViziumHD:
-    def __init__(self, adata, image_fullres, image_highres, image_lowres,scalefactor_json, 
+    def __init__(self, adata, image_fullres, image_highres, image_lowres, scalefactor_json, 
                  name, path_output, properties=None, SC=None, fluorescence=False):
         self.SC = SC
         self.name, self.path_output = name, path_output 
         self.properties = properties if properties else {}
         self.organism = self.properties.get("organism")
+        if isinstance(image_fullres, str): # paths of images, not the images themselves
+            image_fullres, image_highres, image_lowres = ViziumHD_utils.load_images(image_fullres, image_highres, image_lowres)
+        
         self.image_fullres, self.image_highres, self.image_lowres = image_fullres, image_highres, image_lowres
         self.fluorescence = fluorescence
         
+        if isinstance(scalefactor_json, str):
+            with open(scalefactor_json) as file:
+                scalefactor_json = json.load(file)        
         self.json = scalefactor_json
+            
         self.adata = adata
         adata.obs["pxl_col_in_lowres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
         adata.obs["pxl_row_in_lowres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
@@ -375,26 +385,39 @@ class ViziumHD:
         self.__init_img()
         
             
-    def export_h5(self, path=None):
+    def export_h5(self, path=None, force=False):
         '''exports the adata. can also save the obs as parquet'''
-        if not path:
-            path = f"{self.path_output}/{self.name}_viziumHD.h5ad"
-        self.adata.write(path)
-        return path
+        if path is None:
+            path = self.path_output
+        path = f"{path}/{self.name}_viziumHD.h5ad"
+        if not os.path.exists(path) or force:
+            print("[Writing h5]")
+            self.adata.write(path)
+        return self.adata
     
-    def export_images(self, fullres=True, highres=True, lowres=True):
+    def export_images(self, path=None, force=False):
         '''
         exports full,high and low resolution images
         '''
-        if fullres:
-            if self.fluorescence:
-                ViziumHD_utils.export_image(self.image_fullres_orig, self.path_output+"/fullres_image.tif")
-            else:
-                ViziumHD_utils.export_image(self.image_fullres, self.path_output+"/fullres_image.tif")
-        if highres:
-            ViziumHD_utils.export_image(self.image_highres, self.path_output+"/highres_image.tif")
-        if lowres:
-            ViziumHD_utils.export_image(self.image_lowres, self.path_output+"/lowres_image.tif")
+        if path is None:
+            path = self.path_output
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path_image_fullres = f"{path}/{self.name}_fullres.tif"
+        image_fullres = self.image_fullres_orig if self.fluorescence else self.image_fullres
+        path_image_highres = f"{path}/{self.name}_highres.tif"
+        path_image_lowres = f"{path}/{self.name}_lowres.tif"
+        images = ViziumHD_utils._export_images(path_image_fullres, path_image_highres, 
+                                      path_image_lowres, image_fullres, 
+                                      self.image_highres, self.image_lowres, force=force)
+        
+        path_json = f"{path}/{self.name}_scalefactors_json.json"
+        with open(path_json, 'w') as file:
+            json.dump(self.json, file, indent=4)
+        
+        images.append(self.json)
+        
+        return images
 
     def sc_create(self, category):
         if self.SC:
@@ -599,9 +622,9 @@ class ViziumHD:
     
     def remove_pixels(self, column: str, values: list):
         '''
-        removes pixels in images, based on adata.obs[column].isin(values)
+        removes pixels in images, based on adata.obs[column].isin(values).
+        returns new ViziumHD object.
         '''
-    
         # Identify which pixels to remove based on the given condition
         obs_values = self.adata.obs[column]
         remove_mask = obs_values.isin([v for v in values if not pd.isna(v)])
@@ -618,24 +641,50 @@ class ViziumHD:
         img_highres_new = self.image_highres.copy() if self.image_highres is not None else None
         img_lowres_new = self.image_lowres.copy() if self.image_lowres is not None else None
     
-        # Iterate over pixels to remove and set them to background
-        img_info = [(img_fullres_new, "pxl_col_in_fullres", "pxl_row_in_fullres"),
-                    (img_highres_new, "pxl_col_in_highres", "pxl_row_in_highres"),
-                    (img_lowres_new, "pxl_col_in_lowres", "pxl_row_in_lowres")]
+        # Extract spot diameter and compute corresponding sizes for each resolution
+        spot_diameter_fullres = self.json['spot_diameter_fullres']
+        # For indexing, we need integer sizes
         
+        from math import ceil
+        spot_size_fullres = int(ceil(spot_diameter_fullres))
+        spot_size_hires = int(ceil(spot_diameter_fullres * self.json['tissue_hires_scalef']))
+        spot_size_lowres = int(ceil(spot_diameter_fullres * self.json['tissue_lowres_scalef']))
+        print(f"{spot_diameter_fullres=},{self.json['tissue_hires_scalef']=}")
+        print(f"{spot_size_fullres=},{spot_size_hires=},{spot_size_lowres=}")
+        # Ensure sizes are at least 1
+        spot_size_fullres = max(spot_size_fullres, 1)
+        spot_size_hires = max(spot_size_hires, 1)
+        spot_size_lowres = max(spot_size_lowres, 1)
+        
+    
+        # The image info tuples as before
+        img_info = [
+            (img_fullres_new, "pxl_col_in_fullres", "pxl_row_in_fullres", spot_size_fullres),
+            (img_highres_new, "pxl_col_in_highres", "pxl_row_in_highres", spot_size_hires),
+            (img_lowres_new, "pxl_col_in_lowres", "pxl_row_in_lowres", spot_size_lowres)
+        ]
+    
         images = []
-        # Iterate over each image and modify pixels
-        for i, (img_new, col_name, row_name) in enumerate(img_info):
+        for i, (img_new, col_name, row_name, spot_size) in enumerate(img_info):
             if img_new is not None:
                 pxl_cols = self.adata.obs[col_name].values.astype(int)
                 pxl_rows = self.adata.obs[row_name].values.astype(int)
-                # Update pixels
+                half_spot = spot_size // 2
+    
+                # Instead of removing one pixel, remove a square region
                 for idx, to_remove in enumerate(remove_mask):
                     if to_remove:
                         r = pxl_rows[idx]
                         c = pxl_cols[idx]
-                        if 0 <= r < img_new.shape[0] and 0 <= c < img_new.shape[1]:
-                            img_new[r, c, :] = background_value
+    
+                        # Compute the boundaries of the square, clamped within image bounds
+                        top = max(r - half_spot, 0)
+                        bottom = min(r + half_spot + 1, img_new.shape[0])  # +1 to include the boundary
+                        left = max(c - half_spot, 0)
+                        right = min(c + half_spot + 1, img_new.shape[1])
+    
+                        # Set the entire block to background_value
+                        img_new[top:bottom, left:right, :] = background_value
             images.append(img_new)
         
         # Create a new object with the modified images
@@ -644,7 +693,6 @@ class ViziumHD:
                            images[2],self.json,name,self.path_output,
                            properties=self.properties.copy(),
                            fluorescence=self.fluorescence.copy() if self.fluorescence else None)
-    
         return new_obj
 
         
@@ -692,9 +740,9 @@ class ViziumHD:
         ViziumHD_utils.update_instance_methods(self.plot)
         self.__init_img()
         # update also the SC
-        if self.SC is not None:
-            ViziumHD_utils.update_instance_methods(self.SC)
-            ViziumHD_utils.update_instance_methods(self.SC.plot)
+        # if self.SC is not None:
+            # ViziumHD_utils.update_instance_methods(self.SC)
+            # ViziumHD_utils.update_instance_methods(self.SC.plot)
     
     def copy(self):
         return deepcopy(self)

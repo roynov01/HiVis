@@ -332,23 +332,21 @@ def _crop_images_permenent(adata, image_fullres, image_highres, image_lowres, sc
     
 
 def _export_images(path_image_fullres, path_image_highres, path_image_lowres,
-                    image_fullres, image_highres, image_lowres):
-    '''Saves cropped images'''
+                    image_fullres, image_highres, image_lowres, force=False):
+    '''Saves cropped images. force - overrite existing files?'''
     def _export_image(img, path):
-        fileformat = "." + path.split(".")[1]
-        save_path = path.replace(fileformat, "_cropped.tif")
-        if not os.path.exists(save_path):
+        if not os.path.exists(path) or force:
             if img.max() <= 1:
                 img = (img * 255).astype(np.uint8)
             # image = Image.fromarray(img)
-            tifffile.imwrite(save_path, img)
-            # image.save(save_path, format='TIFF') 
-            
+            tifffile.imwrite(path, img)
+            # image.save(save_path, format='TIFF')
     print("[Saving cropped images]")
     images = [image_fullres, image_highres, image_lowres]
     paths = [path_image_fullres, path_image_highres, path_image_lowres]
     for img, path in zip(images, paths):
         _export_image(img, path)
+    return images
               
 
 def _edit_adata(adata, scalefactor_json, mito_name_prefix):

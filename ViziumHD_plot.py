@@ -12,7 +12,7 @@ import pandas as pd
 # import scanpy as sc
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
-from matplotlib import colormaps
+# from matplotlib import colormaps
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.patches as patches
 import matplotlib.colors as mcolors
@@ -93,12 +93,9 @@ class PlotVizium:
             * save - save the image?
             * exact - plot the squares at the exact size? more time costly
         '''
-        
-        
         title = what if title is None else title
         if legend_title is None:
-            legend_title = what.capitalize() if what and what==what.lower else None
-            
+            legend_title = what.capitalize() if what and what==what.lower else what
         xlim, ylim, adjusted_microns_per_pixel = self.main.crop(xlim, ylim, resolution=img_resolution)
         if exact is None:
             if (xlim[1] - xlim[0] + ylim[1] - ylim[0]) <= MAX_SQUARES_TO_DRAW_EXACT:
@@ -153,11 +150,16 @@ class PlotVizium:
         if axis_labels:
             ax.set_xlabel("Spatial 1 (µm)")
             ax.set_ylabel("Spatial 2 (µm)")
+            set_axis_ticks(ax, width, adjusted_microns_per_pixel, axis='x')
+            set_axis_ticks(ax, height, adjusted_microns_per_pixel, axis='y')
+        else:
+            ax.set_xticks([])  
+            ax.set_xticklabels([]) 
+            ax.set_yticks([])  
+            ax.set_yticklabels([]) 
         if title:
             ax.set_title(title)    
             
-        set_axis_ticks(ax, width, adjusted_microns_per_pixel, axis='x')
-        set_axis_ticks(ax, height, adjusted_microns_per_pixel, axis='y')    
         ax.set_xlim(0, width)
         ax.set_ylim(height, 0)     
         
@@ -248,7 +250,7 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
             cmap_obj = cm.get_cmap(cmap)
         elif isinstance(cmap, list):
             cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-        scatter = plt.scatter(x, y, c=values, cmap=cmap_obj, marker='s',
+        scatter = ax.scatter(x, y, c=values, cmap=cmap_obj, marker='s',
                               alpha=alpha, s=size,edgecolor='none')
         if legend:
             cbar = plt.colorbar(scatter, ax=ax, shrink=0.6)
@@ -263,7 +265,7 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
             color_map = {val: cmap.get(val,DEFAULT_COLOR) for val in unique_values}
         else:
             raise ValueError("cmap must be a string (colormap name) or a dictionary")
-        print(f"{cmap=},{unique_values=},{color_map=}")
+        # print(f"{cmap=},{unique_values=},{color_map=}")
         for val in unique_values: # Plot each category with its color
             if values.dtype == bool:
                 values = values.astype(str)
@@ -341,7 +343,6 @@ def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=N
 
 
 def plot_scatter_html(df,x,y,save_path,text="gene",color=None,size=None,xlab=None,ylab=None,title=None,open_fig=True,legend_title=None):
-
     def open_html(html_file,chrome_path=chrome_path):
         process = Popen(['cmd.exe', '/c', chrome_path, html_file], stdout=PIPE, stderr=PIPE)
 
@@ -603,5 +604,3 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
     if title:
         ax.set_title(title)
     return ax
-
-
