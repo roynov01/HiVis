@@ -426,9 +426,6 @@ class ViziumHD:
         params = []
         self.SC = ViziumHD_sc_class.SingleCell(self, params)
 
-    def sc_transfer_meta(self, what:str):
-        '''transfers metadata assignment from the single-cell to the spots'''
-        pass
     
     
     def crop(self, xlim=None, ylim=None, resolution=None):
@@ -620,7 +617,7 @@ class ViziumHD:
             raise KeyError(f"[{what}] isn't in data or metadatas")
         return item
     
-    def remove_pixels(self, column: str, values: list):
+    def remove_pixels(self, column: str, values: list, marging=1):
         '''
         removes pixels in images, based on adata.obs[column].isin(values).
         returns new ViziumHD object.
@@ -669,7 +666,7 @@ class ViziumHD:
             if img_new is not None:
                 pxl_cols = self.adata.obs[col_name].values.astype(int)
                 pxl_rows = self.adata.obs[row_name].values.astype(int)
-                half_spot = spot_size // 2
+                half_spot = spot_size // 2 + marging # +1 is marging
     
                 # Instead of removing one pixel, remove a square region
                 for idx, to_remove in enumerate(remove_mask):

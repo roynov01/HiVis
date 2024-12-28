@@ -89,8 +89,6 @@ def matnorm(df):
         raise ValueError("df is not a list,numpy or a dataframe")
         
 
- 
-    
 def validate_exists(file_path):
     if isinstance(file_path, (list, tuple)):
         for path in file_path:
