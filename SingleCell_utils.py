@@ -11,12 +11,11 @@ import pandas as pd
 from tqdm import tqdm
 import scanpy as sc
 from scipy.sparse import lil_matrix
-import os
 
 # import ViziumHD_utils
 # import ViziumHD_class
 # import ViziumHD_plot
-import ViziumHD_sc_class
+# import ViziumHD_sc_class
 
 
 
@@ -29,6 +28,7 @@ def _aggregate_spots(adata, sc_metadata, columns, custom_agg=None):
     spots_only = sc_metadata.loc[sc_metadata['Classification']=='Spot',['Name','in_nucleus','in_cell']]
     cells_only = sc_metadata.loc[sc_metadata['Classification']=='Cell',columns]
     cells_only.rename(columns={'Object ID': 'Cell_ID'},inplace=True)
+    
     _split_name(spots_only, adata)
     
     custom_agg = custom_agg if custom_agg else {}
@@ -38,7 +38,7 @@ def _aggregate_spots(adata, sc_metadata, columns, custom_agg=None):
     return adata_sc
 
 
-def _split_name(spots_only, adata):
+def _split_name2(spots_only, adata):
     def helper(s):
         if '__' in s:
             parts = s.split('__')
@@ -55,7 +55,19 @@ def _split_name(spots_only, adata):
     print("[Adding cells to the spots-adata]")
     adata.obs = adata.obs.join(spots_only,how='left')
     # adata.obs = adata.obs.join(spots_only,on="Spot_ID",how='left')
-# 
+
+def _split_name(spots_only, adata):
+    print("[Splitting name column]")
+    split_names = spots_only['Name'].str.split('__', n=1, expand=True)
+    split_names.columns = ['Spot_ID', 'Cell_ID']  # Assign column names
+    # Replace empty second parts with NaN
+    split_names['Cell_ID'] = split_names['Cell_ID'].fillna(value=np.nan)
+    spots_only[['Spot_ID', 'Cell_ID']] = split_names
+    spots_only = spots_only.set_index("Spot_ID")
+    del spots_only['Name']
+    adata.obs['Spot_ID'] = adata.obs.index
+    print("[Adding cells to the spots-adata]")
+    adata.obs = adata.obs.join(spots_only,how='left')
 
 
 def _aggregate_meta(adata, cells_only, user_aggregations=None):
@@ -129,6 +141,7 @@ def _aggregate_data(cells_only, adata, output_dir=None, name=''):
     adata_filtered = adata[(adata.obs['in_cell'] == 1)]
     
     # Split into nucleus/cytoplasm subsets
+    print("[Splitting data to nuc/cyto]")
     adata_nuc = adata_filtered[adata_filtered.obs['in_nucleus'] == 1].copy()
     adata_cyto = adata_filtered[adata_filtered.obs['in_nucleus'] == 0].copy()
     ind_dict_nuc = adata_nuc.obs.groupby(by=['Cell_ID']).indices
@@ -149,6 +162,7 @@ def _aggregate_data(cells_only, adata, output_dir=None, name=''):
         cyto_data[i, :] = adata_cyto[ind_dict_cyto[cell],:].X.sum(axis=0) 
     
     # Convert to sparse
+    print("[Converting to sparse matrices and creating anndata]")
     nucleus_data = nucleus_data.tocsr()
     cyto_data = cyto_data.tocsr()
     cell_data = nucleus_data + cyto_data

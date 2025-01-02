@@ -7,8 +7,8 @@ Created on Tue Nov  5 20:57:45 2024
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 import anndata as ad
+import os
 
 import ViziumHD_utils
 import ViziumHD_class
@@ -23,39 +23,90 @@ def _count_basal(series):
     return (series == 'basal').sum()
 
 
-class SingleCell:
-    def __init__(self, vizium_instance, input_df, input_type="Ofra_int", columns=None):
-        '''
-        input_df (str or df) - pd.DataFrame or path to csv file produced with the Groovy pipeline. 
-                                if it's an anndata, it will skip initialization, and just store the anndata.
-        columns (list) - which columns from the CSV to add to the metadata (aggregate from spots)?
-                         if None, will use all columns of the CSV.
-                         example:
+def new(vizium_instance, input_df, columns=None, custom_agg=None, sep="\t"):
+    '''
+    vizium_instance - ViziumHD object
+    input_df (str or df or anndata) - single cell metadata, should include columns: ['Object ID','Name','in_nucleus','in_cell']
+            either pd.DataFrame or str, path to csv file produced with the Groovy pipeline. 
+                            if it's an anndata, it will skip initialization, and just store the anndata.
+    columns (list) - which columns from the CSV to add to the metadata (aggregate from spots)?
+                     example: ['cell_y_um','cell_x_um','area_nuc_um2','number_spots_nuc','number_spots_nuc','area_cell_um2']
+    custom_agg (dict) - {str:func} or {str:[func,func]}. Used for metadata aggregation.
+                        example {'apicome':[_count_apical, _count_basal]}
+    sep (str) - passed to read_csv if input_df is a path of CSV
+    '''
+    if isinstance(input_df, str):
+        ViziumHD_utils.validate_exists(input_df)
+        print("[Reading CSV]")
+        input_df = pd.read_csv(input_df, sep=sep)
+    else:
+        if columns is None: 
+            columns = ['Object ID']
+        elif 'Object ID' not in columns:
+            columns += ['Object ID']
+        adata_sc = SingleCell_utils._aggregate_spots(vizium_instance.adata,
+                                                   input_df, columns,
+                                                   custom_agg=custom_agg) 
+    return SingleCell(vizium_instance, adata_sc)
 
+class SingleCell:
+    def __init__(self, vizium_instance, adata_sc):
         '''
+        vizium_instance - ViziumHD object
+        adata - of single cells
+        '''
+        if not isinstance(adata_sc, ad._core.anndata.AnnData): 
+            raise ValueError("Adata must be Anndata object")
+        self.adata = adata_sc
         self.viz = vizium_instance
         self.path_output = self.viz.path_output + "/single_cell"
-        # self.plot = ViziumHD_plot.plotSC(self)
-        if isinstance(input_df, str):
-            print("[Reading CSV]")
-            input_df = pd.read_csv(input_df, sep="\t")
-        
-
-        if isinstance(input_df, ad._core.anndata.AnnData): 
-            self.adata = input_df
-        else:
-            if columns is None: 
-                columns = ['Object ID']
-#  ['Object ID','cell_y_um','cell_x_um','area_nuc_um2','number_spots_nuc','number_spots_nuc','area_cell_um2']
-            self.adata = SingleCell_utils._aggregate_spots(self.viz.adata,
-                                                       input_df, columns,
-                                                       custom_agg={"apicome":[_count_apical, _count_basal]}) 
+        if not os.path.exists(self.path_output):
+            os.makedirs(self.path_output)
+        self.plot = ViziumHD_plot.PlotSC(self)
 
     def __init_img(self):
+        raise StopIteration("WHAAAAAAAAAAAAAAAAAAAAAT?!")
         pass
+    
+    def get(self, what, cropped=False):
+        # adata = self.adata_cropped if cropped else self.adata
+        adata = self.adata
+        if isinstance(what, str): # easy acess to data or metadata arrays
+            if what in adata.obs.columns: # Metadata
+                return adata.obs[what].values
+            if what in adata.var.index: # A gene
+                return np.array(adata[:, what].X.todense().ravel()).flatten()
+            if what in adata.var.columns: # Gene metadata
+                return adata.var[what].values
+            obs_cols_lower = adata.obs.columns.str.lower()
+            if what.lower() in obs_cols_lower:
+                col_name = adata.obs.columns[obs_cols_lower.get_loc(what.lower())]
+                return adata.obs[col_name].values
+            if self.viz.organism == "mouse" and (what.lower().capitalize() in adata.var.index):
+                return np.array(adata[:, what.lower().capitalize()].X.todense()).flatten()
+            if self.viz.organism == "human" and (what.upper() in adata.var.index):
+                return np.array(adata[:, what.upper()].X.todense()).flatten()
+            var_cols_lower = adata.var.columns.str.lower()
+            if what.lower() in var_cols_lower:
+                col_name = adata.var.columns[var_cols_lower.get_loc(what.lower())]
+                return adata.var[col_name].values
+        else:
+            # Create a new SingleCell object based on adata subsetting
+            return self.subset(what)
+        
+    def subset(self, what=(slice(None), slice(None))):
+        adata = self.adata[what].copy()
+        return SingleCell(self.viz, adata)
+    
+    def __getitem__(self, what):
+        '''get a vector from data (a gene) or metadata (from obs or var). or subset the object.'''
+        item = self.get(what, cropped=False)
+        if item is None:
+            raise KeyError(f"[{what}] isn't in data or metadatas")
+        return item
      
        
-    def sc_transfer_meta(self, what:str):
+    def sc_transfer_meta(self, what: str):
         '''transfers metadata assignment from the single-cell to the spots'''
         pass
     
@@ -103,7 +154,11 @@ class SingleCell:
         '''updates the methods in the instance'''
         ViziumHD_utils.update_instance_methods(self)
         ViziumHD_utils.update_instance_methods(self.plot)
-        self.__init_img()
+        # self.__init_img()
     
     def head(self, n=5):
         return self.adata.obs.head(n) 
+    
+    @property
+    def name(self):
+        return self.viz.name

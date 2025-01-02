@@ -196,7 +196,8 @@ class ViziumHD:
         '''resets the cropped image and updates the cropped adata'''
         self.image_cropped = None
         self.plot.ax_current = None # stores the last plot that was made
-        self.xlim_cur, self.pixel_x, self.ylim_cur, self.pixel_y = None, None, None, None
+        # self.xlim_cur, self.ylim_cur = None, None
+        self.pixel_x, self.pixel_y = None, None 
         self.adata_cropped = self.adata
         self.crop() # creates self.adata_cropped & self.image_cropped
         
@@ -502,7 +503,7 @@ class ViziumHD:
         # Adjust adata coordinates relative to the cropped image
         self.pixel_x = self.adata_cropped.obs[pxl_col] - xlim_pxl[0]
         self.pixel_y = self.adata_cropped.obs[pxl_row] - ylim_pxl[0]
-        self.xlim_cur, self.ylim_cur = xlim, ylim
+        # self.xlim_cur, self.ylim_cur = xlim, ylim
     
         return xlim, ylim, adjusted_microns_per_pixel 
     
@@ -539,7 +540,6 @@ class ViziumHD:
             # Create a new ViziumHD objects based on adata subsetting
             return self.subset(what, remove_empty_pixels=False)
             
-    
     def subset(self, what=(slice(None), slice(None)), remove_empty_pixels=False):
         '''
         Create a new ViziumHD objects based on adata subsetting.
@@ -555,11 +555,15 @@ class ViziumHD:
         adata = self.adata[what].copy()
         adata_shifted, image_fullres_crop, image_highres_crop, image_lowres_crop = self.__crop_images(adata, remove_empty_pixels)
         name = self.name + "_subset" if not self.name.endswith("_subset") else ""
+        single_cell = None
+        if self.SC is not None: 
+            single_cell = self.SC.subset(what)    
         new_obj = ViziumHD(adata_shifted, image_fullres_crop, image_highres_crop, 
-                           image_lowres_crop, self.json, name, self.path_output,
+                           image_lowres_crop, self.json, name, self.path_output,SC=single_cell,
                            properties=self.properties.copy(),fluorescence=self.fluorescence.copy() if self.fluorescence else None)
+        if single_cell: # update the link in SC to the new ViziumHD instance
+            new_obj.SC = ViziumHD_sc_class.SingleCell(new_obj, new_obj.SC.adata)
         return new_obj
-
    
     def __crop_images(self, adata, remove_empty_pixels):
         '''

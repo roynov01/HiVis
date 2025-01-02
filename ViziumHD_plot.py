@@ -9,7 +9,7 @@ import os
 import numpy as np
 import pandas as pd
 # import geopandas as gpd
-# import scanpy as sc
+import scanpy as sc
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 # from matplotlib import colormaps
@@ -21,6 +21,7 @@ import seaborn as sns
 from adjustText import adjust_text
 import plotly.express as px
 from subprocess import Popen, PIPE
+
 
 
 POINTS_PER_INCH = 72
@@ -35,33 +36,24 @@ class PlotVizium:
         self.main = vizium_instance
         self.current_ax = None
     
-    def save(self, filename:str, fig=None, ax=None, open_file=False, format='png', dpi=300):
+    def save(self, figname:str, fig=None, ax=None, open_file=False, format_='png', dpi=300):
         '''
         saves a figure or ax. 
         parameters:
             * filename - name of plot
-            * fig (optional) - plt.Figure object to save.
+            * fig (optional) - plt.Figure object to save, can be a dataframe for writing csv.
             * ax - ax to save. if not passed, will use self.current_ax
             * open_file - open the file?
             * format - format of file
         '''
-        path = f"{self.main.path_output}/{self.main.name}_{filename}.{format}"
-        if isinstance(fig, pd.DataFrame):
-            path = path.replace(".png",".csv")
-            fig.to_csv(path)
-            return path
+        path = f"{self.main.path_output}/{self.main.name}_{figname}.{format_}"
         if fig is None:
             if ax is None:
                 if self.current_ax is None:
                     raise ValueError(f"No ax present in {self.main.name}")
                 ax = self.current_ax
             fig = ax.get_figure()
-        
-        fig.savefig(path, format=format, dpi=dpi, bbox_inches='tight')
-        if open_file:
-            os.startfile(path)
-        return path
-    
+        return save_fig(path, fig, open_file, format_, dpi)
     
     def __get_dot_size(self, adjusted_microns_per_pixel:float):
         '''gets the size of spots, depending on adjusted_microns_per_pixel'''
@@ -195,13 +187,11 @@ class PlotVizium:
             self.save(f"{what}_HIST")
         return ax
     
-    def __call__(self):
-        pass
     
     def __repr__(self):
         s = f"Plots available for [{self.main.name}]:\n\tsave(), spatial(), hist()"
         if self.main.SC:
-            s += "\n\nand for sc:\n\tsave(), spatial(), hist(), cells(), umpa()"
+            s += "\n\nand for sc:\n\tsave(), spatial(), hist(), cells(), umap()"
         return s
     
     
@@ -212,25 +202,146 @@ class PlotSC:
         self.main = sc_instance
         self.current_ax = None
     
-    def save(self):
-        pass
+    def save(self, figname:str, fig=None, ax=None, open_file=False, format_='png', dpi=300):
+        '''
+        saves a figure or ax. 
+        parameters:
+            * filename - name of plot
+            * fig (optional) - plt.Figure object to save, can be a dataframe for writing csv.
+            * ax - ax to save. if not passed, will use self.current_ax
+            * open_file - open the file?
+            * format - format of file
+        '''
+        path = f"{self.main.path_output}/{self.main.viz.name}_{figname}.{format_}"
+        if fig is None:
+            if ax is None:
+                if self.current_ax is None:
+                    raise ValueError(f"No ax present in {self.main.viz.name}")
+                ax = self.current_ax
+            fig = ax.get_figure()
+        return save_fig(path, fig, open_file, format_, dpi)
     
-    def spatial(self):
-        pass
+    
+    def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
+                  legend=True, alpha=1, figsize=(8, 8), save=False, size=1,
+                  xlim=None, ylim=None, legend_title=None, axis_labels=True):
+        title = what if title is None else title
+        if legend_title is None:
+            legend_title = what.capitalize() if what and what==what.lower else what
+            
+            
+            
+        xlim, ylim, adjusted_microns_per_pixel = self.main.crop(xlim, ylim, resolution=img_resolution)
+        
+        
 
-    def hist(self):
-        pass
+            
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+
+        height, width = self.main.image_cropped.shape[:2]  
+        if image: # Plot image
+            ax.imshow(self.main.image_cropped)
+
+        if what: 
+            values = self.main.get(what, cropped=True)
+            if np.issubdtype(values.dtype, np.number):  # Filter values that are 0
+                mask = values > 0
+            else:
+                mask = [True for _ in values]   # No need for filtering
+            values = values[mask]
+            x = self.main.pixel_x[mask]
+            y = self.main.pixel_y[mask]
+            
+            if np.issubdtype(values.dtype, np.number): 
+                argsort_values = np.argsort(values)
+                x, y, values = x.iloc[argsort_values], y.iloc[argsort_values], values[argsort_values]
+            
+            # Plot scatter:
+            else:
+                ax = plot_scatter(x, y, values, size=size,title=title,
+                              figsize=figsize,alpha=alpha,cmap=cmap,ax=ax,
+                              legend=legend,xlab=None,ylab=None, 
+                              legend_title=legend_title)
+
+        if axis_labels:
+            ax.set_xlabel("Spatial 1 (µm)")
+            ax.set_ylabel("Spatial 2 (µm)")
+            set_axis_ticks(ax, width, adjusted_microns_per_pixel, axis='x')
+            set_axis_ticks(ax, height, adjusted_microns_per_pixel, axis='y')
+        else:
+            ax.set_xticks([])  
+            ax.set_xticklabels([]) 
+            ax.set_yticks([])  
+            ax.set_yticklabels([]) 
+        if title:
+            ax.set_title(title)    
+            
+        ax.set_xlim(0, width)
+        ax.set_ylim(height, 0)     
+        
+        # Save figure:
+        self.current_ax = ax
+        if save:
+            self.save(f"{(what + '_') if what else ''}SPATIAL")
+        return ax
+
+    def hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,ax=None,
+             save=False, figsize=(8,8), cmap=None, color="blue"):
+        '''
+        plots histogram of data or metadata. if categorical, will plot barplot.
+        parameters:
+            * what - what to plot. can be metadata (obs/var colnames or a gene)
+            * bins - number of bins of the histogram
+            * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
+            * cmap - colorbar to use. overrides the color argument for barplot
+            * color - color of the histogram
+            * title, xlab, ylab - strings
+            * xlim - two values, where to crop the x axis
+            * save - save the image?
+        '''
+        title = what if title is None else title
+        # self.main.crop() # resets adata_cropped to full image
+        to_plot = pd.Series(self.main.get(what, cropped=True))
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        ax = plot_histogram(to_plot,bins=bins,xlim=xlim,title=title,figsize=figsize,
+                       cmap=cmap,color=color,ylab=ylab,xlab=xlab,ax=ax)            
+        self.current_ax = ax
+        if save:
+            self.save(f"{what}_HIST")
+        return ax
     
     def cells(self):
         pass
     
-    def umap(self):
-        pass
+    def umap(self, features=None, title=None, size=None,layer=None,
+              legend_loc='right margin', save=False, ax=None):
+        if 'X_umap' not in self.main.adata.obsm:
+            raise ValueError("UMAP embedding is missing. Run `sc.tl.umap()` after PCA.")
+        if ax and not isinstance(features, str):
+            raise ValueError("ax can be passed for a single feature only")
+        ax = sc.pl.umap(self.main.adata, color=features,use_raw=False,size=size,ax=ax,
+                        title=title,show=False,legend_loc=legend_loc,layer=layer)
+        self.current_ax = ax
+        if save:
+            self.save(f"{features}_UMAP")
+        return ax
     
     def __repr__(self):
         s = f"Plots available for [{self.main.name}].sc:\n\tsave(), spatial(), hist(), cells(), umpa()"
         return s
 
+
+def save_fig(path, fig, open_file=False, format_='png', dpi=300): 
+    if isinstance(fig, pd.DataFrame):
+        path = path.replace(f".{format}",".csv")
+        fig.to_csv(path)
+        return path
+    fig.savefig(path, format=format_, dpi=dpi, bbox_inches='tight')
+    if open_file:
+        os.startfile(path)
+    return path
 
 def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
                    cmap='winter', figsize=(8, 8), alpha=1, legend_title=None, ax=None):
