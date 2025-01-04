@@ -190,7 +190,7 @@ class ViziumHD:
         ax3 = self.plot.hist("nUMI_gene_log10", title="Number of UMIs per gene", xlab="log10(UMIs)",ax=ax3)
         plt.tight_layout()
         if save:
-            self.plot.save(filename="QC", fig=fig)
+            self.plot.save(figname="QC", fig=fig)
     
     def __init_img(self):
         '''resets the cropped image and updates the cropped adata'''
@@ -257,12 +257,13 @@ class ViziumHD:
         return mask_array
     
 
-    def add_annotations(self, path:str, name:str):
+    def add_annotations(self, path:str, name:str, measurements=True):
         '''
         Adds annotations made in Qupath (geojson)
         parameters:
             * path - path to geojson file
             * name -  name of the annotation (that will be called in the metadata)
+            * measurements - include measurements columns? 
         '''
         ViziumHD_utils.validate_exists(path)
         annotations = gpd.read_file(path)
@@ -270,10 +271,24 @@ class ViziumHD:
             annotations[name] = [x["name"] for x in annotations["classification"]]
         else:
             annotations[name] = annotations.index
+        annotations[f"{name}_id"] = annotations["id"]
         del annotations["id"]
         del annotations["objectType"]
-        if name in self.adata.obs.columns:
-            del self.adata.obs[name]
+        if "isLocked" in annotations.columns:
+            del annotations["isLocked"]
+        if "measurements" in annotations.columns and measurements:
+            measurements_df = pd.json_normalize(annotations["measurements"])
+            annotations = gpd.GeoDataFrame(pd.concat([annotations.drop(columns=["measurements"]), measurements_df], axis=1))
+            perimeter = annotations.geometry.length
+            area = annotations.geometry.area
+            annotations["circularity"] = (4 * np.pi * area) / (perimeter ** 2)
+            annotations.loc[perimeter == 0, "circularity"] = np.nan
+            cols = list(measurements_df.columns) + ["circularity",name,f"{name}_id"]
+        else:
+            cols = [name,f"{name}_id"]
+        for col in cols:
+            if col in self.adata.obs.columns:
+                del self.adata.obs[col]
         obs = gpd.GeoDataFrame(self.adata.obs, 
               geometry=gpd.points_from_xy(self.adata.obs["pxl_col_in_fullres"],
                                           self.adata.obs["pxl_row_in_fullres"]))        
@@ -281,7 +296,7 @@ class ViziumHD:
         merged_obs = gpd.sjoin(obs,annotations,how="left",predicate="within")
         merged_obs = merged_obs[~merged_obs.index.duplicated(keep="first")]
         
-        self.adata.obs = self.adata.obs.join(pd.DataFrame(merged_obs[[name]]),how="left")
+        self.adata.obs = self.adata.obs.join(pd.DataFrame(merged_obs[cols]),how="left")
         self.__init_img()
     
         
@@ -420,14 +435,17 @@ class ViziumHD:
         
         return images
 
-    def sc_create(self, category):
+    def aggregate_cells(self, input_df, columns=None, custom_agg=None, sep="\t"):
         if self.SC:
             if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
                 return
-        params = []
-        self.SC = ViziumHD_sc_class.SingleCell(self, params)
+        self.SC = ViziumHD_sc_class.new_from_segmentation(self, input_df,columns,custom_agg,sep)
 
-    
+    def aggregate_annotations(self,group_col,columns,custom_agg):
+        if self.SC:
+            if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
+                return
+        self.SC = ViziumHD_sc_class.new_from_annotations(self, group_col,columns,custom_agg)
     
     def crop(self, xlim=None, ylim=None, resolution=None):
         '''
@@ -600,8 +618,9 @@ class ViziumHD:
                 background_value = 0 if self.fluorescence else 255 # black for fluorescence, white for RGB
                 img_crop[~mask] = background_value
             return img_crop, xlim_pixels, ylim_pixels
-                
-        image_fullres_crop, xlim_pixels_fullres, ylim_pixels_fullres = _crop_img(adata, self.image_fullres_orig, "pxl_col_in_fullres", "pxl_row_in_fullres")
+        
+        image_fullres = self.image_fullres_orig if self.fluorescence else self.image_fullres
+        image_fullres_crop, xlim_pixels_fullres, ylim_pixels_fullres = _crop_img(adata, image_fullres, "pxl_col_in_fullres", "pxl_row_in_fullres")
         image_highres_crop , _ , _ = _crop_img(adata, self.image_highres, "pxl_col_in_highres", "pxl_row_in_highres")
         image_lowres_crop , _ , _ = _crop_img(adata, self.image_lowres, "pxl_col_in_lowres", "pxl_row_in_lowres")
 
@@ -734,6 +753,10 @@ class ViziumHD:
     @property
     def shape(self):
         return self.adata.shape
+    
+    @property
+    def columns(self):
+        return self.adata.obs.columns.copy()
     
     def update(self):
         '''updates the methods in the instance'''

@@ -333,13 +333,17 @@ def _export_images(path_image_fullres, path_image_highres, path_image_lowres,
                     image_fullres, image_highres, image_lowres, force=False):
     '''Saves cropped images. force - overrite existing files?'''
     def _export_image(img, path):
+        nonlocal printed_message
         if not os.path.exists(path) or force:
+            if not printed_message:
+                print("[Saving cropped images]")
             if img.max() <= 1:
                 img = (img * 255).astype(np.uint8)
             # image = Image.fromarray(img)
             tifffile.imwrite(path, img)
             # image.save(save_path, format='TIFF')
-    print("[Saving cropped images]")
+    printed_message = False
+    
     images = [image_fullres, image_highres, image_lowres]
     paths = [path_image_fullres, path_image_highres, path_image_lowres]
     for img, path in zip(images, paths):

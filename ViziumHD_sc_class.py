@@ -23,7 +23,7 @@ def _count_basal(series):
     return (series == 'basal').sum()
 
 
-def new(vizium_instance, input_df, columns=None, custom_agg=None, sep="\t"):
+def new_from_segmentation(vizium_instance, input_df, columns=None, custom_agg=None, sep="\t"):
     '''
     vizium_instance - ViziumHD object
     input_df (str or df or anndata) - single cell metadata, should include columns: ['Object ID','Name','in_nucleus','in_cell']
@@ -46,6 +46,23 @@ def new(vizium_instance, input_df, columns=None, custom_agg=None, sep="\t"):
             columns += ['Object ID']
         adata_sc = SingleCell_utils._aggregate_spots(vizium_instance.adata,
                                                    input_df, columns,
+                                                   custom_agg=custom_agg) 
+    return SingleCell(vizium_instance, adata_sc)
+
+def new_from_annotations(vizium_instance, group_col, columns=None, custom_agg=None):
+    '''
+    vizium_instance - ViziumHD object
+    input_df (str or df or anndata) - single cell metadata, should include columns: ['Object ID','Name','in_nucleus','in_cell']
+            either pd.DataFrame or str, path to csv file produced with the Groovy pipeline. 
+                            if it's an anndata, it will skip initialization, and just store the anndata.
+    columns (list) - which columns from the CSV to add to the metadata (aggregate from spots)?
+                     example: ['cell_y_um','cell_x_um','area_nuc_um2','number_spots_nuc','number_spots_nuc','area_cell_um2']
+    custom_agg (dict) - {str:func} or {str:[func,func]}. Used for metadata aggregation.
+                        example {'apicome':[_count_apical, _count_basal]}
+    sep (str) - passed to read_csv if input_df is a path of CSV
+    '''
+    adata_sc = SingleCell_utils._aggregate_spots_annotations(vizium_instance.adata,
+                                                   group_col, columns,
                                                    custom_agg=custom_agg) 
     return SingleCell(vizium_instance, adata_sc)
 

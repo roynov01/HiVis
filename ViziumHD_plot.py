@@ -40,7 +40,7 @@ class PlotVizium:
         '''
         saves a figure or ax. 
         parameters:
-            * filename - name of plot
+            * figname - name of plot
             * fig (optional) - plt.Figure object to save, can be a dataframe for writing csv.
             * ax - ax to save. if not passed, will use self.current_ax
             * open_file - open the file?
@@ -206,7 +206,7 @@ class PlotSC:
         '''
         saves a figure or ax. 
         parameters:
-            * filename - name of plot
+            * figname - name of plot
             * fig (optional) - plt.Figure object to save, can be a dataframe for writing csv.
             * ax - ax to save. if not passed, will use self.current_ax
             * open_file - open the file?
@@ -583,7 +583,11 @@ def get_colors(values, cmap):
         cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
     cmap_len = cmap_obj.N
     num_unique = len(unique_values)
-    if num_unique <= cmap_len:
+    if num_unique == 1:
+        # Assign a single color (e.g., middle of the colormap)
+        colors = [cmap_obj(0.5)]
+    elif num_unique <= cmap_len:
+        # Map each unique value to a unique color in the colormap
         colors = [cmap_obj(i / (num_unique - 1)) for i in range(num_unique)]
     else:
         # If there are more unique values than colors in the colormap, cycle through the colormap

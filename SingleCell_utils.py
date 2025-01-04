@@ -5,21 +5,20 @@ Created on Fri Dec 27 17:49:15 2024
 @author: royno
 """
 
-
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import scanpy as sc
-from scipy.sparse import lil_matrix
-
-# import ViziumHD_utils
-# import ViziumHD_class
-# import ViziumHD_plot
-# import ViziumHD_sc_class
+from scipy.sparse import lil_matrix, csr_matrix
 
 
+def custom_mode(series):
+    mode_series = series.mode()
+    if not mode_series.empty:
+        return mode_series.iloc[0]
+    return np.nan   
 
-def _aggregate_spots(adata, sc_metadata, columns, custom_agg=None):
+def _aggregate_spots_cells(adata, sc_metadata, columns, custom_agg=None):
     if "Object ID" not in columns:
         columns += "Object ID"
     for w in ["Object ID","Name","in_nucleus","in_cell"]:
@@ -32,29 +31,10 @@ def _aggregate_spots(adata, sc_metadata, columns, custom_agg=None):
     _split_name(spots_only, adata)
     
     custom_agg = custom_agg if custom_agg else {}
-    _aggregate_meta(adata, cells_only, user_aggregations=custom_agg)
+    _aggregate_meta_cells(adata, cells_only, user_aggregations=custom_agg)
     
-    adata_sc = _aggregate_data(cells_only, adata)
+    adata_sc = _aggregate_data_cells(cells_only, adata)
     return adata_sc
-
-
-def _split_name2(spots_only, adata):
-    def helper(s):
-        if '__' in s:
-            parts = s.split('__')
-            if len(parts) == 2:
-                return parts[0], parts[1]
-        return s, np.nan
-    tqdm.pandas(desc="[Splitting name column]")
-    spots_only[['Spot_ID', 'Cell_ID']] = spots_only['Name'].progress_apply(lambda s: pd.Series(helper(s)))
-    spots_only = spots_only.set_index("Spot_ID")
-
-    del spots_only['Name']
-    
-    adata.obs['Spot_ID'] = adata.obs.index
-    print("[Adding cells to the spots-adata]")
-    adata.obs = adata.obs.join(spots_only,how='left')
-    # adata.obs = adata.obs.join(spots_only,on="Spot_ID",how='left')
 
 def _split_name(spots_only, adata):
     print("[Splitting name column]")
@@ -69,8 +49,7 @@ def _split_name(spots_only, adata):
     print("[Adding cells to the spots-adata]")
     adata.obs = adata.obs.join(spots_only,how='left')
 
-
-def _aggregate_meta(adata, cells_only, user_aggregations=None):
+def _aggregate_meta_cells(adata, cells_only, user_aggregations=None):
     def _guess_default_aggregator(series, default_numeric=np.median, default_categorical=custom_mode):
         """Guess aggregator based on numeric vs. non-numeric dtype."""
         if pd.api.types.is_numeric_dtype(series):
@@ -134,8 +113,7 @@ def _aggregate_meta(adata, cells_only, user_aggregations=None):
     # Merge results   
     cells_only = pd.merge(cells_only, cells_only2, on='Cell_ID', how='left')
 
-
-def _aggregate_data(cells_only, adata, output_dir=None, name=''):
+def _aggregate_data_cells(cells_only, adata, output_dir=None, name=''):
     if 'Cell_ID' in cells_only.columns:
         cells_only.set_index('Cell_ID', inplace=True)
     adata_filtered = adata[(adata.obs['in_cell'] == 1)]
@@ -175,15 +153,172 @@ def _aggregate_data(cells_only, adata, output_dir=None, name=''):
 
     return adata_sc
 
+def _aggregate_spots_annotations(adata, group_col="lipid_id", columns=None, custom_agg=None):
+    """
+    Aggregate an AnnData object based on a column in `adata.obs`.
+    E.g., group by 'villus_id' and create one row per unique villus.
 
-def custom_mode(series):
-    mode_series = series.mode()
-    if not mode_series.empty:
-        return mode_series.iloc[0]
-    return np.nan    
+    Parameters
+    ----------
+    adata : AnnData
+        Original AnnData with spot-level data in .X and metadata in .obs.
+    group_col : str
+        The column in adata.obs used to define groups (default: 'villus_id').
+    columns : list or None
+        Which columns in adata.obs to aggregate. Defaults to empty list.
+    custom_agg : dict or None
+        Optional dict specifying custom aggregation for certain columns.
+        E.g. { "columnA": np.mean, "columnB": lambda x: ','.join(x) }
 
+    Returns
+    -------
+    AnnData
+        A new AnnData with aggregated expression and aggregated metadata.
+        Each row (obs) corresponds to one unique value of `group_col`.
+    """
+    if columns is None:
+        columns = []
+    if not isinstance(columns, list):
+        raise ValueError("`columns` must be a list of column names.")
+    if group_col not in adata.obs.columns:
+        raise ValueError(f"'{group_col}' not found in adata.obs columns.")
+    if group_col not in columns:
+        columns.append(group_col)
 
+    # 2) Aggregate metadata (returns a DataFrame with one row per group_col)
+    meta_df = _aggregate_meta2(adata=adata,group_col=group_col,
+        columns=columns,user_aggregations=custom_agg)
 
+    # 3) Aggregate expression data (returns a 2D array or sparse matrix + list of group IDs)
+    expr_data, group_ids = _aggregate_data2(adata=adata,group_col=group_col)
+
+    # 4) Build a new AnnData
+    #    - obs = aggregated metadata (indexed by the same group IDs order)
+    #    - X   = aggregated expression data
+    #    - var = original genes
+    aggregated_obs = meta_df.reindex(group_ids)  # ensure same order
+    new_adata = sc.AnnData(X=expr_data, obs=aggregated_obs,var=adata.var.copy())
+
+    return new_adata
+
+def _aggregate_meta_annotations(adata, group_col, columns, user_aggregations=None):
+    """
+    Group `adata.obs` by `group_col` and compute aggregated metadata for each group.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Original AnnData with metadata in .obs.
+    group_col : str
+        The column used to define groups.
+    columns : list
+        Which columns to aggregate (must include group_col).
+    user_aggregations : dict or None
+        A mapping of {col_name: aggregator_function or [functions]}.
+        If not provided, numeric columns default to median, others to custom_mode.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame indexed by the unique values of `group_col`.
+        Each row is the aggregated result for that group.
+    """
+    # Subset the obs to relevant columns
+    df = adata.obs[columns].copy()
+
+    # Prepare final aggregator dictionary
+    def _guess_aggregator(series):
+        """Default aggregator for columns without a user-specified aggregator."""
+        if pd.api.types.is_numeric_dtype(series):
+            return np.median
+        else:
+            return custom_mode
+
+    if user_aggregations is None:
+        user_aggregations = {}
+    agg_dict = {}
+    for col in df.columns:
+        if col == group_col:
+            # We won't apply aggregator to the grouping column itself
+            continue
+        if col in user_aggregations:
+            agg_dict[col] = user_aggregations[col]
+        else:
+            agg_dict[col] = _guess_aggregator(df[col])
+
+    # Group by group_col
+    grouped = df.groupby(group_col)
+
+    # Apply aggregations to each group with a progress bar
+    group_results = []
+    for group_val, sub_df in tqdm(grouped, total=len(grouped), desc="Aggregating metadata"):
+        row = {}
+        for col_name, funcs in agg_dict.items():
+            if not isinstance(funcs, list):
+                funcs = [funcs]
+            for func in funcs:
+                result = func(sub_df[col_name])
+                # If multiple funcs for the same column, store as colname_funcname
+                if len(funcs) > 1:
+                    func_name = getattr(func, "__name__", "func")
+                    row[f"{col_name}_{func_name}"] = result
+                else:
+                    row[col_name] = result
+
+        # Keep track of which group (index)
+        row[group_col] = group_val
+        group_results.append(row)
+
+    aggregated_df = pd.DataFrame(group_results).set_index(group_col)
+    return aggregated_df
+
+def _aggregate_data_annotations(adata, group_col):
+    """
+    Aggregate the expression data in `adata.X` by summing (or otherwise combining)
+    all spots/rows that share the same value of `group_col`.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The AnnData with spot-level expression in .X and grouping info in .obs.
+    group_col : str
+        The column in adata.obs used to define groups.
+
+    Returns
+    -------
+    (X_agg, group_ids) : (csr_matrix or np.ndarray, list-like)
+        X_agg is the aggregated expression matrix with shape [n_groups, n_genes].
+        group_ids is the list of group_col values in the order used by the rows of X_agg.
+    """
+    # 1) Find the unique groups & row indices
+    #    We'll build a mapping of {group_val -> list of row indices}
+    obs = adata.obs
+    unique_groups = obs[group_col].dropna().unique()  # skip NaNs if needed
+    group_to_indices = {}
+    for i, val in enumerate(obs[group_col]):
+        if pd.isna(val):
+            continue  
+        group_to_indices.setdefault(val, []).append(i)
+
+    # 2) Summation across rows for each group
+    #    We'll create a new matrix with shape [n_groups, n_genes]
+    n_genes = adata.shape[1]
+    n_groups = len(unique_groups)
+    # Using a sparse matrix in case adata.X is large
+    out_matrix = csr_matrix((n_groups, n_genes), dtype=adata.X.dtype)
+
+    # If adata.X is sparse, we can sum slices directly; if it's dense, convert or handle carefully
+    # We'll do a row-by-row sum here with a progress bar
+    for idx, gval in enumerate(tqdm(unique_groups, desc="Aggregating expression")):
+        row_indices = group_to_indices[gval]
+        # Sum across all rows in that group
+        # If adata.X is sparse, sum(axis=0) stays sparse. Otherwise, we might want to convert to dense
+        group_sum = adata.X[row_indices].sum(axis=0)
+        # group_sum might be a matrix; ensure it's 1D
+        out_matrix[idx, :] = group_sum
+
+    # 3) Return the aggregated matrix + the list of group IDs
+    return out_matrix, unique_groups
 
 
 
