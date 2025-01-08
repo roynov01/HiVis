@@ -5,7 +5,6 @@ Created on Sun Sep 15 13:28:30 2024
 @author: royno
 """
 # General libraries
-# import warnings
 import os
 import dill
 from tqdm import tqdm
@@ -18,7 +17,6 @@ import geopandas as gpd
 # Plotting libraries
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
-
 from PIL import Image
 
 import ViziumHD_utils
@@ -26,12 +24,6 @@ import ViziumHD_sc_class
 import ViziumHD_plot
 
 Image.MAX_IMAGE_PIXELS = 1063425001 # Enable large images loading
-FULLRES_THRESH = 1000 # in microns, below which, a full-res image will be plotted
-HIGHRES_THRESH = 3000 # in microns, below which, a high-res image will be plotted
-DEFAULT_COLORS = ["white","purple","blue","yellow","red"]
-
-# TODO add
-# CELLPOSE
 
 
 def load(filename, directory=''):
@@ -51,7 +43,7 @@ def load(filename, directory=''):
 
 def new(path_image_fullres:str, path_input_data:str, path_output:str,
              name:str, properties: dict = None, on_tissue_only=True,min_reads_in_spot=1,
-             min_reads_gene=10, fluorescence=False):
+             min_reads_gene=10, fluorescence=False, plot_qc=True):
     '''
     - Loads images (fullres, highres, lowres)
     - Loads data and metadata
@@ -112,12 +104,12 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
     adata = adata[adata.obs["nUMI"] >= min_reads_in_spot, adata.var["nUMI_gene"] >= min_reads_gene].copy()
 
     return ViziumHD(adata, image_fullres, image_highres, image_lowres, scalefactor_json, 
-                    name, path_output, properties, SC=None, fluorescence=fluorescence)
+                    name, path_output, properties, SC=None, fluorescence=fluorescence, plot_qc=plot_qc)
 
 
 class ViziumHD:
     def __init__(self, adata, image_fullres, image_highres, image_lowres, scalefactor_json, 
-                 name, path_output, properties=None, SC=None, fluorescence=False):
+                 name, path_output, properties=None, SC=None, fluorescence=False, plot_qc=True):
         self.SC = SC
         self.name, self.path_output = name, path_output 
         self.properties = properties if properties else {}
@@ -140,17 +132,15 @@ class ViziumHD:
         adata.obs["pxl_row_in_highres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
         adata.obs["um_x"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["microns_per_pixel"]
         adata.obs["um_y"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["microns_per_pixel"]
-        self.xlim_max = (adata.obs['um_x'].min(), adata.obs['um_x'].max())
-        self.ylim_max = (adata.obs['um_y'].min(), adata.obs['um_y'].max())
         
         self.plot = ViziumHD_plot.PlotVizium(self)
         if fluorescence:
             self.image_fullres_orig = self.image_fullres.copy()
             self.recolor(fluorescence)
         else:
-            self.__init_img()
-
-        self.qc(save=True)
+            self.plot._init_img()
+        if plot_qc:
+            self.qc(save=True)
     
     def recolor(self, fluorescence=None, normalization_method="percentile"):
         '''
@@ -178,7 +168,7 @@ class ViziumHD:
         self.image_fullres = ViziumHD_utils.fluorescence_to_RGB(self.image_fullres_orig, 
                                                                 self.fluorescence.values(), 
                                                                 normalization_method)
-        self.__init_img()
+        self.plot._init_img()
 
 
     def qc(self, save=False,figsize=(10, 10)):
@@ -191,16 +181,6 @@ class ViziumHD:
         plt.tight_layout()
         if save:
             self.plot.save(figname="QC", fig=fig)
-    
-    def __init_img(self):
-        '''resets the cropped image and updates the cropped adata'''
-        self.image_cropped = None
-        self.plot.ax_current = None # stores the last plot that was made
-        # self.xlim_cur, self.ylim_cur = None, None
-        self.pixel_x, self.pixel_y = None, None 
-        self.adata_cropped = self.adata
-        self.crop() # creates self.adata_cropped & self.image_cropped
-        
     
     def add_mask(self, mask_path:str, name:str, plot=True, cmap="Paired"):
         '''
@@ -252,7 +232,7 @@ class ViziumHD:
         if plot:
             _plot_mask(mask_array, cmap=cmap)
         _assign_spots(mask_array, name)
-        self.__init_img()
+        self.plot._init_img()
         print(f"\nTo rename the values in the metadata, call the [update_meta] method with [{name}] and dictionary with current_name:new_name")
         return mask_array
     
@@ -276,6 +256,7 @@ class ViziumHD:
         del annotations["objectType"]
         if "isLocked" in annotations.columns:
             del annotations["isLocked"]
+        
         if "measurements" in annotations.columns and measurements:
             measurements_df = pd.json_normalize(annotations["measurements"])
             annotations = gpd.GeoDataFrame(pd.concat([annotations.drop(columns=["measurements"]), measurements_df], axis=1))
@@ -285,6 +266,8 @@ class ViziumHD:
             annotations.loc[perimeter == 0, "circularity"] = np.nan
             cols = list(measurements_df.columns) + ["circularity",name,f"{name}_id"]
         else:
+            if measurements:
+                print("No measurements found")
             cols = [name,f"{name}_id"]
         for col in cols:
             if col in self.adata.obs.columns:
@@ -297,7 +280,7 @@ class ViziumHD:
         merged_obs = merged_obs[~merged_obs.index.duplicated(keep="first")]
         
         self.adata.obs = self.adata.obs.join(pd.DataFrame(merged_obs[cols]),how="left")
-        self.__init_img()
+        self.plot._init_img()
     
         
     def dge(self, column, group1, group2=None, method="wilcox", two_sided=False,
@@ -364,7 +347,7 @@ class ViziumHD:
             if name in self.adata.var.columns:
                 raise ValueError(f"[{name}] allready present in adata.var")
             self.adata.var[name] = values
-        self.__init_img()
+        self.plot._init_img()
     
     def update_meta(self, name:str, values:dict, type_="obs"):
         '''
@@ -382,8 +365,7 @@ class ViziumHD:
             
             # Convert back to original dtype if it was categorical
             if pd.api.types.is_categorical_dtype(original_dtype):
-                self.adata.obs[name] = self.adata.obs[name].astype('category')
-                
+                self.adata.obs[name] = self.adata.obs[name].astype('category') 
         elif type_ == "var":
             if name not in self.adata.var.columns:
                 raise ValueError(f"No metadata called [{name}] in var")
@@ -392,13 +374,11 @@ class ViziumHD:
             
             # Convert back to original dtype if it was categorical
             if pd.api.types.is_categorical_dtype(original_dtype):
-                self.adata.var[name] = self.adata.var[name].astype('category')
-                
+                self.adata.var[name] = self.adata.var[name].astype('category')    
         else:
             raise ValueError("type_ must be either 'obs' or 'var'")
         
-        # Call to initialize image if needed
-        self.__init_img()
+        self.plot._init_img()
         
             
     def export_h5(self, path=None, force=False):
@@ -441,89 +421,11 @@ class ViziumHD:
                 return
         self.SC = ViziumHD_sc_class.new_from_segmentation(self, input_df,columns,custom_agg,sep)
 
-    def aggregate_annotations(self,group_col,columns,custom_agg):
+    def aggregate_annotations(self,group_col,columns=None,custom_agg=None):
         if self.SC:
             if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
                 return
         self.SC = ViziumHD_sc_class.new_from_annotations(self, group_col,columns,custom_agg)
-    
-    def crop(self, xlim=None, ylim=None, resolution=None):
-        '''
-        Crops the images and adata based on xlim and ylim in microns. 
-        saves it in self.adata_cropped and self.image_cropped
-        xlim, ylim: tuple of two values, in microns
-        resolution - if None, will determine automatically, other wise, "full","high" or "low"
-        '''
-        microns_per_pixel = self.json['microns_per_pixel'] 
-    
-        # If xlim or ylim is None, set to the full range of the data
-        if xlim is None:
-            xlim = self.xlim_max
-        if ylim is None:
-            ylim = self.ylim_max
-    
-        # Decide which image to use based on lim_size:
-        x_range = xlim[1] - xlim[0]
-        y_range = ylim[1] - ylim[0]
-        lim_size = max(x_range, y_range)
-        
-        if resolution == "full":
-            image = self.image_fullres
-            scalef = 1  # No scaling needed for full-resolution
-            pxl_col, pxl_row = 'pxl_col_in_fullres', 'pxl_row_in_fullres'
-        elif resolution == "high":
-            image = self.image_highres
-            scalef = self.json['tissue_hires_scalef']
-            pxl_col, pxl_row = 'pxl_col_in_highres', 'pxl_row_in_highres'
-        elif resolution == "low":
-            image = self.image_lowres
-            scalef = self.json['tissue_lowres_scalef']
-            pxl_col, pxl_row = 'pxl_col_in_lowres', 'pxl_row_in_lowres'       
-        elif lim_size <= FULLRES_THRESH: # Use full-resolution image
-            image = self.image_fullres
-            scalef = 1  # No scaling needed for full-resolution
-            pxl_col, pxl_row = 'pxl_col_in_fullres', 'pxl_row_in_fullres'
-            print("Full-res image selected")
-        elif lim_size <= HIGHRES_THRESH: # Use high-resolution image
-            image = self.image_highres
-            scalef = self.json['tissue_hires_scalef']  
-            pxl_col, pxl_row = 'pxl_col_in_highres', 'pxl_row_in_highres'
-            print("High-res image selected")
-        else: # Use low-resolution image
-            image = self.image_lowres
-            scalef = self.json['tissue_lowres_scalef']  
-            pxl_col, pxl_row = 'pxl_col_in_lowres', 'pxl_row_in_lowres'
-            print("Low-res image selected")
-    
-        adjusted_microns_per_pixel = microns_per_pixel / scalef
-        # refresh the adata_cropped
-        
-        xlim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in xlim]
-        ylim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in ylim]
-                
-        # Ensure indices are within the bounds of the image dimensions
-        xlim_pxl[0], ylim_pxl[0] = max(xlim_pxl[0], 0), max(ylim_pxl[0], 0)
-        xlim_pxl[1], ylim_pxl[1] = min(xlim_pxl[1], image.shape[1]), min(ylim_pxl[1], image.shape[0])
-        if xlim_pxl[0] >= xlim_pxl[1] or ylim_pxl[0] >= ylim_pxl[1]:
-            raise ValueError("Calculated pixel indices are invalid.")
-        
-        # Crop the selected image
-        self.image_cropped = image[ylim_pxl[0]:ylim_pxl[1], xlim_pxl[0]:xlim_pxl[1]]
-    
-        # Create a mask to filter the adata based on xlim and ylim
-        x_mask = (self.adata.obs['um_x'] >= xlim[0]) & (self.adata.obs['um_x'] <= xlim[1])
-        y_mask = (self.adata.obs['um_y'] >= ylim[0]) & (self.adata.obs['um_y'] <= ylim[1])
-        mask = x_mask & y_mask
-    
-        # Crop the adata
-        self.adata_cropped = self.adata[mask]
-    
-        # Adjust adata coordinates relative to the cropped image
-        self.pixel_x = self.adata_cropped.obs[pxl_col] - xlim_pxl[0]
-        self.pixel_y = self.adata_cropped.obs[pxl_row] - ylim_pxl[0]
-        # self.xlim_cur, self.ylim_cur = xlim, ylim
-    
-        return xlim, ylim, adjusted_microns_per_pixel 
     
     def get(self, what, cropped=False):
         '''
@@ -583,15 +485,16 @@ class ViziumHD:
             new_obj.SC = ViziumHD_sc_class.SingleCell(new_obj, new_obj.SC.adata)
         return new_obj
    
-    def __crop_images(self, adata, remove_empty_pixels):
+    def __crop_images(self, adata, remove_empty_pixels=False):
         '''
         Helper function for get().
         Crops the images based on the spatial coordinates in a subsetted `adata` 
         and adjusts the adata accordingly (shifts x, y)
-        remove_empty_pixels
+        remove_empty_pixels - whether to remove pixels that dont have spots on them.
         '''
         # Crop images
         def _crop_img(adata, img, col, row):
+            '''crops one image by the x,y values in adata.obs, as specified by col, row'''
             pxl_col = adata.obs[col].values
             pxl_row = adata.obs[row].values
             xlim_pixels = [int(np.floor(pxl_col.min())), int(np.ceil(pxl_col.max()))]
@@ -632,6 +535,7 @@ class ViziumHD:
         adata_shifted.obs["pxl_col_in_fullres"] -= xlim_pixels_fullres[0]
         adata_shifted.obs["pxl_row_in_fullres"] -= ylim_pixels_fullres[0]
         return adata_shifted, image_fullres_crop, image_highres_crop, image_lowres_crop
+    
         
     def __getitem__(self, what):
         '''get a vector from data (a gene) or metadata (from obs or var). or subset the object.'''
@@ -731,7 +635,8 @@ class ViziumHD:
         return s
     
     def __repr__(self):
-        s = f"ViziumHD[{self.name}]"
+        # s = f"ViziumHD[{self.name}]"
+        s = self.__str__()
         return s
     
     def __delitem__(self, key):
@@ -762,7 +667,7 @@ class ViziumHD:
         '''updates the methods in the instance'''
         ViziumHD_utils.update_instance_methods(self)
         ViziumHD_utils.update_instance_methods(self.plot)
-        self.__init_img()
+        self.plot._init_img()
         # update also the SC
         # if self.SC is not None:
             # ViziumHD_utils.update_instance_methods(self.SC)

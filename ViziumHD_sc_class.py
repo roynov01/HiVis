@@ -9,9 +9,12 @@ import numpy as np
 import pandas as pd
 import anndata as ad
 import os
+import scipy.io
+from copy import deepcopy
+
 
 import ViziumHD_utils
-import ViziumHD_class
+# import ViziumHD_class
 import ViziumHD_plot
 import SingleCell_utils
 
@@ -39,14 +42,17 @@ def new_from_segmentation(vizium_instance, input_df, columns=None, custom_agg=No
         ViziumHD_utils.validate_exists(input_df)
         print("[Reading CSV]")
         input_df = pd.read_csv(input_df, sep=sep)
-    else:
-        if columns is None: 
-            columns = ['Object ID']
-        elif 'Object ID' not in columns:
-            columns += ['Object ID']
-        adata_sc = SingleCell_utils._aggregate_spots(vizium_instance.adata,
-                                                   input_df, columns,
-                                                   custom_agg=custom_agg) 
+    if columns is None: 
+        columns = []
+    for col in ["Object ID","pxl_row_in_fullres", "pxl_col_in_fullres", "pxl_col_in_lowres", "pxl_row_in_lowres",
+                "pxl_col_in_highres", "pxl_row_in_highres", "um_x", "um_y", "nUMI"]:
+        if col not in columns:
+            columns += [col]
+    adata_sc = SingleCell_utils._aggregate_spots(vizium_instance.adata,
+                                               input_df, columns,
+                                               custom_agg=custom_agg) 
+    adata_sc.obs.rename(columns={"nUMI":"nUMI_avg"})
+    adata_sc.obs["nUMI"] = adata_sc.obs["nUMI_avg"] * adata_sc.obs["spot_count"]
     return SingleCell(vizium_instance, adata_sc)
 
 def new_from_annotations(vizium_instance, group_col, columns=None, custom_agg=None):
@@ -61,9 +67,17 @@ def new_from_annotations(vizium_instance, group_col, columns=None, custom_agg=No
                         example {'apicome':[_count_apical, _count_basal]}
     sep (str) - passed to read_csv if input_df is a path of CSV
     '''
+    if columns is None: 
+        columns = []
+    for col in ["pxl_row_in_fullres", "pxl_col_in_fullres", "pxl_col_in_lowres", "pxl_row_in_lowres",
+                "pxl_col_in_highres", "pxl_row_in_highres", "um_x", "um_y", "nUMI"]:
+        if col not in columns:
+            columns += [col]
     adata_sc = SingleCell_utils._aggregate_spots_annotations(vizium_instance.adata,
                                                    group_col, columns,
                                                    custom_agg=custom_agg) 
+    adata_sc.obs.rename(columns={"nUMI":"nUMI_avg"},inplace=True)
+    adata_sc.obs["nUMI"] = adata_sc.obs["nUMI_avg"] * adata_sc.obs["spot_count"]
     return SingleCell(vizium_instance, adata_sc)
 
 class SingleCell:
@@ -127,7 +141,7 @@ class SingleCell:
         '''transfers metadata assignment from the single-cell to the spots'''
         pass
     
-    def crop(self):
+    def _crop(self):
         pass
         
     
@@ -151,7 +165,8 @@ class SingleCell:
         return s
     
     def __repr__(self):
-        s = f"SingleCell[{self.viz.name}]"
+        # s = f"SingleCell[{self.viz.name}]"
+        s = self.__str__()
         return s
     
     def __delitem__(self, key):
@@ -171,11 +186,27 @@ class SingleCell:
         '''updates the methods in the instance'''
         ViziumHD_utils.update_instance_methods(self)
         ViziumHD_utils.update_instance_methods(self.plot)
-        # self.__init_img()
+        # self.plot._init_img()
     
     def head(self, n=5):
         return self.adata.obs.head(n) 
     
     @property
     def name(self):
-        return self.viz.name
+        return self.viz.name + "_sc"
+    
+    def copy(self):
+        return deepcopy(self)
+    
+    def export_to_matlab(self, path=None):
+        var_names = self.adata.var_names.to_numpy()  
+        if 'X_umap' in self.adata.obsm:
+            self.adata.obs['UMAP_1'] = self.adata.obsm['X_umap'][:, 0]  
+            self.adata.obs['UMAP_2'] = self.adata.obsm['X_umap'][:, 1]  
+        obs = self.adata.obs.to_dict(orient='list')  
+        if not path:
+            path = f"{self.path_output}/matlab"
+            if not os.path.exists(path):
+                os.makedirs(path)
+            path = f"{path}/{self.name}.mat"
+        scipy.io.savemat(path, {"genes": var_names, "metadata": obs, "mat": self.adata.X})

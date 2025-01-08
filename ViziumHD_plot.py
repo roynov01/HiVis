@@ -30,11 +30,101 @@ MAX_BARS = 30 # in barplot
 PAD_CONSTANT = 0.3 # padding of squares in scatterplot
 DEFAULT_COLOR ='None' # for plotting categorical
 chrome_path = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
+FULLRES_THRESH = 1000 # in microns, below which, a full-res image will be plotted
+HIGHRES_THRESH = 3000 # in microns, below which, a high-res image will be plotted
+# DEFAULT_COLORS = ["white","purple","blue","yellow","red"]
 
 class PlotVizium:
     def __init__(self, vizium_instance):
         self.main = vizium_instance
         self.current_ax = None
+        self.xlim_max = (vizium_instance.adata.obs['um_x'].min(), vizium_instance.adata.obs['um_x'].max())
+        self.ylim_max = (vizium_instance.adata.obs['um_y'].min(), vizium_instance.adata.obs['um_y'].max())
+        
+    def _crop(self, xlim=None, ylim=None, resolution=None):
+        '''
+        Crops the images and adata based on xlim and ylim in microns. 
+        saves it in self.adata_cropped and self.image_cropped
+        xlim, ylim: tuple of two values, in microns
+        resolution - if None, will determine automatically, other wise, "full","high" or "low"
+        '''
+        microns_per_pixel = self.main.json['microns_per_pixel'] 
+    
+        # If xlim or ylim is None, set to the full range of the data
+        if xlim is None:
+            xlim = self.xlim_max
+        if ylim is None:
+            ylim = self.ylim_max
+    
+        # Decide which image to use based on lim_size:
+        x_range = xlim[1] - xlim[0]
+        y_range = ylim[1] - ylim[0]
+        lim_size = max(x_range, y_range)
+        
+        if resolution == "full":
+            image = self.main.image_fullres
+            scalef = 1  # No scaling needed for full-resolution
+            pxl_col, pxl_row = 'pxl_col_in_fullres', 'pxl_row_in_fullres'
+        elif resolution == "high":
+            image = self.main.image_highres
+            scalef = self.main.json['tissue_hires_scalef']
+            pxl_col, pxl_row = 'pxl_col_in_highres', 'pxl_row_in_highres'
+        elif resolution == "low":
+            image = self.main.image_lowres
+            scalef = self.main.json['tissue_lowres_scalef']
+            pxl_col, pxl_row = 'pxl_col_in_lowres', 'pxl_row_in_lowres'       
+        elif lim_size <= FULLRES_THRESH: # Use full-resolution image
+            image = self.main.image_fullres
+            scalef = 1  # No scaling needed for full-resolution
+            pxl_col, pxl_row = 'pxl_col_in_fullres', 'pxl_row_in_fullres'
+            print("Full-res image selected")
+        elif lim_size <= HIGHRES_THRESH: # Use high-resolution image
+            image = self.main.image_highres
+            scalef = self.main.json['tissue_hires_scalef']  
+            pxl_col, pxl_row = 'pxl_col_in_highres', 'pxl_row_in_highres'
+            print("High-res image selected")
+        else: # Use low-resolution image
+            image = self.main.image_lowres
+            scalef = self.main.json['tissue_lowres_scalef']  
+            pxl_col, pxl_row = 'pxl_col_in_lowres', 'pxl_row_in_lowres'
+            print("Low-res image selected")
+    
+        adjusted_microns_per_pixel = microns_per_pixel / scalef
+        # refresh the adata_cropped
+        
+        xlim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in xlim]
+        ylim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in ylim]
+                
+        # Ensure indices are within the bounds of the image dimensions
+        xlim_pxl[0], ylim_pxl[0] = max(xlim_pxl[0], 0), max(ylim_pxl[0], 0)
+        xlim_pxl[1], ylim_pxl[1] = min(xlim_pxl[1], image.shape[1]), min(ylim_pxl[1], image.shape[0])
+        if xlim_pxl[0] >= xlim_pxl[1] or ylim_pxl[0] >= ylim_pxl[1]:
+            raise ValueError("Calculated pixel indices are invalid.")
+        
+        # Crop the selected image
+        self.image_cropped = image[ylim_pxl[0]:ylim_pxl[1], xlim_pxl[0]:xlim_pxl[1]]
+    
+        # Create a mask to filter the adata based on xlim and ylim
+        x_mask = (self.main.adata.obs['um_x'] >= xlim[0]) & (self.main.adata.obs['um_x'] <= xlim[1])
+        y_mask = (self.main.adata.obs['um_y'] >= ylim[0]) & (self.main.adata.obs['um_y'] <= ylim[1])
+        mask = x_mask & y_mask
+    
+        # Crop the adata
+        self.main.adata_cropped = self.main.adata[mask]
+    
+        # Adjust adata coordinates relative to the cropped image
+        self.pixel_x = self.main.adata_cropped.obs[pxl_col] - xlim_pxl[0]
+        self.pixel_y = self.main.adata_cropped.obs[pxl_row] - ylim_pxl[0]
+    
+        return xlim, ylim, adjusted_microns_per_pixel 
+    
+    def _init_img(self):
+        '''resets the cropped image and updates the cropped adata'''
+        self.image_cropped = None
+        self.ax_current = None # stores the last plot that was made
+        self.pixel_x, self.pixel_y = None, None 
+        self.main.adata_cropped = self.main.adata
+        self._crop() # creates self.main.adata_cropped & self.image_cropped
     
     def save(self, figname:str, fig=None, ax=None, open_file=False, format_='png', dpi=300):
         '''
@@ -66,7 +156,7 @@ class PlotVizium:
     
     
     def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
-                  legend=True, alpha=1, figsize=(8, 8), save=False, exact=None,
+                  legend=True, alpha=1, figsize=(8, 8), save=False, exact=None,brightness=0,contrast=1,
                   xlim=None, ylim=None, legend_title=None, axis_labels=True, pad=False):
         '''
         plots the image, and/or data/metadata (spatial plot)
@@ -74,7 +164,7 @@ class PlotVizium:
             * what - what to plot. can be metadata (obs/var colnames or a gene)
             * image - plot image?
             * img_resolution - "low","high","full". If None, will determine automatically
-            * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
+            * ax - matplotlib ax, if not passed, new figure will be created with size=figsize
             * cmap - colorbar to use
             * title, legend_title, axis_labels - strings
             * legend - show legend?
@@ -84,11 +174,13 @@ class PlotVizium:
             * alpha - transparency of scatterplot. value between 0 and 1
             * save - save the image?
             * exact - plot the squares at the exact size? more time costly
+            * brightness - increases brigtness, for example 0.2. 
+            * contrast - > 1 increases contrast, < 1 decreases.
         '''
         title = what if title is None else title
         if legend_title is None:
             legend_title = what.capitalize() if what and what==what.lower else what
-        xlim, ylim, adjusted_microns_per_pixel = self.main.crop(xlim, ylim, resolution=img_resolution)
+        xlim, ylim, adjusted_microns_per_pixel = self._crop(xlim, ylim, resolution=img_resolution)
         if exact is None:
             if (xlim[1] - xlim[0] + ylim[1] - ylim[0]) <= MAX_SQUARES_TO_DRAW_EXACT:
                 exact = True
@@ -104,13 +196,24 @@ class PlotVizium:
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
 
-        height, width = self.main.image_cropped.shape[:2]  
+        height, width = self.image_cropped.shape[:2]  
         if image: # Plot image
             extent = None
             # ax.imshow(self.image_cropped, extent=[xlim[0], xlim[1], ylim[1], ylim[0]])
             if exact:
                 extent = [0, width, height, 0]
-            ax.imshow(self.main.image_cropped, extent=extent)
+            
+            img = self.image_cropped.copy()
+            if contrast != 1:
+                # Change contrast
+                mean_value = np.mean()  
+                img_contrast = mean_value + contrast * (img - mean_value)
+                img = np.clip(img_contrast, 0, 1)
+                # Change brigtness
+            if brightness:
+                img = np.clip(img + brightness, 0, 1)
+                
+            ax.imshow(img, extent=extent)
 
         if what: 
             values = self.main.get(what, cropped=True)
@@ -119,8 +222,8 @@ class PlotVizium:
             else:
                 mask = [True for _ in values]   # No need for filtering
             values = values[mask]
-            x = self.main.pixel_x[mask]
-            y = self.main.pixel_y[mask]
+            x = self.pixel_x[mask]
+            y = self.pixel_y[mask]
             
             if np.issubdtype(values.dtype, np.number): 
                 argsort_values = np.argsort(values)
@@ -176,7 +279,7 @@ class PlotVizium:
             * save - save the image?
         '''
         title = what if title is None else title
-        self.main.crop() # resets adata_cropped to full image
+        self._crop() # resets adata_cropped to full image
         to_plot = pd.Series(self.main.get(what, cropped=True))
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
@@ -201,6 +304,9 @@ class PlotSC:
     def __init__(self, sc_instance):
         self.main = sc_instance
         self.current_ax = None
+        
+    def _crop(self):
+        pass
     
     def save(self, figname:str, fig=None, ax=None, open_file=False, format_='png', dpi=300):
         '''
@@ -231,7 +337,7 @@ class PlotSC:
             
             
             
-        xlim, ylim, adjusted_microns_per_pixel = self.main.crop(xlim, ylim, resolution=img_resolution)
+        xlim, ylim, adjusted_microns_per_pixel = self._crop(xlim, ylim, resolution=img_resolution)
         
         
 
@@ -239,9 +345,9 @@ class PlotSC:
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
 
-        height, width = self.main.image_cropped.shape[:2]  
+        height, width = self.image_cropped.shape[:2]  
         if image: # Plot image
-            ax.imshow(self.main.image_cropped)
+            ax.imshow(self.image_cropped)
 
         if what: 
             values = self.main.get(what, cropped=True)
@@ -250,8 +356,8 @@ class PlotSC:
             else:
                 mask = [True for _ in values]   # No need for filtering
             values = values[mask]
-            x = self.main.pixel_x[mask]
-            y = self.main.pixel_y[mask]
+            x = self.pixel_x[mask]
+            y = self.pixel_y[mask]
             
             if np.issubdtype(values.dtype, np.number): 
                 argsort_values = np.argsort(values)
@@ -301,7 +407,7 @@ class PlotSC:
             * save - save the image?
         '''
         title = what if title is None else title
-        # self.main.crop() # resets adata_cropped to full image
+        # self._crop() # resets adata_cropped to full image
         to_plot = pd.Series(self.main.get(what, cropped=True))
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)

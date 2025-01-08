@@ -97,7 +97,7 @@ def _aggregate_meta_cells(adata, cells_only, user_aggregations=None):
                         row_result[f"{col_name}_{fun_name}"] = agg_value
                     else:
                         row_result[col_name] = agg_value
-            
+            row_result['spot_count'] = len(group)
             row_result['Cell_ID'] = name
             results.append(row_result)
         return pd.DataFrame(results)
@@ -184,13 +184,14 @@ def _aggregate_spots_annotations(adata, group_col="lipid_id", columns=None, cust
         raise ValueError(f"'{group_col}' not found in adata.obs columns.")
     if group_col not in columns:
         columns.append(group_col)
+        
 
     # 2) Aggregate metadata (returns a DataFrame with one row per group_col)
-    meta_df = _aggregate_meta2(adata=adata,group_col=group_col,
+    meta_df = _aggregate_meta_annotations(adata=adata,group_col=group_col,
         columns=columns,user_aggregations=custom_agg)
 
     # 3) Aggregate expression data (returns a 2D array or sparse matrix + list of group IDs)
-    expr_data, group_ids = _aggregate_data2(adata=adata,group_col=group_col)
+    expr_data, group_ids = _aggregate_data_annotations(adata=adata,group_col=group_col)
 
     # 4) Build a new AnnData
     #    - obs = aggregated metadata (indexed by the same group IDs order)
@@ -264,6 +265,8 @@ def _aggregate_meta_annotations(adata, group_col, columns, user_aggregations=Non
                     row[f"{col_name}_{func_name}"] = result
                 else:
                     row[col_name] = result
+                    
+        row['spot_count'] = len(sub_df)
 
         # Keep track of which group (index)
         row[group_col] = group_val
