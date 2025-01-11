@@ -20,20 +20,20 @@ def custom_mode(series):
 
 def _aggregate_spots_cells(adata, sc_metadata, columns, custom_agg=None):
     if "Object ID" not in columns:
-        columns += "Object ID"
+        columns += ["Object ID"]
     for w in ["Object ID","Name","in_nucleus","in_cell"]:
         if w not in sc_metadata.columns:
             raise ValueError("columns of df must include ['Object ID','Name','in_nucleus','in_cell']")
     spots_only = sc_metadata.loc[sc_metadata['Classification']=='Spot',['Name','in_nucleus','in_cell']]
-    cells_only = sc_metadata.loc[sc_metadata['Classification']=='Cell',columns]
+    cells_only = sc_metadata.loc[sc_metadata['Classification']=='Cell',]
     cells_only.rename(columns={'Object ID': 'Cell_ID'},inplace=True)
     
     _split_name(spots_only, adata)
     
     custom_agg = custom_agg if custom_agg else {}
-    _aggregate_meta_cells(adata, cells_only, user_aggregations=custom_agg)
+    _aggregate_meta_annotations(adata,"Cell_ID" ,cells_only, columns, user_aggregations=custom_agg)
     
-    adata_sc = _aggregate_data_cells(cells_only, adata)
+    adata_sc = _aggregate_data_annotations(cells_only, adata)
     return adata_sc
 
 def _split_name(spots_only, adata):
@@ -46,25 +46,18 @@ def _split_name(spots_only, adata):
     spots_only = spots_only.set_index("Spot_ID")
     del spots_only['Name']
     adata.obs['Spot_ID'] = adata.obs.index
-    print("[Adding cells to the spots-adata]")
+    print("[Adding Cell_ID to the spots-adata]")
     adata.obs = adata.obs.join(spots_only,how='left')
+
 
 def _aggregate_meta_cells(adata, cells_only, user_aggregations=None):
     def _guess_default_aggregator(series, default_numeric=np.median, default_categorical=custom_mode):
-        """Guess aggregator based on numeric vs. non-numeric dtype."""
         if pd.api.types.is_numeric_dtype(series):
             return default_numeric
         else:
             return default_categorical
 
-    def _prepare_aggregations(df, user_aggregations=None,
-                              default_numeric=np.median,
-                              default_categorical=custom_mode):
-        """
-        Build a dict of {column_name: function or [functions]}.
-        1. Use user_aggregations if given.
-        2. Otherwise, guess aggregator based on column type.
-        """
+    def _prepare_aggregations(df, user_aggregations=None,default_numeric=np.median,default_categorical=custom_mode):
         if user_aggregations is None:
             user_aggregations = {}
         final_aggregations = {}
@@ -77,12 +70,6 @@ def _aggregate_meta_cells(adata, cells_only, user_aggregations=None):
         return final_aggregations
 
     def _aggregate_with_progress(grouped, aggregations):
-        """
-        Apply the aggregations to each group with a progress bar.
-        :param grouped: A pandas groupby object
-        :param aggregations: Dict of {col_name: function or list_of_functions}
-        :return: DataFrame with one row per group
-        """
         results = []        
         for name, group in tqdm(grouped, total=len(grouped), desc="Aggregating spots metadata"):
             row_result = {}
@@ -102,18 +89,13 @@ def _aggregate_meta_cells(adata, cells_only, user_aggregations=None):
             results.append(row_result)
         return pd.DataFrame(results)
     
-    # Prepare final aggregator dictionary
     final_aggregations = _prepare_aggregations(
         adata.obs, user_aggregations=user_aggregations,default_numeric=np.median,
         default_categorical=custom_mode)
-
-    # Perform aggregation
     cells_only2 = _aggregate_with_progress(adata.obs.groupby('Cell_ID'), final_aggregations)
-
-    # Merge results   
     cells_only = pd.merge(cells_only, cells_only2, on='Cell_ID', how='left')
 
-def _aggregate_data_cells(cells_only, adata, output_dir=None, name=''):
+def _aggregate_data_cells(cells_only, adata):
     if 'Cell_ID' in cells_only.columns:
         cells_only.set_index('Cell_ID', inplace=True)
     adata_filtered = adata[(adata.obs['in_cell'] == 1)]
@@ -159,7 +141,6 @@ def _aggregate_spots_annotations(adata, group_col="lipid_id", columns=None, cust
     E.g., group by 'villus_id' and create one row per unique villus.
 
     Parameters
-    ----------
     adata : AnnData
         Original AnnData with spot-level data in .X and metadata in .obs.
     group_col : str
@@ -171,7 +152,6 @@ def _aggregate_spots_annotations(adata, group_col="lipid_id", columns=None, cust
         E.g. { "columnA": np.mean, "columnB": lambda x: ','.join(x) }
 
     Returns
-    -------
     AnnData
         A new AnnData with aggregated expression and aggregated metadata.
         Each row (obs) corresponds to one unique value of `group_col`.
@@ -205,22 +185,14 @@ def _aggregate_spots_annotations(adata, group_col="lipid_id", columns=None, cust
 def _aggregate_meta_annotations(adata, group_col, columns, user_aggregations=None):
     """
     Group `adata.obs` by `group_col` and compute aggregated metadata for each group.
-
     Parameters
-    ----------
-    adata : AnnData
-        Original AnnData with metadata in .obs.
-    group_col : str
-        The column used to define groups.
-    columns : list
-        Which columns to aggregate (must include group_col).
-    user_aggregations : dict or None
-        A mapping of {col_name: aggregator_function or [functions]}.
+    adata - Original AnnData with metadata in .obs.
+    group_col : str - The column used to define groups.
+    columns : list - Which columns to aggregate (must include group_col).
+    user_aggregations : dict or None - A mapping of {col_name: aggregator_function or [functions]}.
         If not provided, numeric columns default to median, others to custom_mode.
 
-    Returns
-    -------
-    pd.DataFrame
+    Returns pd.DataFrame
         A DataFrame indexed by the unique values of `group_col`.
         Each row is the aggregated result for that group.
     """
@@ -272,8 +244,8 @@ def _aggregate_meta_annotations(adata, group_col, columns, user_aggregations=Non
         row[group_col] = group_val
         group_results.append(row)
 
-    aggregated_df = pd.DataFrame(group_results).set_index(group_col)
-    return aggregated_df
+    updated_obs = pd.DataFrame(group_results).set_index(group_col)
+    return updated_obs
 
 def _aggregate_data_annotations(adata, group_col):
     """
@@ -296,7 +268,7 @@ def _aggregate_data_annotations(adata, group_col):
     # 1) Find the unique groups & row indices
     #    We'll build a mapping of {group_val -> list of row indices}
     obs = adata.obs
-    unique_groups = obs[group_col].dropna().unique()  # skip NaNs if needed
+    unique_groups = obs[group_col].dropna().unique()  
     group_to_indices = {}
     for i, val in enumerate(obs[group_col]):
         if pd.isna(val):

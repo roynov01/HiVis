@@ -12,7 +12,7 @@ import pandas as pd
 import scanpy as sc
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
-# from matplotlib import colormaps
+from matplotlib import colormaps
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.patches as patches
 import matplotlib.colors as mcolors
@@ -232,13 +232,13 @@ class PlotVizium:
             # Plot scatter:
             if exact:
                 ax = _plot_squares_exact(x, y, values, size=size,title=title,
-                              figsize=figsize,alpha=alpha,cmap=cmap,ax=ax,
+                              alpha=alpha,cmap=cmap,ax=ax,
                               legend=legend,xlab=None,ylab=None, 
                               legend_title=legend_title)
                 ax.set_aspect('equal')
             else:
                 ax = plot_scatter(x, y, values, size=size,title=title,
-                              figsize=figsize,alpha=alpha,cmap=cmap,ax=ax,
+                              alpha=alpha,cmap=cmap,ax=ax,
                               legend=legend,xlab=None,ylab=None, 
                               legend_title=legend_title)
 
@@ -304,9 +304,50 @@ class PlotSC:
     def __init__(self, sc_instance):
         self.main = sc_instance
         self.current_ax = None
+        self.xlim_max = (sc_instance.adata.obs['um_x'].min(), sc_instance.adata.obs['um_x'].max())
+        self.ylim_max = (sc_instance.adata.obs['um_y'].min(), sc_instance.adata.obs['um_y'].max())
         
-    def _crop(self):
-        pass
+    def _crop(self, xlim=None, ylim=None,resolution=None):
+        # If xlim or ylim is None, set to the full range of the data
+        if xlim is None:
+            xlim = self.xlim_max
+        if ylim is None:
+            ylim = self.ylim_max
+    
+        x_mask = (self.main.adata.obs['um_x'] >= xlim[0]) & (self.main.adata.obs['um_x'] <= xlim[1])
+        y_mask = (self.main.adata.obs['um_y'] >= ylim[0]) & (self.main.adata.obs['um_y'] <= ylim[1])
+        mask = x_mask & y_mask
+    
+        # Crop the adata
+        self.main.adata_cropped = self.main.adata[mask]
+    
+        # Adjust adata coordinates relative to the cropped image
+        x_range = xlim[1] - xlim[0]
+        y_range = ylim[1] - ylim[0]
+        lim_size = max(x_range, y_range)
+        
+        if resolution == "full":
+            pxl_col, pxl_row, scalef = 'pxl_col_in_fullres', 'pxl_row_in_fullres', 1
+        elif resolution == "high":
+            pxl_col, pxl_row, scalef = 'pxl_col_in_highres', 'pxl_row_in_highres', self.main.viz.json['tissue_hires_scalef']
+        elif resolution == "low":
+            pxl_col, pxl_row, scalef = 'pxl_col_in_lowres', 'pxl_row_in_lowres', self.main.viz.json['tissue_lowres_scalef']      
+        elif lim_size <= FULLRES_THRESH: 
+            pxl_col, pxl_row, scalef = 'pxl_col_in_fullres', 'pxl_row_in_fullres', 1
+        elif lim_size <= HIGHRES_THRESH: 
+            pxl_col, pxl_row, scalef = 'pxl_col_in_highres', 'pxl_row_in_highres', self.main.viz.json['tissue_hires_scalef'] 
+        else: 
+            pxl_col, pxl_row, scalef = 'pxl_col_in_lowres', 'pxl_row_in_lowres', self.main.viz.json['tissue_lowres_scalef']  
+        # microns_per_pixel = self.main.viz.json['microns_per_pixel'] 
+        # adjusted_microns_per_pixel = microns_per_pixel / scalef        
+        # xlim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in xlim]
+        # ylim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in ylim]
+ 
+        # self.pixel_x = self.main.adata_cropped.obs[pxl_col] - xlim_pxl[0]
+        # self.pixel_y = self.main.adata_cropped.obs[pxl_row] - ylim_pxl[0]
+        self.pixel_x = self.main.adata_cropped.obs[pxl_col] 
+        self.pixel_y = self.main.adata_cropped.obs[pxl_row] 
+
     
     def save(self, figname:str, fig=None, ax=None, open_file=False, format_='png', dpi=300):
         '''
@@ -329,27 +370,22 @@ class PlotSC:
     
     
     def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
-                  legend=True, alpha=1, figsize=(8, 8), save=False, size=1,
+                  legend=True, alpha=1, figsize=(8, 8), save=False, size=1,brightness=0,contrast=1,
                   xlim=None, ylim=None, legend_title=None, axis_labels=True):
         title = what if title is None else title
         if legend_title is None:
             legend_title = what.capitalize() if what and what==what.lower else what
-            
-            
-            
-        xlim, ylim, adjusted_microns_per_pixel = self._crop(xlim, ylim, resolution=img_resolution)
-        
-        
 
-            
-        if ax is None:
-            fig, ax = plt.subplots(figsize=figsize)
+        self._crop(xlim, ylim, resolution=img_resolution)
 
-        height, width = self.image_cropped.shape[:2]  
-        if image: # Plot image
-            ax.imshow(self.image_cropped)
+        
+        ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,
+                            contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution)
 
         if what: 
+            if ax is None:
+                fig, ax = plt.subplots(figsize=figsize)
+            
             values = self.main.get(what, cropped=True)
             if np.issubdtype(values.dtype, np.number):  # Filter values that are 0
                 mask = values > 0
@@ -364,28 +400,12 @@ class PlotSC:
                 x, y, values = x.iloc[argsort_values], y.iloc[argsort_values], values[argsort_values]
             
             # Plot scatter:
-            else:
-                ax = plot_scatter(x, y, values, size=size,title=title,
-                              figsize=figsize,alpha=alpha,cmap=cmap,ax=ax,
-                              legend=legend,xlab=None,ylab=None, 
-                              legend_title=legend_title)
-
-        if axis_labels:
-            ax.set_xlabel("Spatial 1 (µm)")
-            ax.set_ylabel("Spatial 2 (µm)")
-            set_axis_ticks(ax, width, adjusted_microns_per_pixel, axis='x')
-            set_axis_ticks(ax, height, adjusted_microns_per_pixel, axis='y')
-        else:
-            ax.set_xticks([])  
-            ax.set_xticklabels([]) 
-            ax.set_yticks([])  
-            ax.set_yticklabels([]) 
-        if title:
-            ax.set_title(title)    
             
-        ax.set_xlim(0, width)
-        ax.set_ylim(height, 0)     
-        
+            ax = plot_scatter(x, y, values, size=size,title=title,
+                          alpha=alpha,cmap=cmap,ax=ax,
+                          legend=legend,xlab=None,ylab=None, 
+                          legend_title=legend_title,marker="o")
+
         # Save figure:
         self.current_ax = ax
         if save:
@@ -407,7 +427,7 @@ class PlotSC:
             * save - save the image?
         '''
         title = what if title is None else title
-        # self._crop() # resets adata_cropped to full image
+        self._crop() # resets adata_cropped to full image
         to_plot = pd.Series(self.main.get(what, cropped=True))
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
@@ -450,7 +470,7 @@ def save_fig(path, fig, open_file=False, format_='png', dpi=300):
     return path
 
 def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
-                   cmap='winter', figsize=(8, 8), alpha=1, legend_title=None, ax=None):
+                   cmap='winter', figsize=(8, 8), alpha=1, legend_title=None, ax=None,marker='s'):
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
     ax.set_aspect('equal')
@@ -464,7 +484,7 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
     
     if np.issubdtype(values.dtype, np.number): # Numeric case: Use colorbar
         if isinstance(cmap, str):
-            cmap_obj = cm.get_cmap(cmap)
+            cmap_obj = colormaps.get_cmap(cmap)
         elif isinstance(cmap, list):
             cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
         scatter = ax.scatter(x, y, c=values, cmap=cmap_obj, marker='s',
@@ -475,7 +495,7 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
     else: # Categorical case: Use legend 
         unique_values = np.unique(values.astype(str))
         unique_values = unique_values[unique_values != 'nan']
-        if isinstance(cmap, str):
+        if isinstance(cmap, (str,list)):
             colors = get_colors(unique_values, cmap)
             color_map = {val: colors[i] for i, val in enumerate(unique_values)}  
         elif isinstance(cmap, dict):
@@ -488,7 +508,7 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
                 values = values.astype(str)
             mask = values == val
             ax.scatter(x[mask], y[mask], color=color_map[val], edgecolor='none',
-                        label=str(val), marker='s', alpha=alpha, s=size)
+                        label=str(val), marker=marker, alpha=alpha, s=size)
         if legend:
             legend_elements = [Patch(facecolor=color_map[val], label=str(val)) for val in unique_values]
             ax.legend(handles=legend_elements, title=legend_title, loc='center left', bbox_to_anchor=(1, 0.5))
@@ -684,7 +704,7 @@ def get_colors(values, cmap):
     else:
         unique_values = np.unique(values.astype(str))
     if isinstance(cmap, str):
-        cmap_obj = cm.get_cmap(cmap)
+        cmap_obj = colormaps.get_cmap(cmap)
     elif isinstance(cmap, list):
         cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
     cmap_len = cmap_obj.N
@@ -754,7 +774,7 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
     if np.issubdtype(values.dtype, np.number):  # Numeric case: Use colorbar
         # Normalize the values for the colormap
         if isinstance(cmap, str):
-            cmap_obj = cm.get_cmap(cmap)
+            cmap_obj = colormaps.get_cmap(cmap)
         elif isinstance(cmap, list):
             cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
         norm = mcolors.Normalize(vmin=np.min(values), vmax=np.max(values))
@@ -786,14 +806,13 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
     else:  # Categorical case: Use legend
         unique_values = np.unique(values.astype(str))
         unique_values = unique_values[unique_values != 'nan']
-        if isinstance(cmap, str):
+        if isinstance(cmap, (str,list)):
             colors = get_colors(unique_values, cmap)
             color_map = {val: colors[i] for i, val in enumerate(unique_values)}  
         elif isinstance(cmap, dict):
             color_map = {val: cmap.get(val, 'gray') for val in unique_values}
         else:
             raise ValueError("cmap must be a string (colormap name) or a dictionary")
-        print(f"{cmap=},{unique_values=},{color_map=}")
 
         # Add rectangles for each category
         for val in unique_values:

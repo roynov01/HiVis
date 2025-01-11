@@ -11,7 +11,7 @@ import anndata as ad
 import os
 import scipy.io
 from copy import deepcopy
-
+import scanpy as sc
 
 import ViziumHD_utils
 # import ViziumHD_class
@@ -48,7 +48,7 @@ def new_from_segmentation(vizium_instance, input_df, columns=None, custom_agg=No
                 "pxl_col_in_highres", "pxl_row_in_highres", "um_x", "um_y", "nUMI"]:
         if col not in columns:
             columns += [col]
-    adata_sc = SingleCell_utils._aggregate_spots(vizium_instance.adata,
+    adata_sc = SingleCell_utils._aggregate_spots_cells(vizium_instance.adata,
                                                input_df, columns,
                                                custom_agg=custom_agg) 
     adata_sc.obs.rename(columns={"nUMI":"nUMI_avg"})
@@ -94,13 +94,14 @@ class SingleCell:
         if not os.path.exists(self.path_output):
             os.makedirs(self.path_output)
         self.plot = ViziumHD_plot.PlotSC(self)
+        self.adata_cropped = None
 
     def __init_img(self):
         raise StopIteration("WHAAAAAAAAAAAAAAAAAAAAAT?!")
         pass
     
     def get(self, what, cropped=False):
-        # adata = self.adata_cropped if cropped else self.adata
+        adata = self.adata_cropped if cropped else self.adata
         adata = self.adata
         if isinstance(what, str): # easy acess to data or metadata arrays
             if what in adata.obs.columns: # Metadata
@@ -139,9 +140,6 @@ class SingleCell:
        
     def sc_transfer_meta(self, what: str):
         '''transfers metadata assignment from the single-cell to the spots'''
-        pass
-    
-    def _crop(self):
         pass
         
     

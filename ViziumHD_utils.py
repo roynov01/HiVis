@@ -17,9 +17,9 @@ import warnings
 import scanpy as sc
 import tifffile
 import matplotlib.pyplot as plt
-import ViziumHD_plot
 from matplotlib.colors import to_rgba
 
+import ViziumHD_plot
 
 def update_instance_methods(instance):
     '''reloads the methods in an instance'''
