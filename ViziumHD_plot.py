@@ -115,6 +115,11 @@ class PlotVizium:
         # Adjust adata coordinates relative to the cropped image
         self.pixel_x = self.main.adata_cropped.obs[pxl_col] - xlim_pxl[0]
         self.pixel_y = self.main.adata_cropped.obs[pxl_row] - ylim_pxl[0]
+        
+        print(f"Microns per Pixel: {microns_per_pixel}")
+        print(f"Scaling Factor (scalef): {scalef}")
+        print(f"Adjusted Microns per Pixel: {adjusted_microns_per_pixel}")
+        print(f"Pixel Cropping Limits: xlim_pxl={xlim_pxl}, ylim_pxl={ylim_pxl}")
     
         return xlim, ylim, adjusted_microns_per_pixel 
     
@@ -304,8 +309,8 @@ class PlotSC:
     def __init__(self, sc_instance):
         self.main = sc_instance
         self.current_ax = None
-        self.xlim_max = (sc_instance.adata.obs['um_x'].min(), sc_instance.adata.obs['um_x'].max())
-        self.ylim_max = (sc_instance.adata.obs['um_y'].min(), sc_instance.adata.obs['um_y'].max())
+        self.xlim_max = (self.main.viz.adata.obs['um_x'].min(), self.main.viz.adata.obs['um_x'].max())
+        self.ylim_max = (self.main.viz.adata.obs['um_y'].min(), self.main.viz.adata.obs['um_y'].max())
         
     def _crop(self, xlim=None, ylim=None,resolution=None):
         # If xlim or ylim is None, set to the full range of the data
@@ -338,15 +343,23 @@ class PlotSC:
             pxl_col, pxl_row, scalef = 'pxl_col_in_highres', 'pxl_row_in_highres', self.main.viz.json['tissue_hires_scalef'] 
         else: 
             pxl_col, pxl_row, scalef = 'pxl_col_in_lowres', 'pxl_row_in_lowres', self.main.viz.json['tissue_lowres_scalef']  
-        # microns_per_pixel = self.main.viz.json['microns_per_pixel'] 
-        # adjusted_microns_per_pixel = microns_per_pixel / scalef        
-        # xlim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in xlim]
-        # ylim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in ylim]
+            
+        
+        microns_per_pixel = self.main.viz.json['microns_per_pixel'] 
+        adjusted_microns_per_pixel = microns_per_pixel / scalef        
+        xlim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in xlim]
+        ylim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in ylim]
  
-        # self.pixel_x = self.main.adata_cropped.obs[pxl_col] - xlim_pxl[0]
-        # self.pixel_y = self.main.adata_cropped.obs[pxl_row] - ylim_pxl[0]
-        self.pixel_x = self.main.adata_cropped.obs[pxl_col] 
-        self.pixel_y = self.main.adata_cropped.obs[pxl_row] 
+        self.pixel_x = self.main.adata_cropped.obs[pxl_col] - xlim_pxl[0]
+        self.pixel_y = self.main.adata_cropped.obs[pxl_row] - ylim_pxl[0]
+        # self.pixel_x = self.main.adata_cropped.obs[pxl_col] 
+        # self.pixel_y = self.main.adata_cropped.obs[pxl_row] 
+        
+        print(f"Microns per Pixel: {microns_per_pixel}")
+        print(f"Scaling Factor (scalef): {scalef}")
+        print(f"Adjusted Microns per Pixel: {adjusted_microns_per_pixel}")
+        print(f"Pixel Cropping Limits: xlim_pxl={xlim_pxl}, ylim_pxl={ylim_pxl}")
+
 
     
     def save(self, figname:str, fig=None, ax=None, open_file=False, format_='png', dpi=300):
@@ -381,7 +394,8 @@ class PlotSC:
         
         ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,
                             contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution)
-
+        
+        
         if what: 
             if ax is None:
                 fig, ax = plt.subplots(figsize=figsize)
@@ -394,6 +408,8 @@ class PlotSC:
             values = values[mask]
             x = self.pixel_x[mask]
             y = self.pixel_y[mask]
+            # height = self.main.viz.plot.image_cropped.shape[0]
+            # self.pixel_y = height - self.pixel_y # Flip Y axis
             
             if np.issubdtype(values.dtype, np.number): 
                 argsort_values = np.argsort(values)
@@ -405,6 +421,8 @@ class PlotSC:
                           alpha=alpha,cmap=cmap,ax=ax,
                           legend=legend,xlab=None,ylab=None, 
                           legend_title=legend_title,marker="o")
+
+
 
         # Save figure:
         self.current_ax = ax
@@ -487,7 +505,7 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
             cmap_obj = colormaps.get_cmap(cmap)
         elif isinstance(cmap, list):
             cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-        scatter = ax.scatter(x, y, c=values, cmap=cmap_obj, marker='s',
+        scatter = ax.scatter(x, y, c=values, cmap=cmap_obj, marker=marker,
                               alpha=alpha, s=size,edgecolor='none')
         if legend:
             cbar = plt.colorbar(scatter, ax=ax, shrink=0.6)
@@ -502,7 +520,6 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
             color_map = {val: cmap.get(val,DEFAULT_COLOR) for val in unique_values}
         else:
             raise ValueError("cmap must be a string (colormap name) or a dictionary")
-        # print(f"{cmap=},{unique_values=},{color_map=}")
         for val in unique_values: # Plot each category with its color
             if values.dtype == bool:
                 values = values.astype(str)

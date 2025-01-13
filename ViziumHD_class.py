@@ -648,7 +648,7 @@ class ViziumHD:
                 del self.adata.var[key]
             else:
                 raise KeyError(f"'{key}' not found in adata.obs")
-            self.__init_img()
+            self.plot.__init_img()
         else:
             raise TypeError(f"Key must be a string, not {type(key).__name__}")
     

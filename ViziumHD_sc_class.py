@@ -102,7 +102,6 @@ class SingleCell:
     
     def get(self, what, cropped=False):
         adata = self.adata_cropped if cropped else self.adata
-        adata = self.adata
         if isinstance(what, str): # easy acess to data or metadata arrays
             if what in adata.obs.columns: # Metadata
                 return adata.obs[what].values
