@@ -15,6 +15,8 @@ import scanpy as sc
 import geopandas as gpd
 import warnings
 import re
+from shapely.affinity import scale
+from shapely import wkt
 
 
 import ViziumHD_utils
@@ -105,15 +107,30 @@ class SingleCell:
 
 
     def import_geometry(self, geojson_path, object_type="cell"):
-        gdf = gpd.read_file(geojson_path)
+        if isinstance(geojson_path,str):
+            gdf = gpd.read_file(geojson_path)
+        elif isinstance(geojson_path,gpd.GeoDataFrame):
+            gdf = geojson_path
         gdf = gdf[gdf["objectType"] == object_type]
         gdf = gdf.loc[:,["id","geometry"]]
         gdf.rename(columns={"id":self.adata.obs.index.name},inplace=True)
+        # with warnings.catch_warnings():
+        #     warnings.filterwarnings("ignore", message="Geometry column does not contain geometry")
+        #     gdf["geometry"] = gdf["geometry"].apply(wkt.loads)
+            # gdf["geometry"] = gdf["geometry"].astype(str)
+
+        
+        microns_per_pixel = self.viz.json["microns_per_pixel"]
+        gdf["geometry"] = gdf["geometry"].apply(lambda geom: scale(geom, xfact=microns_per_pixel, yfact=microns_per_pixel, origin=(0, 0)))
+        gdf["geometry"] = gdf["geometry"].apply(lambda geom: geom.wkt)
+        gdf = gdf.set_index(self.adata.obs.index.name)
+    
+        if "geometry" in self.adata.obs.columns:
+            print("Geometry column already exists, overwriting...")
+            del self.adata.obs["geometry"]
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="Geometry column does not contain geometry")
-            gdf["geometry"] = gdf["geometry"].astype(str)
-        gdf = gdf.set_index(self.adata.obs.index.name)
-        self.adata.obs = self.adata.obs.join(gdf,how="left")
+            self.adata.obs = self.adata.obs.join(gdf,how="left")
         
     
     def merge(self, adata, obs=None, var=None, umap=True, pca=True, hvg=True):

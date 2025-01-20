@@ -206,11 +206,10 @@ class PlotVizium:
             # ax.imshow(self.image_cropped, extent=[xlim[0], xlim[1], ylim[1], ylim[0]])
             if exact:
                 extent = [0, width, height, 0]
-            
             img = self.image_cropped.copy()
             if contrast != 1:
                 # Change contrast
-                mean_value = np.mean()  
+                mean_value = np.mean(img)  
                 img_contrast = mean_value + contrast * (img - mean_value)
                 img = np.clip(img_contrast, 0, 1)
                 # Change brigtness
@@ -363,13 +362,13 @@ class PlotSC:
             self._init_geometry(adjusted_microns_per_pixel, xlim_pxl, ylim_pxl)
             
             
-    def _init_geometry(self, adjusted_microns_per_pixel):
+    def _init_geometry(self, adjusted_microns_per_pixel, xlim_pxl, ylim_pxl):
         """
         Initialize or refresh self._geometry from self.main.adata.obs["geometry"].
         If self._geometry is already defined, you could skip re-initializing
         unless you've changed the data externally.
         """
-        obs = self.main.adata_cropped
+        obs = self.main.adata_cropped.obs
 
         if "geometry" not in obs.columns:
             print("'geometry' column isn't in OBS")
@@ -384,17 +383,20 @@ class PlotSC:
         
         # Scale from microns → pixels 
         scale_factor = 1.0 / adjusted_microns_per_pixel
+        gdf = gdf.dropna(subset=["geometry"]).copy()
+
+        
         gdf["geometry"] = gdf["geometry"].apply(
             lambda geom: shapely.affinity.scale(geom, xfact=scale_factor, yfact=scale_factor, origin=(0, 0))
         )
         
         # Shift so that (xlim[0], ylim[0]) → (0,0)
-        x_shift = -self.xlim_pxl[0]
-        y_shift = -self.ylim_pxl[0]
+        x_shift = -xlim_pxl[0]
+        y_shift = -ylim_pxl[0]
         gdf["geometry"] = gdf["geometry"].apply(
             lambda geom: shapely.affinity.translate(geom, xoff=x_shift, yoff=y_shift))
         
-        self._geometry = gdf
+        self.geometry = gdf
     
     def save(self, figname:str, fig=None, ax=None, open_file=False, format_='png', dpi=300):
         '''
@@ -493,9 +495,9 @@ class PlotSC:
     
     def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, 
               figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,
-              legend=True, ax=None, title=None, legend_title=None, brightness=None, contrast=None):
+              legend=True, ax=None, title=None, legend_title=None, brightness=0,contrast=1):
         
-        if "geometry" not in self.main.adata.columns:
+        if "geometry" not in self.main.adata.obs.columns:
             raise ValueError("No 'geometry' column found in adata.obs.")
             
         self._crop(xlim=xlim, ylim=ylim, resolution=img_resolution, geometry=True)
@@ -528,7 +530,10 @@ class PlotSC:
                     cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
                 plotted = self.geometry.plot(column="temp", ax=ax, cmap=cmap_obj, legend=False, alpha=alpha)
                 if legend:
-                    cbar = plt.colorbar(plotted, ax=ax, shrink=0.6)
+                    norm = plt.Normalize(vmin=values.min(), vmax=values.max())
+                    sm = plt.cm.ScalarMappable(cmap=cmap_obj, norm=norm)
+                    sm.set_array([])  
+                    cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
                     cbar.set_label(legend_title)
             else: # Categorical case
                 unique_values = np.unique(values.astype(str))
@@ -552,7 +557,7 @@ class PlotSC:
                     ax.legend(handles=legend_elements, title=legend_title, loc='center left', bbox_to_anchor=(1, 0.5))
       
             # self.geometry.plot(column="temp",ax=ax,cmap=cmap,legend=legend,alpha=alpha)
-        self.geometry.drop(columns="temp", inplace=True)
+            self.geometry.drop(columns="temp", inplace=True)
         self.current_ax = ax
         if save:
             self.save(f"{what}_CELLS")

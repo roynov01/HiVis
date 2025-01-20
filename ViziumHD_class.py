@@ -382,7 +382,20 @@ class ViziumHD:
         
     
     def pseudobulk(self, by=None):
+        if by is None:
+            pb = self.adata.X.mean(axis=0).A1
+            return pd.Series(pb, index=self.adata.var_names)
         
+        unique_groups = self.adata.obs[by].unique()
+        n_groups = len(unique_groups)
+        n_genes = self.adata.n_vars  
+        result = np.zeros((n_groups, n_genes))
+        for i, group in enumerate(unique_groups):
+            mask = self.adata.obs[by] == group
+            group_sum = self.adata.X[mask].sum(axis=0)  
+            group_mean = group_sum / mask.sum() 
+            result[i, :] = group_mean.A1     
+        return pd.DataFrame(result.T, index=self.adata.var_names, columns=unique_groups)
         
                 
     def export_h5(self, path=None, force=False):
