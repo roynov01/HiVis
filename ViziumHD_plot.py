@@ -13,7 +13,7 @@ import scanpy as sc
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib import colormaps
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 import matplotlib.patches as patches
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
@@ -21,7 +21,11 @@ import seaborn as sns
 from adjustText import adjust_text
 import plotly.express as px
 from subprocess import Popen, PIPE
-
+import shapely.wkt
+# import shapely.geometry
+import shapely.affinity
+import geopandas as gpd
+from shapely.geometry import Polygon
 
 
 POINTS_PER_INCH = 72
@@ -115,11 +119,6 @@ class PlotVizium:
         # Adjust adata coordinates relative to the cropped image
         self.pixel_x = self.main.adata_cropped.obs[pxl_col] - xlim_pxl[0]
         self.pixel_y = self.main.adata_cropped.obs[pxl_row] - ylim_pxl[0]
-        
-        print(f"Microns per Pixel: {microns_per_pixel}")
-        print(f"Scaling Factor (scalef): {scalef}")
-        print(f"Adjusted Microns per Pixel: {adjusted_microns_per_pixel}")
-        print(f"Pixel Cropping Limits: xlim_pxl={xlim_pxl}, ylim_pxl={ylim_pxl}")
     
         return xlim, ylim, adjusted_microns_per_pixel 
     
@@ -270,7 +269,7 @@ class PlotVizium:
         return ax
     
     def hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,ax=None,
-             save=False, figsize=(8,8), cmap=None, color="blue"):
+             save=False, figsize=(8,8), cmap=None, color="blue",cropped=True):
         '''
         plots histogram of data or metadata. if categorical, will plot barplot
         parameters:
@@ -282,10 +281,14 @@ class PlotVizium:
             * title, xlab, ylab - strings
             * xlim - two values, where to crop the x axis
             * save - save the image?
+            * cropped - if False and plot.spatial was run with xlim, ylim hist will be on cropped area
         '''
         title = what if title is None else title
-        self._crop() # resets adata_cropped to full image
+        if cropped:
+            self._crop() # resets adata_cropped to full image
         to_plot = pd.Series(self.main.get(what, cropped=True))
+        if to_plot is None:
+            raise ValueError(f"'{what}' not in adata")
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
         ax = plot_histogram(to_plot,bins=bins,xlim=xlim,title=title,figsize=figsize,
@@ -311,8 +314,10 @@ class PlotSC:
         self.current_ax = None
         self.xlim_max = (self.main.viz.adata.obs['um_x'].min(), self.main.viz.adata.obs['um_x'].max())
         self.ylim_max = (self.main.viz.adata.obs['um_y'].min(), self.main.viz.adata.obs['um_y'].max())
+        self.geometry = None
+        self._crop()
         
-    def _crop(self, xlim=None, ylim=None,resolution=None):
+    def _crop(self, xlim=None, ylim=None, resolution=None, geometry=False):
         # If xlim or ylim is None, set to the full range of the data
         if xlim is None:
             xlim = self.xlim_max
@@ -324,7 +329,7 @@ class PlotSC:
         mask = x_mask & y_mask
     
         # Crop the adata
-        self.main.adata_cropped = self.main.adata[mask]
+        self.main.adata_cropped = self.main.adata[mask].copy()
     
         # Adjust adata coordinates relative to the cropped image
         x_range = xlim[1] - xlim[0]
@@ -344,7 +349,6 @@ class PlotSC:
         else: 
             pxl_col, pxl_row, scalef = 'pxl_col_in_lowres', 'pxl_row_in_lowres', self.main.viz.json['tissue_lowres_scalef']  
             
-        
         microns_per_pixel = self.main.viz.json['microns_per_pixel'] 
         adjusted_microns_per_pixel = microns_per_pixel / scalef        
         xlim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in xlim]
@@ -355,12 +359,42 @@ class PlotSC:
         # self.pixel_x = self.main.adata_cropped.obs[pxl_col] 
         # self.pixel_y = self.main.adata_cropped.obs[pxl_row] 
         
-        print(f"Microns per Pixel: {microns_per_pixel}")
-        print(f"Scaling Factor (scalef): {scalef}")
-        print(f"Adjusted Microns per Pixel: {adjusted_microns_per_pixel}")
-        print(f"Pixel Cropping Limits: xlim_pxl={xlim_pxl}, ylim_pxl={ylim_pxl}")
+        if geometry:
+            self._init_geometry(adjusted_microns_per_pixel, xlim_pxl, ylim_pxl)
+            
+            
+    def _init_geometry(self, adjusted_microns_per_pixel):
+        """
+        Initialize or refresh self._geometry from self.main.adata.obs["geometry"].
+        If self._geometry is already defined, you could skip re-initializing
+        unless you've changed the data externally.
+        """
+        obs = self.main.adata_cropped
 
-
+        if "geometry" not in obs.columns:
+            print("'geometry' column isn't in OBS")
+            self.geometry = None
+            return
+        
+        # Convert WKT → Shapely geometry
+        geometry = (obs["geometry"].dropna().apply(shapely.wkt.loads))
+        
+        # Build a GeoDataFrame in micron space (before scaling)
+        gdf = gpd.GeoDataFrame(obs.drop(columns="geometry"),geometry=geometry,crs=None) # EPSG:4326?
+        
+        # Scale from microns → pixels 
+        scale_factor = 1.0 / adjusted_microns_per_pixel
+        gdf["geometry"] = gdf["geometry"].apply(
+            lambda geom: shapely.affinity.scale(geom, xfact=scale_factor, yfact=scale_factor, origin=(0, 0))
+        )
+        
+        # Shift so that (xlim[0], ylim[0]) → (0,0)
+        x_shift = -self.xlim_pxl[0]
+        y_shift = -self.ylim_pxl[0]
+        gdf["geometry"] = gdf["geometry"].apply(
+            lambda geom: shapely.affinity.translate(geom, xoff=x_shift, yoff=y_shift))
+        
+        self._geometry = gdf
     
     def save(self, figname:str, fig=None, ax=None, open_file=False, format_='png', dpi=300):
         '''
@@ -391,10 +425,8 @@ class PlotSC:
 
         self._crop(xlim, ylim, resolution=img_resolution)
 
-        
         ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,
                             contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution)
-        
         
         if what: 
             if ax is None:
@@ -431,7 +463,7 @@ class PlotSC:
         return ax
 
     def hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,ax=None,
-             save=False, figsize=(8,8), cmap=None, color="blue"):
+             save=False, figsize=(8,8), cmap=None, color="blue",cropped=True):
         '''
         plots histogram of data or metadata. if categorical, will plot barplot.
         parameters:
@@ -445,8 +477,11 @@ class PlotSC:
             * save - save the image?
         '''
         title = what if title is None else title
-        self._crop() # resets adata_cropped to full image
+        if cropped:
+            self._crop() # resets adata_cropped to full image
         to_plot = pd.Series(self.main.get(what, cropped=True))
+        if to_plot is None:
+            raise ValueError(f"'{what}' not in adata")
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
         ax = plot_histogram(to_plot,bins=bins,xlim=xlim,title=title,figsize=figsize,
@@ -456,17 +491,115 @@ class PlotSC:
             self.save(f"{what}_HIST")
         return ax
     
-    def cells(self):
-        pass
-    
-    def umap(self, features=None, title=None, size=None,layer=None,
-              legend_loc='right margin', save=False, ax=None):
+    def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, 
+              figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,
+              legend=True, ax=None, title=None, legend_title=None, brightness=None, contrast=None):
+        
+        if "geometry" not in self.main.adata.columns:
+            raise ValueError("No 'geometry' column found in adata.obs.")
+            
+        self._crop(xlim=xlim, ylim=ylim, resolution=img_resolution, geometry=True)
+        
+        if self.geometry.empty:
+            raise ValueError(f"No cells found in limits x={xlim}, y={ylim}")
+        
+        title = what if title is None else title
+        if legend_title is None:
+            legend_title = what.capitalize() if what and what==what.lower else what
+        
+        ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,
+                            contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution)
+        
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        
+        self.geometry.boundary.plot(ax=ax, color=line_color, linewidth=linewidth)
+        
+        if what: 
+            values = self.main.get(what, cropped=True) 
+            if len(values) != len(self.main.adata_cropped):
+                raise ValueError("Can only plot OBS or gene expression")
+            self.geometry["temp"] = values
+            
+            if np.issubdtype(values.dtype, np.number):
+                if isinstance(cmap, str):
+                    cmap_obj = colormaps.get_cmap(cmap)
+                elif isinstance(cmap, list):
+                    cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+                plotted = self.geometry.plot(column="temp", ax=ax, cmap=cmap_obj, legend=False, alpha=alpha)
+                if legend:
+                    cbar = plt.colorbar(plotted, ax=ax, shrink=0.6)
+                    cbar.set_label(legend_title)
+            else: # Categorical case
+                unique_values = np.unique(values.astype(str))
+                unique_values = unique_values[unique_values != 'nan']
+                if isinstance(cmap, (str,list)):
+                    colors = get_colors(unique_values, cmap)
+                    color_map = {val: colors[i] for i, val in enumerate(unique_values)}  
+                elif isinstance(cmap, dict):
+                    color_map = {val: cmap.get(val,DEFAULT_COLOR) for val in unique_values}
+                else:
+                    raise ValueError("cmap must be a string (colormap name) or a dictionary")
+                for val in unique_values: # Plot each category with its color
+                    values = values.astype(str)
+                    mask = (self.geometry["temp"].astype(str) == val)
+                    sub_gdf = self.geometry[mask]
+                    if sub_gdf.empty:
+                        continue
+                    sub_gdf.plot(ax=ax,facecolor=color_map[val],edgecolor="none",alpha=alpha,label=str(val))
+                if legend:
+                    legend_elements = [Patch(facecolor=color_map[val], label=str(val)) for val in unique_values]
+                    ax.legend(handles=legend_elements, title=legend_title, loc='center left', bbox_to_anchor=(1, 0.5))
+      
+            # self.geometry.plot(column="temp",ax=ax,cmap=cmap,legend=legend,alpha=alpha)
+        self.geometry.drop(columns="temp", inplace=True)
+        self.current_ax = ax
+        if save:
+            self.save(f"{what}_CELLS")
+        return ax
+
+        
+    def umap(self, features=None, title=None, size=None,layer=None,legend=True,texts=False,
+              legend_loc='right margin', save=False, ax=None, figsize=(8,8),cmap="viridis"):
         if 'X_umap' not in self.main.adata.obsm:
             raise ValueError("UMAP embedding is missing. Run `sc.tl.umap()` after PCA.")
-        if ax and not isinstance(features, str):
-            raise ValueError("ax can be passed for a single feature only")
+        if ax:
+            if not isinstance(features, str):
+                raise ValueError("ax can be passed for a single feature only")
+        else:
+            if isinstance(features, str):
+                features = [features]
+                fig, ax = plt.subplots(figsize=figsize)
+        if not legend:
+            legend_loc="none"
+        
+        color_values = self.main[features[0] if isinstance(features, list) else features] 
+        if isinstance(cmap, (str, list, dict)):
+            colors = get_colors(color_values, cmap)
+        unique_values = np.unique(color_values.astype(str))
+        if len(unique_values) == len(colors):
+            self.main.adata.uns[f'{features[0]}_colors'] = colors  # Set colors for the feature categories
+        else:
+            raise ValueError("Mismatch between number of unique values and generated colors.")    
         ax = sc.pl.umap(self.main.adata, color=features,use_raw=False,size=size,ax=ax,
                         title=title,show=False,legend_loc=legend_loc,layer=layer)
+        del self.main.adata.uns[f'{features[0]}_colors']
+
+        if texts and isinstance(features, str):
+            values = self.main.adata.obs[features]
+        
+            if isinstance(values.dtype, pd.CategoricalDtype) or values.dtype.name == 'category':
+                cluster_coords = self.main.adata.obsm['X_umap']
+                values = self.main.adata.obs[features]
+                unique_clusters = values.unique()
+                for cluster in unique_clusters:
+                    mask = values == cluster
+                    centroid_x = cluster_coords[mask, 0].mean()
+                    centroid_y = cluster_coords[mask, 1].mean()
+            
+                    plt.text(centroid_x, centroid_y, str(cluster), color='black',
+                             fontsize=10, ha='center', va='center', weight='bold')
+                
         self.current_ax = ax
         if save:
             self.save(f"{features}_UMAP")
@@ -537,7 +670,53 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
         ax.set_title(title)
     return ax
     
-
+def plot_polygons(geometry,values=None,ax=None,title=None,cmap="winter",color="black",
+    alpha=1.0,legend=True,xlab=None, ylab=None,legend_title=None,size=1,figsize=(8,8)):
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, layout='constrained')
+    if isinstance(geometry, pd.Series):
+        geometry = geometry.values
+    geometry = list(geometry)
+    if values is not None:
+        # Ensure 'values' is an array-like object
+        if not isinstance(values, pd.Series):
+            values = pd.Series(values, index=range(len(values)))
+        # Use your existing `get_colors` to map values -> colors
+        fill_colors = get_colors(values, cmap)
+    else:
+        fill_colors = ["none"] * len(geometry)
+    for geom_item, fill_color in zip(geometry, fill_colors):
+        # Parse WKT strings into Shapely Polygons if needed
+        if isinstance(geom_item, str):
+            geom_item = shapely.wkt.loads(geom_item)
+        if not isinstance(geom_item, Polygon):
+            continue  # Skip anything not a Polygon
+        
+        polygon_coords = np.array(geom_item.exterior.coords)
+        patch = patches.Polygon(
+            polygon_coords,
+            facecolor=fill_color,  # Fill color based on 'values' or 'none'
+            edgecolor=color,       # Line color from 'color'
+            linewidth=size,        # Line thickness
+            alpha=alpha
+        )
+        ax.add_patch(patch)
+    if legend and values is not None:
+        unique_vals = values.unique()
+        color_list = get_colors(unique_vals, cmap)
+        handles = [patches.Patch(facecolor=c, edgecolor="black", label=str(val))
+            for c, val in zip(color_list, unique_vals)]
+        ax.legend(handles=handles, title=legend_title, loc="best")
+    if xlab:
+        ax.set_xlabel(xlab)
+    if ylab:
+        ax.set_ylabel(ylab)
+    if title:
+        ax.set_title(title)
+    return ax
+    
+    
+    
 
 def plot_scatter_signif(df,x_col,y_col,genes=None,text=True,figsize=(8,8),size=10,legend=False,title=None,
                     ax=None,xlab=None,ylab=None,out_path=None,color="blue",color_genes="red",x_line=None,y_line=None):

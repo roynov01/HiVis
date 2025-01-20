@@ -380,7 +380,11 @@ class ViziumHD:
         
         self.plot._init_img()
         
-            
+    
+    def pseudobulk(self, by=None):
+        
+        
+                
     def export_h5(self, path=None, force=False):
         '''exports the adata. can also save the obs as parquet'''
         if path is None:
@@ -437,17 +441,26 @@ class ViziumHD:
             * cropped - get the data from the adata_cropped after crop() or plotting methods?
         '''
         adata = self.adata_cropped if cropped else self.adata
-        if isinstance(what, str): # easy acess to data or metadata arrays
-            if what in adata.obs.columns: # Metadata
-                return adata.obs[what].values
-            if what in adata.var.index: # A gene
+        if isinstance(what, str):  # Easy access to data or metadata arrays
+            if what in adata.obs.columns:  # Metadata
+                column_data = adata.obs[what]
+                if column_data.dtype.name == 'category':  # Handle categorical dtype
+                    return column_data.astype(str).values
+                return column_data.values
+            if what in adata.var.index:  # A gene
                 return np.array(adata[:, what].X.todense().ravel()).flatten()
-            if what in adata.var.columns: # Gene metadata
-                return adata.var[what].values
+            if what in adata.var.columns:  # Gene metadata
+                column_data = adata.var[what]
+                if column_data.dtype.name == 'category':  # Handle categorical dtype
+                    return column_data.astype(str).values
+                return column_data.values
             obs_cols_lower = adata.obs.columns.str.lower()
             if what.lower() in obs_cols_lower:
                 col_name = adata.obs.columns[obs_cols_lower.get_loc(what.lower())]
-                return adata.obs[col_name].values
+                column_data = adata.obs[col_name]
+                if column_data.dtype.name == 'category':  # Handle categorical dtype
+                    return column_data.astype(str).values
+                return column_data.values
             if self.organism == "mouse" and (what.lower().capitalize() in adata.var.index):
                 return np.array(adata[:, what.lower().capitalize()].X.todense()).flatten()
             if self.organism == "human" and (what.upper() in adata.var.index):
@@ -455,9 +468,12 @@ class ViziumHD:
             var_cols_lower = adata.var.columns.str.lower()
             if what.lower() in var_cols_lower:
                 col_name = adata.var.columns[var_cols_lower.get_loc(what.lower())]
-                return adata.var[col_name].values
+                column_data = adata.var[col_name]
+                if column_data.dtype.name == 'category':  # Handle categorical dtype
+                    return column_data.astype(str).values
+                return column_data.values
         else:
-            # Create a new ViziumHD objects based on adata subsetting
+            # Create a new ViziumHD object based on adata subsetting
             return self.subset(what, remove_empty_pixels=False)
             
     def subset(self, what=(slice(None), slice(None)), remove_empty_pixels=False):
