@@ -11,7 +11,6 @@ import importlib
 import os
 from tqdm import tqdm
 from statsmodels.stats.multitest import multipletests
-# from PIL import Image
 import math
 import warnings
 import scanpy as sc
@@ -45,6 +44,11 @@ def update_instance_methods(instance):
 
 
 def p_adjust(pvals, method="fdr_bh"):
+    '''
+    Adjusts Pvalues, return array of q-values.
+    pvals - list / array / pd.Series
+    method is passed to statsmodels.stats.multitest.multipletests
+    '''
     if isinstance(pvals, (list, np.ndarray)):
         pvals = pd.Series(pvals)
     elif not isinstance(pvals, pd.Series):
@@ -71,6 +75,9 @@ def p_adjust(pvals, method="fdr_bh"):
     
 
 def matnorm(df):
+    '''
+    Normilizes a dataframe or matrix or array by the sum of columns.
+    '''
     if isinstance(df, pd.core.series.Series):
         return df.div(df.sum())
     if isinstance(df, (np.ndarray, np.matrix)):
@@ -90,6 +97,7 @@ def matnorm(df):
         
 
 def validate_exists(file_path):
+    '''Validates if a file exists'''
     if isinstance(file_path, (list, tuple)):
         for path in file_path:
             if not os.path.exists(path):
@@ -249,9 +257,8 @@ def find_markers(exp_df, celltypes=None, ratio_thresh=2, exp_thresh=0,
 def fix_excel_gene_dates(df, handle_duplicates="mean"):
     """
     Fixes gene names in a DataFrame that Excel auto-converted to dates.
-        * df (pd.DataFrame): DataFrame containing gene names either in a column named "gene" or in the index.
+        * df - DataFrame containing gene names either in a column named "gene" or in the index.
         * handle_duplicates (str): How to handle duplicates after conversion. Options: "mean" or "first".
-
     """
     date_to_gene = {
         "1-Mar": "MARCH1", "2-Mar": "MARCH2", "3-Mar": "MARCH3", "4-Mar": "MARCH4", "5-Mar": "MARCH5",
@@ -276,8 +283,6 @@ def fix_excel_gene_dates(df, handle_duplicates="mean"):
         df = df.reset_index()
     
     return df
-
-
 
 
 def _crop_images_permenent(adata, image_fullres, image_highres, image_lowres, scalefactor_json):
@@ -352,6 +357,9 @@ def _export_images(path_image_fullres, path_image_highres, path_image_lowres,
               
 
 def _edit_adata(adata, scalefactor_json, mito_name_prefix):
+    '''
+    Adds QC (nUMI, mito %) and unit transformation to anndata.
+    '''
     adata.obs["pxl_col_in_lowres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
     adata.obs["pxl_row_in_lowres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
     adata.obs["pxl_col_in_highres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
@@ -373,6 +381,9 @@ def _edit_adata(adata, scalefactor_json, mito_name_prefix):
 
 
 def _measure_fluorescence(adata, image_fullres, fluorescence, spot_diameter_fullres):
+    '''
+    Adds measurements of each fluorescence channel into the adata.
+    '''
     num_channels = image_fullres.shape[2]
     if len(fluorescence) != num_channels:
         raise ValueError(f"Length of 'fluorescence' should be number of channels in image ({num_channels})")
@@ -442,6 +453,7 @@ def fluorescence_to_RGB(image, colors:list, normalization_method=None):
  
 
 def _normalize_channel(channel_data, method="percentile"):
+    '''Normilizes one image channel based on the given method'''
     if method == "percentile":
         p_min, p_max = np.percentile(channel_data, (1, 99))
         if p_max > p_min:
@@ -475,6 +487,12 @@ def _normalize_channel(channel_data, method="percentile"):
    
 
 def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_only):
+    '''Imports data, metadata and image
+        parameters:
+            * paths - metadata_path is parquet file, path_input_data is folder, 
+                      such as square_002um. path_image_fullres is tif file.
+            * on_tissue_only - filter spots that are classified to be under tissue?
+    '''
     # load metadata (and save as CSV)
     print("[Loading metadata]")        
     metadata = pd.read_parquet(metadata_path)
@@ -490,7 +508,7 @@ def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_o
         warnings.filterwarnings("ignore", message="Variable names are not unique. To make them unique")
         adata = sc.read_visium(path_input_data, source_image_path=path_image_fullres)
     adata.var_names_make_unique()
-    del adata.uns["spatial"]
+    # del adata.uns["spatial"]
     
     # filter spots that are classified to be under tissue
     if on_tissue_only: 
@@ -504,3 +522,18 @@ def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_o
     adata.obs = adata.obs.join(metadata, how='left')
     return adata
 
+
+def merge_geojsons(geojsons_files, filename_out):
+    '''
+    Combine geopandas to one file.
+    parameters:
+        * geojsons_files - list of file paths
+        * filename_out - name of the combined file. ends with .shp
+    '''
+    import geopandas as gpd
+    gdfs = [gpd.read_file(file) for file in geojsons_files]
+    combined_gdf = pd.concat(gdfs, ignore_index=True)
+    combined_gdf = gpd.GeoDataFrame(combined_gdf, geometry='geometry')
+    if not filename_out.endswith(".shp"):
+        filename_out += ".shp"
+    combined_gdf.to_file(filename_out, driver="GPKG")

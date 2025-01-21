@@ -39,6 +39,7 @@ HIGHRES_THRESH = 3000 # in microns, below which, a high-res image will be plotte
 # DEFAULT_COLORS = ["white","purple","blue","yellow","red"]
 
 class PlotVizium:
+    '''Handles all plotting for ViziumHD object'''
     def __init__(self, vizium_instance):
         self.main = vizium_instance
         self.current_ax = None
@@ -172,8 +173,7 @@ class PlotVizium:
             * cmap - colorbar to use
             * title, legend_title, axis_labels - strings
             * legend - show legend?
-            * xlim - two values, in microns
-            * ylim - two values, in microns
+            * xlim, ylim - two values each, in microns
             * pad - scale the size of dots to be smaller
             * alpha - transparency of scatterplot. value between 0 and 1
             * save - save the image?
@@ -305,9 +305,8 @@ class PlotVizium:
         return s
     
     
-
-
 class PlotSC:
+    '''Handles all plotting for SingleCell object'''
     def __init__(self, sc_instance):
         self.main = sc_instance
         self.current_ax = None
@@ -317,6 +316,13 @@ class PlotSC:
         self._crop()
         
     def _crop(self, xlim=None, ylim=None, resolution=None, geometry=False):
+        '''
+        Creates self.main.adata_cropped, based on xlim, ylim, in um units.
+        parameters:
+            * xlim,ylim both have two elements. if None, will take the maximal limits.
+            * resolution - can be "full","high","low" or None
+            * geometry - initialize / update self.geometry?
+        '''
         # If xlim or ylim is None, set to the full range of the data
         if xlim is None:
             xlim = self.xlim_max
@@ -369,7 +375,6 @@ class PlotSC:
         unless you've changed the data externally.
         """
         obs = self.main.adata_cropped.obs
-
         if "geometry" not in obs.columns:
             print("'geometry' column isn't in OBS")
             self.geometry = None
@@ -381,7 +386,7 @@ class PlotSC:
         # Build a GeoDataFrame in micron space (before scaling)
         gdf = gpd.GeoDataFrame(obs.drop(columns="geometry"),geometry=geometry,crs=None) # EPSG:4326?
         
-        # Scale from microns → pixels 
+        # Scale from microns to pixels 
         scale_factor = 1.0 / adjusted_microns_per_pixel
         gdf = gdf.dropna(subset=["geometry"]).copy()
 
@@ -390,7 +395,7 @@ class PlotSC:
             lambda geom: shapely.affinity.scale(geom, xfact=scale_factor, yfact=scale_factor, origin=(0, 0))
         )
         
-        # Shift so that (xlim[0], ylim[0]) → (0,0)
+        # Shift so that (xlim[0], ylim[0]) to (0,0)
         x_shift = -xlim_pxl[0]
         y_shift = -ylim_pxl[0]
         gdf["geometry"] = gdf["geometry"].apply(
@@ -406,7 +411,7 @@ class PlotSC:
             * fig (optional) - plt.Figure object to save, can be a dataframe for writing csv.
             * ax - ax to save. if not passed, will use self.current_ax
             * open_file - open the file?
-            * format - format of file
+            * format_ - format of file
         '''
         path = f"{self.main.path_output}/{self.main.viz.name}_{figname}.{format_}"
         if fig is None:
@@ -421,6 +426,19 @@ class PlotSC:
     def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
                   legend=True, alpha=1, figsize=(8, 8), save=False, size=1,brightness=0,contrast=1,
                   xlim=None, ylim=None, legend_title=None, axis_labels=True):
+        '''
+        Plot a spatial representation of self.adata.
+        parameters:
+            * what - what to color the cells with (fill) - can be column from obs or a gene
+            * image - plot the image underneath the cells?
+            * img_resolution - which resolution to use for the image - can be "full","high","low"
+            * brightness, contrast - for image modification
+            * cmap - can be string (name of pellate), list of colors, 
+                     or in categorical values case, a dict {"value":"color"}
+            * xlim, ylim - two values each, in microns
+            * save - save the plot?
+            * figsize, legend, alpha, title, legend_title, axis_labels - cosmetic parameters  
+        '''
         title = what if title is None else title
         if legend_title is None:
             legend_title = what.capitalize() if what and what==what.lower else what
@@ -475,6 +493,7 @@ class PlotSC:
             * cmap - colorbar to use. overrides the color argument for barplot
             * color - color of the histogram
             * title, xlab, ylab - strings
+            * save - save the plot?
             * xlim - two values, where to crop the x axis
             * save - save the image?
         '''
@@ -496,7 +515,19 @@ class PlotSC:
     def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, 
               figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,
               legend=True, ax=None, title=None, legend_title=None, brightness=0,contrast=1):
-        
+        '''
+        Plot a UMAP of self.adata.
+        parameters:
+            * what - what to color the cells with (fill) - can be column from obs or a gene
+            * image - plot the image underneath the cells?
+            * img_resolution - which resolution to use for the image - can be "full","high","low"
+            * brightness, contrast - for image modification
+            * cmap - can be string (name of pellate), list of colors, 
+                     or in categorical values case, a dict {"value":"color"}
+            * xlim, ylim - two values each, in microns
+            * save - svae the plot?
+            * figsize, line_color, legend, linewidth, title, legend_title - cosmetic parameters            
+        '''
         if "geometry" not in self.main.adata.obs.columns:
             raise ValueError("No 'geometry' column found in adata.obs.")
             
@@ -518,9 +549,9 @@ class PlotSC:
         self.geometry.boundary.plot(ax=ax, color=line_color, linewidth=linewidth)
         
         if what: 
-            values = self.main.get(what, cropped=True) 
-            if len(values) != len(self.main.adata_cropped):
-                raise ValueError("Can only plot OBS or gene expression")
+            values = self.main.get(what, cropped=True, geometry=True) 
+            # if len(values) != len(self.main.adata_cropped):
+            #     raise ValueError("Can only plot OBS or gene expression")
             self.geometry["temp"] = values
             
             if np.issubdtype(values.dtype, np.number):
@@ -528,7 +559,7 @@ class PlotSC:
                     cmap_obj = colormaps.get_cmap(cmap)
                 elif isinstance(cmap, list):
                     cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-                plotted = self.geometry.plot(column="temp", ax=ax, cmap=cmap_obj, legend=False, alpha=alpha)
+                self.geometry.plot(column="temp", ax=ax, cmap=cmap_obj, legend=False, alpha=alpha)
                 if legend:
                     norm = plt.Normalize(vmin=values.min(), vmax=values.max())
                     sm = plt.cm.ScalarMappable(cmap=cmap_obj, norm=norm)
@@ -566,6 +597,17 @@ class PlotSC:
         
     def umap(self, features=None, title=None, size=None,layer=None,legend=True,texts=False,
               legend_loc='right margin', save=False, ax=None, figsize=(8,8),cmap="viridis"):
+        '''
+        Plot a UMAP of self.adata.
+        parameters:
+            * features - if None, won't color. can be a string or list of strings,
+                        passed to scanpy.pl.umap
+            * layer - which layer to use from the self.adata. If None, will use X
+            * texts - add text in the center of mass of categorical case
+            * cmap - can be string (name of pellate), list of colors, 
+                     or in categorical values case, a dict {"value":"color"}
+            * figsize, size, legend, legend_loc, title, legend_title - cosmetic parameters            
+        '''
         if 'X_umap' not in self.main.adata.obsm:
             raise ValueError("UMAP embedding is missing. Run `sc.tl.umap()` after PCA.")
         if ax:
@@ -616,6 +658,7 @@ class PlotSC:
 
 
 def save_fig(path, fig, open_file=False, format_='png', dpi=300): 
+    '''Save a fig object'''
     if isinstance(fig, pd.DataFrame):
         path = path.replace(f".{format}",".csv")
         fig.to_csv(path)
@@ -627,6 +670,15 @@ def save_fig(path, fig, open_file=False, format_='png', dpi=300):
 
 def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
                    cmap='winter', figsize=(8, 8), alpha=1, legend_title=None, ax=None,marker='s'):
+    '''
+    Plots a scatterplot based on coordinates and values.
+    parameters:
+        * x, y, values - coordinates and values to plot. lists, Series, or arrays
+        * cmap - can be string (name of pellate), list of colors, 
+                 or in categorical values case, a dict {"value":"color"}
+        * marker - shape of dots. "s" for square, "o" or "." for circle
+        * figsize, size, legend, xlab, ylab, title, legend_title - cosmetic parameters
+    '''
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
     ax.set_aspect('equal')
@@ -675,69 +727,81 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
         ax.set_title(title)
     return ax
     
-def plot_polygons(geometry,values=None,ax=None,title=None,cmap="winter",color="black",
-    alpha=1.0,legend=True,xlab=None, ylab=None,legend_title=None,size=1,figsize=(8,8)):
-    if ax is None:
-        fig, ax = plt.subplots(figsize=figsize, layout='constrained')
-    if isinstance(geometry, pd.Series):
-        geometry = geometry.values
-    geometry = list(geometry)
-    if values is not None:
-        # Ensure 'values' is an array-like object
-        if not isinstance(values, pd.Series):
-            values = pd.Series(values, index=range(len(values)))
-        # Use your existing `get_colors` to map values -> colors
-        fill_colors = get_colors(values, cmap)
-    else:
-        fill_colors = ["none"] * len(geometry)
-    for geom_item, fill_color in zip(geometry, fill_colors):
-        # Parse WKT strings into Shapely Polygons if needed
-        if isinstance(geom_item, str):
-            geom_item = shapely.wkt.loads(geom_item)
-        if not isinstance(geom_item, Polygon):
-            continue  # Skip anything not a Polygon
+# def plot_polygons(geometry,values=None,ax=None,title=None,cmap="winter",color="black",
+#     alpha=1.0,legend=True,xlab=None, ylab=None,legend_title=None,size=1,figsize=(8,8)):
+    
+#     if ax is None:
+#         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
+#     if isinstance(geometry, pd.Series):
+#         geometry = geometry.values
+#     geometry = list(geometry)
+#     if values is not None:
+#         # Ensure 'values' is an array-like object
+#         if not isinstance(values, pd.Series):
+#             values = pd.Series(values, index=range(len(values)))
+#         # Use your existing `get_colors` to map values -> colors
+#         fill_colors = get_colors(values, cmap)
+#     else:
+#         fill_colors = ["none"] * len(geometry)
+#     for geom_item, fill_color in zip(geometry, fill_colors):
+#         # Parse WKT strings into Shapely Polygons if needed
+#         if isinstance(geom_item, str):
+#             geom_item = shapely.wkt.loads(geom_item)
+#         if not isinstance(geom_item, Polygon):
+#             continue  # Skip anything not a Polygon
         
-        polygon_coords = np.array(geom_item.exterior.coords)
-        patch = patches.Polygon(
-            polygon_coords,
-            facecolor=fill_color,  # Fill color based on 'values' or 'none'
-            edgecolor=color,       # Line color from 'color'
-            linewidth=size,        # Line thickness
-            alpha=alpha
-        )
-        ax.add_patch(patch)
-    if legend and values is not None:
-        unique_vals = values.unique()
-        color_list = get_colors(unique_vals, cmap)
-        handles = [patches.Patch(facecolor=c, edgecolor="black", label=str(val))
-            for c, val in zip(color_list, unique_vals)]
-        ax.legend(handles=handles, title=legend_title, loc="best")
-    if xlab:
-        ax.set_xlabel(xlab)
-    if ylab:
-        ax.set_ylabel(ylab)
-    if title:
-        ax.set_title(title)
-    return ax
+#         polygon_coords = np.array(geom_item.exterior.coords)
+#         patch = patches.Polygon(
+#             polygon_coords,
+#             facecolor=fill_color,  # Fill color based on 'values' or 'none'
+#             edgecolor=color,       # Line color from 'color'
+#             linewidth=size,        # Line thickness
+#             alpha=alpha
+#         )
+#         ax.add_patch(patch)
+#     if legend and values is not None:
+#         unique_vals = values.unique()
+#         color_list = get_colors(unique_vals, cmap)
+#         handles = [patches.Patch(facecolor=c, edgecolor="black", label=str(val))
+#             for c, val in zip(color_list, unique_vals)]
+#         ax.legend(handles=handles, title=legend_title, loc="best")
+#     if xlab:
+#         ax.set_xlabel(xlab)
+#     if ylab:
+#         ax.set_ylabel(ylab)
+#     if title:
+#         ax.set_title(title)
+#     return ax
     
     
-    
-
 def plot_scatter_signif(df,x_col,y_col,genes=None,text=True,figsize=(8,8),size=10,legend=False,title=None,
                     ax=None,xlab=None,ylab=None,out_path=None,color="blue",color_genes="red",x_line=None,y_line=None):
+    '''
+    Plots a scatterplot based on a dataframe.
+    parameters:
+        * df - pd.Data.Frame
+        * x_col, y_col - names of columns in the df to plot
+        * genes - list of genes to color
+        * text - show names of genes?
+        * out_path - path to save the image. if None, won't save'
+        * x_line, y_line (numbers) - add vertical and/or horizontal 
+        * figsize, size, legend, xlab, ylab, color, color_genes - cosmetic parameters
+    '''
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
-    df['type'] = ""
+    df["type"] = ""
     
-    sns.scatterplot(data=df[df['type'] == ''], x=x_col, y=y_col,s=size,legend=legend,
+    sns.scatterplot(data=df[df["type"] == ""], x=x_col, y=y_col,s=size,legend=legend,
                     ax=ax,color=color,edgecolor=None)
     if y_line is not None:
         ax.axhline(y=y_line if y_line is not True else 0,color="k",linestyle="--")
     if x_line is not None:
         ax.axvline(x=x_line if x_line is not True else 0,color="k",linestyle="--")
     if genes:
-        df.loc[df['gene'].isin(genes),"type"] = "selected"
-        subplot = df[df['type'] != '']
+        if "gene" not in df.columns:
+            df["gene"] = df.index
+        df.loc[df["gene"].isin(genes),"type"] = "selected"
+        subplot = df[df["type"] != ""]
         if not subplot.empty:
             sns.scatterplot(data=subplot, x=x_col, y=y_col,color=color_genes,
                             s=size,legend=False,ax=ax,edgecolor="k")
@@ -745,11 +809,11 @@ def plot_scatter_signif(df,x_col,y_col,genes=None,text=True,figsize=(8,8),size=1
                 texts = [ax.text(
                     subplot[x_col].iloc[i], 
                     subplot[y_col].iloc[i], 
-                    subplot['gene'].iloc[i],
+                    subplot["gene"].iloc[i],
                     color=color_genes,
                     fontsize=14,
                     ) for i in range(len(subplot))]
-                adjust_text(texts, arrowprops=dict(arrowstyle='-', color='black', lw=0.5),
+                adjust_text(texts, arrowprops=dict(arrowstyle="-", color="black", lw=0.5),
                             force_text=(0.6, 0.6),ax=ax)
     ax.set_xlabel(xlab, fontsize=14)
     ax.set_ylabel(ylab, fontsize=14)
@@ -757,13 +821,22 @@ def plot_scatter_signif(df,x_col,y_col,genes=None,text=True,figsize=(8,8),size=1
     if out_path:
         if not out_path.endswith(".png"):
             out_path += ".png"
-        plt.savefig(out_path, format='png', dpi=300, bbox_inches='tight')
+        plt.savefig(out_path, format="png", dpi=300, bbox_inches="tight")
     return ax
 
 
 def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=None, title=None,
             size=10, colname_exp="expression_mean",colname_qval="qval", 
             colname_fc="log2fc", n_texts=130, ylab="log2(ratio)"):
+    '''
+    Plots a MA plot of the output of ViziumHD.dge().
+    parameters:
+        * exp_thresh - show only genes with expression higher than this value
+        * qval_thresh, fc_thresh - values above/below which consider a pojnt as significant
+        * size, ylab, title, figsize - cosmetic parameters
+        * colname_exp - can be "expression_mean","expression_min","expression_max"
+        * n_texts - maximal number of texts to display. above, will only color the dots
+    '''
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
     plot = df.loc[df[colname_exp] >= exp_thresh].copy()
@@ -774,13 +847,23 @@ def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=N
     signif_genes = plot.loc[plot["signif"]==True,"gene"].tolist()
     text = True if len(signif_genes) < n_texts else False
     ax = plot_scatter_signif(plot, "exp", colname_fc, genes=signif_genes,
-                             text=text, title=title,ax=ax,
+                             text=text, title=title,ax=ax,size=size,
                              xlab=f"log10({colname_exp.replace('_',' ')})",
                              ylab=ylab,y_line=0,color_genes="red", color="gray")
     return ax
 
 
-def plot_scatter_html(df,x,y,save_path,text="gene",color=None,size=None,xlab=None,ylab=None,title=None,open_fig=True,legend_title=None):
+def plot_scatter_html(df,x,y,save_path,text="gene",color=None,size=None,
+                      xlab=None,ylab=None,title=None,open_fig=True,legend_title=None):
+    '''
+    Creates plotly express interactive scatterplot.
+    parameters:
+        * save_path - path of html file, where to save the plot.
+        * color - color spots by a column in the df
+        * size - change size of dots by a column in the df
+        * open_fig - open the file with default machine software?
+        * xlab, ylab, title, legend_title - cosmetic parameters
+    '''
     def open_html(html_file,chrome_path=chrome_path):
         process = Popen(['cmd.exe', '/c', chrome_path, html_file], stdout=PIPE, stderr=PIPE)
 
@@ -812,7 +895,14 @@ def plot_scatter_html(df,x,y,save_path,text="gene",color=None,size=None,xlab=Non
 
 def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, figsize=(8,8), 
               cmap=None, color="blue", ylab="Count",xlab=None,ax=None):
-    '''values: pd.Series'''
+    '''
+    Plots histogram from numeric values or barplot for categorical values.
+    Parameters:
+        * values: pd.Series
+        * show_zeroes - include count of zeroes in numerical case?
+        * cmap - used for categorical case. has higher priority than color.
+        * xlim, figsize, ylab, xlab - cosmetic parameters
+    '''
     
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
@@ -847,6 +937,7 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
 
 
 def plot_pie(series, figsize=(4,4),title=None,ax=None,cmap="Set1",capitalize=True):
+    '''plots a piechart of pd.Series'''
     from matplotlib.patches import Circle
 
     if ax is None:
@@ -875,21 +966,11 @@ def plot_pie(series, figsize=(4,4),title=None,ax=None,cmap="Set1",capitalize=Tru
     handles = []
     for w, category in zip(wedges, categories):
         facecolor = w.get_facecolor()
-        handles.append(
-            plt.Line2D([0], [0],
-                marker='o',
-                color=facecolor,
-                label=category,
-                markersize=15,
-                linestyle='None'))
+        handles.append(plt.Line2D([0], [0],marker='o',color=facecolor,
+                label=category, markersize=15,linestyle='None'))
 
-    legend = ax.legend(
-        handles=handles,
-        title=title,
-        loc='center',
-        bbox_to_anchor=(0.5, 0.5),
-        bbox_transform=ax.transAxes,
-        frameon=False)
+    legend = ax.legend(handles=handles,title=title,loc='center',
+        bbox_to_anchor=(0.5, 0.5),bbox_transform=ax.transAxes,frameon=False)
     legend.set_zorder(3)
 
     ax.axis('equal')  # Ensure pie chart is a circle
@@ -923,6 +1004,7 @@ def get_colors(values, cmap):
 
 
 def set_axis_ticks(ax, length_in_pixels, adjusted_microns_per_pixel, axis='x', num_ticks_desired=6):
+    '''sets ticks and ticklabels at round numbers'''
     # Calculate the total length in microns
     total_microns = length_in_pixels * adjusted_microns_per_pixel
 
@@ -956,8 +1038,12 @@ def set_axis_ticks(ax, length_in_pixels, adjusted_microns_per_pixel, axis='x', n
 
 def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
                  cmap='winter', figsize=(8, 8), alpha=1, legend_title=None, ax=None):
-    '''plots sqares in the exact size'''
-
+    '''
+    Plots sqares in the exact size
+    parameters:
+        * cmap - str, name of colormap, or list of colors. if categorical, can also be a dict {"val":"color"}
+        * title, legend, ylab, xlab, figsize, alpha, legend_title - cosmetic parameters
+    '''
 
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
@@ -989,12 +1075,8 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
             # Create a rectangle (square) centered at (xi, yi)
             square = patches.Rectangle(
                 (ll_corner_x, ll_corner_y),   # (x, y) of lower-left corner
-                size,                         # Width in data units
-                size,                         # Height in data units
-                facecolor=cmap_obj(norm(vi)),
-                edgecolor='none',
-                alpha=alpha
-            )
+                size,size,    # Width, Height in data units
+                facecolor=cmap_obj(norm(vi)), edgecolor='none',alpha=alpha)
             ax.add_patch(square)
 
         # Create a ScalarMappable for the colorbar
@@ -1025,13 +1107,8 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
                 ll_corner_x = xj - size / 2
                 ll_corner_y = yj - size / 2
                 square = patches.Rectangle(
-                    (ll_corner_x, ll_corner_y),
-                    size,
-                    size,
-                    facecolor=color,
-                    edgecolor='none',
-                    alpha=alpha
-                )
+                    (ll_corner_x, ll_corner_y),size,size,facecolor=color,
+                    edgecolor='none',alpha=alpha)
                 ax.add_patch(square)
 
         if legend:

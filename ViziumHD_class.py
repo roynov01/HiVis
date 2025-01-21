@@ -61,6 +61,7 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
         * min_reads_in_spot - filter out spots with less than X UMIs
         * min_reads_gene - filter out gene that is present in less than X spots
         * fluorescence - either False for H&E, or a dict of channel names and colors
+        * plot_qc - plot QC when object is being created
     '''
     # Validate paths of metadata and images
     if not os.path.exists(path_output):
@@ -377,11 +378,14 @@ class ViziumHD:
                 self.adata.var[name] = self.adata.var[name].astype('category')    
         else:
             raise ValueError("type_ must be either 'obs' or 'var'")
-        
         self.plot._init_img()
         
     
     def pseudobulk(self, by=None):
+        '''
+        if by is None, will return the mean expression of every gene.
+        Else, will return a dataframe, each column is a value in "by" (for example cluster), rows are genes.
+        '''
         if by is None:
             pb = self.adata.X.mean(axis=0).A1
             return pd.Series(pb, index=self.adata.var_names)
@@ -399,7 +403,12 @@ class ViziumHD:
         
                 
     def export_h5(self, path=None, force=False):
-        '''exports the adata. can also save the obs as parquet'''
+        '''
+        Exports the adata.
+        Parameters:
+            * path - path to save the h5 file
+            * force - save file even if it allready exists
+        '''
         if path is None:
             path = self.path_output
         path = f"{path}/{self.name}_viziumHD.h5ad"
@@ -410,7 +419,10 @@ class ViziumHD:
     
     def export_images(self, path=None, force=False):
         '''
-        exports full,high and low resolution images
+        Exports full,high and low resolution images
+        Parameters:
+            * path - path to save the image files
+            * force - save files even if they allready exists
         '''
         if path is None:
             path = self.path_output
@@ -432,17 +444,17 @@ class ViziumHD:
         
         return images
 
-    def aggregate_cells(self, input_df, columns=None, custom_agg=None, sep="\t"):
-        if self.SC:
-            if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
-                return
-        self.SC = ViziumHD_sc_class.new_from_segmentation(self, input_df,columns,custom_agg,sep)
+    # def aggregate_cells(self, input_df, columns=None, custom_agg=None, sep="\t"):
+    #     if self.SC:
+    #         if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
+    #             return
+    #     self.SC = ViziumHD_sc_class.new_from_segmentation(self, input_df,columns,custom_agg,sep)
 
-    def aggregate_annotations(self,group_col,columns=None,custom_agg=None):
-        if self.SC:
-            if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
-                return
-        self.SC = ViziumHD_sc_class.new_from_annotations(self, group_col,columns,custom_agg)
+    # def aggregate_annotations(self,group_col,columns=None,custom_agg=None):
+    #     if self.SC:
+    #         if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
+    #             return
+    #     self.SC = ViziumHD_sc_class.new_from_annotations(self, group_col,columns,custom_agg)
     
     def get(self, what, cropped=False):
         '''
@@ -489,31 +501,44 @@ class ViziumHD:
             # Create a new ViziumHD object based on adata subsetting
             return self.subset(what, remove_empty_pixels=False)
             
-    def subset(self, what=(slice(None), slice(None)), remove_empty_pixels=False):
+    def subset(self, what=(slice(None), slice(None)), remove_empty_pixels=False, crop_sc=True):
         '''
         Create a new ViziumHD objects based on adata subsetting.
         parameters:
-            * remove_empty_pixels - if True, the images will only contain pixels under visium spots
             * what - tuple of two elements. slicing instruction for adata. examples:
                 - (slice(None), slice(None)): Select all spots and all genes.
                 - ([0, 1, 2], slice(None)): Select the first three spots and all genes.
                 - (slice(None), ['GeneA', 'GeneB']): Select all spots and specific genes.
                 - (adata.obs['obs1'] == 'value', slice(None)): Select spots where 
                   the 'obs1' column in adata.obs is 'value', and all genes.
+            * remove_empty_pixels - if True, the images will only contain pixels under visium spots
+            * crop_sc (bool) - crop the SC adata?
         '''
         adata = self.adata[what].copy()
         adata_shifted, image_fullres_crop, image_highres_crop, image_lowres_crop = self.__crop_images(adata, remove_empty_pixels)
+        image_fullres_crop, image_highres_crop, image_lowres_crop, xlim_pixels_fullres, ylim_pixels_fullres = self.__crop_images(adata, remove_empty_pixels)
         name = self.name + "_subset" if not self.name.endswith("_subset") else ""
         single_cell = None
+        
+        # update the link in SC to the new ViziumHD instance
         if self.SC is not None: 
-            single_cell = self.SC.subset(what)    
+            if crop_sc:
+                adata_sc = self.SC.adata.copy()
+                cell_col = adata_sc.obs.index.name
+                adata_sc_shifted = adata_sc[adata_sc.obs.index.isin(adata_shifted.obs[cell_col]),adata_shifted.var_names]
+                adata_sc_shifted = self.__shift_adata(adata_sc_shifted, xlim_pixels_fullres, ylim_pixels_fullres)
+            else:
+                adata_sc_shifted = self.SC.adata
+            
+        adata_shifted = self.__shift_adata(adata, xlim_pixels_fullres, ylim_pixels_fullres)
         new_obj = ViziumHD(adata_shifted, image_fullres_crop, image_highres_crop, 
                            image_lowres_crop, self.json, name, self.path_output,SC=single_cell,
-                           properties=self.properties.copy(),fluorescence=self.fluorescence.copy() if self.fluorescence else None)
-        if single_cell: # update the link in SC to the new ViziumHD instance
-            new_obj.SC = ViziumHD_sc_class.SingleCell(new_obj, new_obj.SC.adata)
+                           properties=self.properties.copy(),fluorescence=self.fluorescence.copy() if self.fluorescence else None)    
+        if self.SC is not None: 
+            new_obj.SC = ViziumHD_sc_class.SingleCell(new_obj, adata_sc_shifted.copy())        
         return new_obj
    
+
     def __crop_images(self, adata, remove_empty_pixels=False):
         '''
         Helper function for get().
@@ -556,18 +581,23 @@ class ViziumHD:
         image_highres_crop , _ , _ = _crop_img(adata, self.image_highres, "pxl_col_in_highres", "pxl_row_in_highres")
         image_lowres_crop , _ , _ = _crop_img(adata, self.image_lowres, "pxl_col_in_lowres", "pxl_row_in_lowres")
 
-        # Shift adata
+        return image_fullres_crop, image_highres_crop, image_lowres_crop,xlim_pixels_fullres, ylim_pixels_fullres
+    
+
+    def __shift_adata(self, adata, xlim_pixels_fullres, ylim_pixels_fullres):
+        '''
+        Shifts the coordinates in an adata, based on xlim, ylim
+        '''
         adata_shifted = adata.copy()
         drop_columns = ["pxl_col_in_lowres","pxl_row_in_lowres","pxl_col_in_highres",
                         "pxl_row_in_highres","um_x","um_y"]
         adata_shifted.obs.drop(columns=drop_columns, inplace=True)
         adata_shifted.obs["pxl_col_in_fullres"] -= xlim_pixels_fullres[0]
         adata_shifted.obs["pxl_row_in_fullres"] -= ylim_pixels_fullres[0]
-        return adata_shifted, image_fullres_crop, image_highres_crop, image_lowres_crop
-    
+        return adata_shifted
         
     def __getitem__(self, what):
-        '''get a vector from data (a gene) or metadata (from obs or var). or subset the object.'''
+        '''Get a vector from data (a gene) or metadata (from obs or var). or subset the object.'''
         item = self.get(what, cropped=False)
         if item is None:
             raise KeyError(f"[{what}] isn't in data or metadatas")
@@ -575,7 +605,8 @@ class ViziumHD:
     
     def remove_pixels(self, column: str, values: list, marging=1):
         '''
-        removes pixels in images, based on adata.obs[column].isin(values).
+        Removes pixels in images, based on adata.obs[column].isin(values).
+        marging - how many pixels to extend the removed pixels.
         returns new ViziumHD object.
         '''
         # Identify which pixels to remove based on the given condition
@@ -602,8 +633,6 @@ class ViziumHD:
         spot_size_fullres = int(ceil(spot_diameter_fullres))
         spot_size_hires = int(ceil(spot_diameter_fullres * self.json['tissue_hires_scalef']))
         spot_size_lowres = int(ceil(spot_diameter_fullres * self.json['tissue_lowres_scalef']))
-        print(f"{spot_diameter_fullres=},{self.json['tissue_hires_scalef']=}")
-        print(f"{spot_size_fullres=},{spot_size_hires=},{spot_size_lowres=}")
         # Ensure sizes are at least 1
         spot_size_fullres = max(spot_size_fullres, 1)
         spot_size_hires = max(spot_size_hires, 1)
@@ -692,16 +721,14 @@ class ViziumHD:
     def columns(self):
         return self.adata.obs.columns.copy()
     
-    def update(self):
-        '''updates the methods in the instance'''
+    def update(self, SC=False):
+        '''Updates the methods in the instance'''
         ViziumHD_utils.update_instance_methods(self)
         ViziumHD_utils.update_instance_methods(self.plot)
         self.plot._init_img()
-        # update also the SC
-        # if self.SC is not None:
-            # ViziumHD_utils.update_instance_methods(self.SC)
-            # ViziumHD_utils.update_instance_methods(self.SC.plot)
-    
+        if SC and self.SC is not None:
+            self.SC.update()
+
     def copy(self):
         return deepcopy(self)
     

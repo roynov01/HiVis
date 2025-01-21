@@ -3,32 +3,28 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import scanpy as sc
-from scipy.sparse import lil_matrix, csr_matrix
+from scipy.sparse import lil_matrix
 from scipy.stats import multinomial
 import ViziumHD_utils
 
 def new_adata(vizium_instance,aggregate_by,aggregation_func,columns=None,
     custom_agg=None,additional_obs=None,**aggregation_kwargs):
-    """
-    Creates a new AnnData (adata_sc) by aggregating both expression and metadata
-    from an existing AnnData (vizium_instance.adata).
-    
-    :param vizium_instance:  An object holding an AnnData at `.adata`.
-    :param aggregate_by:     Column in obs by which to group spots.
-    :param aggregation_func: Function that aggregates expression data (X, layers).
-    :param columns:          List of obs columns to aggregate (defaults to coords, etc.).
-    :param custom_agg:       Dict specifying custom aggregators for specific columns
-                             (e.g., {"um_x": np.mean, "um_y": np.mean}).
-    :param additional_obs:   Optional DataFrame to join on aggregate_by.
-    :param aggregation_params: Extra arguments for the aggregation_func.
-    :return:                 Aggregated AnnData object.
-    """
+    '''
+    Creates a new AnnData by aggregating both expression and metadata from vizium_instance.adata.
+    parameters:
+        * param vizium_instance - ViziumHD object
+        * param aggregate_by - Column in obs by which to group spots
+        * param aggregation_func - Function that aggregates expression data (X, layers)
+        * param columns - List of obs columns to aggregate
+        * param custom_agg - Dict specifying custom aggregators for specific columns
+                             (e.g., {"eta": np.mean, "apicome":[count_basal, count_apical]})
+        * param additional_obs -
+        * param aggregation_kwargs - Extra arguments for the aggregation_func
+        * return -  Aggregated AnnData
+    '''
     adata = vizium_instance.adata
 
-    default_cols = ["pxl_row_in_fullres", "pxl_col_in_fullres",
-        "pxl_col_in_lowres",  "pxl_row_in_lowres",
-        "pxl_col_in_highres", "pxl_row_in_highres",
-        "um_x", "um_y", "nUMI"]
+    default_cols = ["pxl_row_in_fullres", "pxl_col_in_fullres","nUMI"]
     
     if columns is None:
         columns = default_cols
@@ -62,6 +58,9 @@ def new_adata(vizium_instance,aggregate_by,aggregation_func,columns=None,
 
 
 def _aggregate_meta(adata, aggregate_by, columns, custom_agg=None):
+    '''
+    Helper function for "new_adata". Aggregates metadata.
+    '''
     def custom_mode(series):
         mode_series = series.mode()
         if not mode_series.empty:
@@ -112,6 +111,11 @@ def _aggregate_meta(adata, aggregate_by, columns, custom_agg=None):
 
 
 def _aggregate_data_annotations(adata, group_col):
+    '''
+    Helper function that can be used for as "aggregation_func" in new_adata().
+    Aggregates expression data based on a column in adata.obs.
+    For example by "villus_id"
+    '''
     obs = adata.obs
     unique_groups = obs[group_col].dropna().unique()
     group_to_indices = {}
@@ -132,6 +136,11 @@ def _aggregate_data_annotations(adata, group_col):
 
 
 def _aggregate_data_stardist(adata, group_col="Cell_ID", in_cell_col="in_cell",nuc_col="in_nucleus"):
+    '''
+    Helper function that can be used for as "aggregation_func" in new_adata().
+    Aggregates expression data based on processed dataframe from 
+    Ofras pipeline that uses Stardist + extension. (version used in small intestine).    
+    '''
     adata_filtered = adata[(adata.obs[in_cell_col] == 1)]
     
     # Split into nucleus/cytoplasm subsets
@@ -166,12 +175,14 @@ def _aggregate_data_stardist(adata, group_col="Cell_ID", in_cell_col="in_cell",n
     return cell_data, cells_ids, layers, None
 
 
-
-
 def _aggregate_data_two_nuclei(adata, cells_nuc, 
     group_col_cell="Cell_ID",group_col_nuc="Nuc_ID",in_cell_col="InCell",
     nuc_col="InNuc"):
-    
+    '''
+    Helper function that can be used for as "aggregation_func" in new_adata().
+    Aggregates expression data based on processed dataframe from 
+    Ofras pipeline that uses Cellpose for liver (cells with 0,1,2 nuclei).     
+    '''
     # Filter only spots that are inside a cell
     adata_filtered = adata[adata.obs[in_cell_col] == 1].copy()
     
@@ -202,11 +213,10 @@ def _aggregate_data_two_nuclei(adata, cells_nuc,
     nuc_index = 0
     
     for i, cell in enumerate(tqdm(cells_ids, desc='Aggregating spots expression')):
-        # 1) Aggregate cytoplasm for this cell 
+        # Aggregate cytoplasm for this cell 
         if cell in cyto_dict:
             cyto_data[i, :] = adata_cyto[cyto_dict[cell], :].X.sum(axis=0)
         
-        # 2) Handle nucleus data
         nuc1_id = cells_nuc.loc[cell, "nuc1"]
         nuc2_id = cells_nuc.loc[cell, "nuc2"]
         
@@ -252,16 +262,11 @@ def _aggregate_data_two_nuclei(adata, cells_nuc,
     return cell_data, cells_ids, layers, {"nuc_by_genes":df,"nuc_cell_dict":nuc_cell_dict}
 
 
-
-def adata_to_nuc_by_gene(adata):
-    
-    
-    
-    
-    return df
-
-
 def processcells_2nucs(df, nuc_cell_dict, n_perm=10, func=np.mean):
+    '''
+    Find genes that are enriched in one out of two nuclei in double-nucleated cells
+    '''
+    
     def calculate_val(nuc1, nuc2):
         nucs_ratio = (nuc1 + 1) / (nuc2 + 1)  # Add pseudonumber and calculate ratio
         return np.abs(np.log2(nucs_ratio))  
@@ -320,63 +325,4 @@ def processcells_2nucs(df, nuc_cell_dict, n_perm=10, func=np.mean):
     results["expression_mean"] = mean_expr.values
     
     return results
-
-# def _aggregate_data_liver(adata, cells_nuc, group_col="Cell_ID", in_cell_col="in_cell",
-#                           nuc_col="in_nucleus"):
-#     cells_wo_nuc = set(cells_nuc.index[cells_nuc["nuc1"].isna()])
-#     cells2nuc = set(cells_nuc.index[~cells_nuc["nuc2"].isna()])
-#     cells_with_nuc = set(cells_nuc.index) - (cells_wo_nuc | cells2nuc)
-
-#     nuc1_data = lil_matrix((num_cells, num_genes), dtype=np.float32)
-#     nuc2_data = lil_matrix((num_cells, num_genes), dtype=np.float32)
-#     nucs_ratio = lil_matrix((num_cells, num_genes), dtype=np.float32)
-#     cyto_data = lil_matrix((num_cells, num_genes), dtype=np.float32)
-    
-#     for i, cell in enumerate(tqdm(cells_ids, desc='Aggregating spots expression')): 
-#         cyto_data[i, :] = adata_cyto[ind_dict_cyto[cell],:].X.sum(axis=0) 
-#         if cell in cells_with_nuc:
-#             nuc1 = adata_nuc[ind_dict_nuc[cell],:].X.sum(axis=0)
-#             nuc1_data[i, :] = nuc1
-#             if cell in cells2nuc:
-#                 nuc2 = adata_nuc[ind_dict_nuc[cell],:].X.sum(axis=0)
-#                 nuc2_data[i, :] = nuc2
-#                 ratio = nuc1 + 1 / nuc2 + 1 # ratio and pseudonumber
-#                 nucs_ratio[i, :] = np.abs(np.log2(ratio))
-#         else: # No nucleus
-#             pass
-            
-#     print("[Converting to sparse matrices]")
-#     nuc1_data = nuc1_data.tocsr()
-#     nuc2_data = nuc2_data.tocsr()
-    
-#     nucleus_data = nuc1_data + nuc2_data
-#     cyto_data = cyto_data.tocsr()
-    
-#     cell_data = nucleus_data + cyto_data
-#     layers = {"nuc":nucleus_data, "cyto":cyto_data}
-
-#     return cell_data, cells_ids, layers
-
-# m1_sub = m1[(m1.adata.obs.um_x<1000) & (m1.adata.obs.um_y>5000),:]
-# m1_sub.adata.obs["lipid_id_c"] = m1_sub.adata.obs["lipid_id"].copy()
-
-# adata_sc = new_adata(m1_sub, "lipid_id", _aggregate_data_annotations, 
-#               columns=["lipid_id_c"], custom_agg=None, additional_obs=None)
-
-# m1_sub.SC = ViziumHD_sc_class.SingleCell(m1_sub,adata_sc)
-# m1_sub.SC.plot.spatial("lipid_id_c",size=50,cmap="tab20",legend=False)
-
-
-
-# fig, ax = plt.subplots(figsize=(12,12))
-# m1_sub.SC.update()
-# ax = m1_sub.SC.plot.spatial(image=False,what="lipid_id_c",ax=ax,cmap="tab20",
-#                        img_resolution="full",size=200,legend=False)
-# m1_sub.plot.spatial("lipid_id_c",legend=False,img_resolution="full",
-#                           cmap=["black","black"],alpha=0.5,ax=ax,exact=True)
-# plt.show()
-
-
-
-    
 

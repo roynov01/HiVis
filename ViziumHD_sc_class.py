@@ -11,90 +11,36 @@ import anndata as ad
 import os
 import scipy.io
 from copy import deepcopy
-import scanpy as sc
 import geopandas as gpd
 import warnings
 import re
 from shapely.affinity import scale
-from shapely import wkt
-
 
 import ViziumHD_utils
-# import ViziumHD_class
 import ViziumHD_plot
 import SingleCell_utils
 
 
-# def _count_apical(series):
-#         return (series == 'apical').sum()
-
-# def _count_basal(series):
-#     return (series == 'basal').sum()
-
-
-# def new_from_segmentation(vizium_instance, input_df, columns=None, custom_agg=None, sep="\t"):
-#     '''
-#     vizium_instance - ViziumHD object
-#     input_df (str or df or anndata) - single cell metadata, should include columns: ['Object ID','Name','in_nucleus','in_cell']
-#             either pd.DataFrame or str, path to csv file produced with the Groovy pipeline. 
-#                             if it's an anndata, it will skip initialization, and just store the anndata.
-#     columns (list) - which columns from the CSV to add to the metadata (aggregate from spots)?
-#                      example: ['cell_y_um','cell_x_um','area_nuc_um2','number_spots_nuc','number_spots_nuc','area_cell_um2']
-#     custom_agg (dict) - {str:func} or {str:[func,func]}. Used for metadata aggregation.
-#                         example {'apicome':[_count_apical, _count_basal]}
-#     sep (str) - passed to read_csv if input_df is a path of CSV
-#     '''
-#     if isinstance(input_df, str):
-#         ViziumHD_utils.validate_exists(input_df)
-#         print("[Reading CSV]")
-#         input_df = pd.read_csv(input_df, sep=sep)
-#     if columns is None: 
-#         columns = []
-#     for col in ["Object ID","pxl_row_in_fullres", "pxl_col_in_fullres", "pxl_col_in_lowres", "pxl_row_in_lowres",
-#                 "pxl_col_in_highres", "pxl_row_in_highres", "um_x", "um_y", "nUMI"]:
-#         if col not in columns:
-#             columns += [col]
-#     adata_sc = SingleCell_utils._aggregate_spots_cells(vizium_instance.adata,
-#                                                input_df, columns,
-#                                                custom_agg=custom_agg) 
-#     adata_sc.obs.rename(columns={"nUMI":"nUMI_avg"})
-#     adata_sc.obs["nUMI"] = adata_sc.obs["nUMI_avg"] * adata_sc.obs["spot_count"]
-#     return SingleCell(vizium_instance, adata_sc)
-
-# def new_from_annotations(vizium_instance, group_col, columns=None, custom_agg=None):
-#     '''
-#     vizium_instance - ViziumHD object
-#     input_df (str or df or anndata) - single cell metadata, should include columns: ['Object ID','Name','in_nucleus','in_cell']
-#             either pd.DataFrame or str, path to csv file produced with the Groovy pipeline. 
-#                             if it's an anndata, it will skip initialization, and just store the anndata.
-#     columns (list) - which columns from the CSV to add to the metadata (aggregate from spots)?
-#                      example: ['cell_y_um','cell_x_um','area_nuc_um2','number_spots_nuc','number_spots_nuc','area_cell_um2']
-#     custom_agg (dict) - {str:func} or {str:[func,func]}. Used for metadata aggregation.
-#                         example {'apicome':[_count_apical, _count_basal]}
-#     sep (str) - passed to read_csv if input_df is a path of CSV
-#     '''
-#     if columns is None: 
-#         columns = []
-#     for col in ["pxl_row_in_fullres", "pxl_col_in_fullres", "pxl_col_in_lowres", "pxl_row_in_lowres",
-#                 "pxl_col_in_highres", "pxl_row_in_highres", "um_x", "um_y", "nUMI"]:
-#         if col not in columns:
-#             columns += [col]
-#     adata_sc = SingleCell_utils._aggregate_spots_annotations(vizium_instance.adata,
-#                                                    group_col, columns,
-#                                                    custom_agg=custom_agg) 
-#     adata_sc.obs.rename(columns={"nUMI":"nUMI_avg"},inplace=True)
-#     adata_sc.obs["nUMI"] = adata_sc.obs["nUMI_avg"] * adata_sc.obs["spot_count"]
-#     return SingleCell(vizium_instance, adata_sc)
-
 class SingleCell:
     def __init__(self, vizium_instance, adata_sc, geojson_cells_path=None):
         '''
-        vizium_instance - ViziumHD object
-        adata_sc - anndata of single cells
-        geojson_path - path of geojson, exported cells
+        Creates a new instance that is linked to a ViziumHD object and has a PlosSC object.
+        parameters:
+            * vizium_instance - ViziumHD object
+            * adata_sc - anndata of single cells
+            * geojson_path - path of geojson, exported cells
         '''
         if not isinstance(adata_sc, ad._core.anndata.AnnData): 
             raise ValueError("Adata must be Anndata object")
+        
+        scalefactor_json = vizium_instance.json
+        adata_sc.obs["pxl_col_in_lowres"] = adata_sc.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
+        adata_sc.obs["pxl_row_in_lowres"] = adata_sc.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
+        adata_sc.obs["pxl_col_in_highres"] = adata_sc.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
+        adata_sc.obs["pxl_row_in_highres"] = adata_sc.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
+        adata_sc.obs["um_x"] = adata_sc.obs["pxl_col_in_fullres"] * scalefactor_json["microns_per_pixel"]
+        adata_sc.obs["um_y"] = adata_sc.obs["pxl_row_in_fullres"] * scalefactor_json["microns_per_pixel"]
+        
         self.adata = adata_sc
         self.viz = vizium_instance
         self.path_output = self.viz.path_output + "/single_cell"
@@ -107,6 +53,12 @@ class SingleCell:
 
 
     def import_geometry(self, geojson_path, object_type="cell"):
+        '''
+        Adds "geometry" column to self.adata.obs, based on Geojson exported from Qupath.
+        parameters:
+            * geojson_path - path to geojson file
+            * object_type - which "objectType" to merge from the geojson
+        '''
         if isinstance(geojson_path,str):
             gdf = gpd.read_file(geojson_path)
         elif isinstance(geojson_path,gpd.GeoDataFrame):
@@ -114,12 +66,7 @@ class SingleCell:
         gdf = gdf[gdf["objectType"] == object_type]
         gdf = gdf.loc[:,["id","geometry"]]
         gdf.rename(columns={"id":self.adata.obs.index.name},inplace=True)
-        # with warnings.catch_warnings():
-        #     warnings.filterwarnings("ignore", message="Geometry column does not contain geometry")
-        #     gdf["geometry"] = gdf["geometry"].apply(wkt.loads)
-            # gdf["geometry"] = gdf["geometry"].astype(str)
 
-        
         microns_per_pixel = self.viz.json["microns_per_pixel"]
         gdf["geometry"] = gdf["geometry"].apply(lambda geom: scale(geom, xfact=microns_per_pixel, yfact=microns_per_pixel, origin=(0, 0)))
         gdf["geometry"] = gdf["geometry"].apply(lambda geom: geom.wkt)
@@ -134,19 +81,33 @@ class SingleCell:
         
     
     def merge(self, adata, obs=None, var=None, umap=True, pca=True, hvg=True):
+        '''
+        Merge info from an anndata to self.adata.
+        parameters:
+            * adata - anndata where to get the values from
+            * obs - single string or list of obs to merge
+            * var - single string or list of var to merge
+            * umap - add umap to OBSM, and UMAP coordinates to obs?
+            * pca - add PCA to OBSM?
+            * hvg - add highly variable genes to vars?
+        '''
         if not obs:
             obs = []
         elif isinstance(obs, str):
             obs = [obs]
         if umap and "X_umap" in adata.obsm:
-            self.adata.obsm['X_umap'] = adata.obsm['X_umap'].copy()
+            if self.adata.shape[0] == adata.shape[0]:
+                self.adata.obsm['X_umap'] = adata.obsm['X_umap'].copy()
+            else:
+                print("Cant add UMAP to obsm, size of adatas don't match")
             umap_coords = adata.obsm['X_umap']
             adata.obs['UMAP_1'] = umap_coords[:, 0]
             adata.obs['UMAP_2'] = umap_coords[:, 1]
             
             obs += ['UMAP_1','UMAP_2']
         if pca and "X_pca" in adata.obsm:
-            self.adata.obsm['X_pca'] = adata.obsm['X_pca'].copy()
+            if self.adata.shape[0] == adata.shape[0]:
+                self.adata.obsm['X_pca'] = adata.obsm['X_pca'].copy()
         if hvg and 'highly_variable' in adata.var.columns:
             if not var:
                 var = 'highly_variable'
@@ -154,7 +115,6 @@ class SingleCell:
                 if 'highly_variable' not in var:
                     var += ['highly_variable']
         if obs:
-            
             existing_columns = [col for col in obs if col in self.adata.obs.columns]
             if existing_columns:
                 self.adata.obs.drop(columns=existing_columns, inplace=True)
@@ -168,8 +128,19 @@ class SingleCell:
             self.adata.var = self.adata.var.join(adata.var[var])
             
                 
-    def get(self, what, cropped=False):
+    def get(self, what, cropped=False, geometry=False):
+        '''
+        get a vector from data (a gene) or metadata (from obs or var). or subset the object.
+        parameters:
+            * what - if string, will get data or metadata. 
+                     else, will return a new SingleCell object that is spliced.
+                     the splicing is passed to the self.adata.
+            * cropped - get the data from the adata_cropped after crop() or plotting methods?
+            * geometry - include only cells which have geometry
+        '''
         adata = self.adata_cropped if cropped else self.adata
+        if geometry and self.plot.geometry is not None:
+            adata = adata[adata.obs.index.isin(self.plot.geometry.index)]
         if isinstance(what, str):  # Easy access to data or metadata arrays
             if what in adata.obs.columns:  # Metadata
                 column_data = adata.obs[what]
@@ -229,7 +200,10 @@ class SingleCell:
         return expr_df.groupby(group_key).mean().T
     
     def sync_metadata_to_spots(self, what: str):
-        '''transfers metadata assignment from the single-cell to the spots'''
+        '''
+        Transfers metadata assignment from the single-cell to the spots.
+        what - obs column name to pass to ViziumHD object
+        '''
         if what not in self.adata.obs:
             raise KeyError(f"'{what}' does not exist in SC.adata.obs.")
         cell_id_col = self.adata.obs.index.name
@@ -239,6 +213,9 @@ class SingleCell:
         self.viz.adata.obs[what] = self.viz.adata.obs[cell_id_col].map(mapping)
         
     def export_h5(self, path=None):
+        '''
+        Exports the adata. path - path to save the h5 file
+        '''
         if not path:
             path = f"{self.path_output}/{self.viz.name}_viziumHD_cells.h5ad"
         self.adata.write(path)
@@ -278,7 +255,6 @@ class SingleCell:
         '''updates the methods in the instance'''
         ViziumHD_utils.update_instance_methods(self)
         ViziumHD_utils.update_instance_methods(self.plot)
-        # self.plot._init_img()
     
     def head(self, n=5):
         return self.adata.obs.head(n) 
@@ -291,6 +267,7 @@ class SingleCell:
         return deepcopy(self)
     
     def export_to_matlab(self, path=None):
+        '''exports gene names, data (sparse matrix) and metadata to a .mat file'''
         var_names = self.adata.var_names.to_numpy()  
         if 'X_umap' in self.adata.obsm:
             self.adata.obs['UMAP_1'] = self.adata.obsm['X_umap'][:, 0]  
