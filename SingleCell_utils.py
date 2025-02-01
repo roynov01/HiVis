@@ -32,6 +32,7 @@ def new_adata(vizium_instance,aggregate_by,aggregation_func,columns=None,
         for col in default_cols:
             if col not in columns:
                 columns.append(col)
+    columns = list(set(columns))
 
     meta_df, meta_ids = _aggregate_meta(adata=adata,aggregate_by=aggregate_by,
                         columns=columns,custom_agg=custom_agg)
@@ -184,7 +185,8 @@ def _aggregate_data_two_nuclei(adata, cells_nuc,
     Ofras pipeline that uses Cellpose for liver (cells with 0,1,2 nuclei).     
     '''
     # Filter only spots that are inside a cell
-    adata_filtered = adata[adata.obs[in_cell_col] == 1].copy()
+    mask = adata.obs[in_cell_col] == 1
+    adata_filtered = adata[list(mask[mask].index)].copy()
     
     # Subset: nucleus spots vs cytoplasm spots
     adata_nuc = adata_filtered[adata_filtered.obs[nuc_col] == 1].copy()

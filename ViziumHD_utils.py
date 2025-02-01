@@ -17,6 +17,7 @@ import scanpy as sc
 import tifffile
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba
+import scipy.sparse as sp
 
 import ViziumHD_plot
 
@@ -92,6 +93,14 @@ def matnorm(df):
         return normalized_df.astype(np.float32)
     if isinstance(df, list):
         return (pd.Series(df) / sum(df)).tolist()
+    if sp.isspmatrix_csr(df):
+        column_sums = np.array(df.sum(axis=0)).ravel()
+        column_sums[column_sums == 0] = 1  # Avoid division by zero
+        inv_col_sums = 1 / column_sums
+        # Create a diagonal sparse matrix of inverse sums
+        diag_inv = sp.diags(inv_col_sums)
+        # Multiply the original CSR by this diagonal to normalize columns
+        return df.dot(diag_inv)
     else: # pandas
         raise ValueError("df is not a list,numpy or a dataframe")
         
@@ -341,12 +350,14 @@ def _export_images(path_image_fullres, path_image_highres, path_image_lowres,
         nonlocal printed_message
         if not os.path.exists(path) or force:
             if not printed_message:
-                print("[Saving cropped images]")
+                print(f"[Saving cropped images] path_image_fullres")
+                printed_message = True
             if img.max() <= 1:
                 img = (img * 255).astype(np.uint8)
             # image = Image.fromarray(img)
             tifffile.imwrite(path, img)
             # image.save(save_path, format='TIFF')
+            
     printed_message = False
     
     images = [image_fullres, image_highres, image_lowres]
@@ -537,3 +548,123 @@ def merge_geojsons(geojsons_files, filename_out):
     if not filename_out.endswith(".shp"):
         filename_out += ".shp"
     combined_gdf.to_file(filename_out, driver="GPKG")
+
+
+def inspect_df(df, col, n_rows=2):
+    '''samples a df and return few rows (n_rows)
+    from each unique value of col'''
+    subset_df = df.groupby(col).apply(lambda x: x.sample(min(len(x), n_rows))).reset_index(drop=True)
+    return subset_df
+
+
+def pca(df, k_means=None, first_pc=1, title="PCA", number_of_genes=20):
+    """
+    Performs PCA on a dataframe, optionally applies k-means clustering, and generates plots.
+
+    Parameters:
+    - df: DataFrame with genes as rows and samples as columns.
+    - k_means: Number of clusters for k-means clustering. If None, clustering is not performed.
+    - first_pc: The first principal component to display.
+    - title: Title for the PCA plot.
+    - number_of_genes: Number of variable genes to plot.
+
+    Returns:
+    - A dictionary with PCA plot, elbow plot, PCA DataFrame, variance explained,
+      and silhouette scores (if k_means is provided).
+    """
+    import seaborn as sns
+    from sklearn.decomposition import PCA
+    from sklearn.cluster import KMeans
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import silhouette_score
+    import pandas as pd
+    import numpy as np
+    
+    if first_pc >= df.shape[1]:
+        raise ValueError(f"No PC {first_pc +1} possible in a data of {df.shape[1]} samples")
+
+    # Filter out genes with zero expression
+    df_filtered = df.loc[df.sum(axis=1) > 0]
+
+    # Perform PCA
+    pca_object = PCA()
+    pca_result = pca_object.fit_transform(df_filtered.T)
+
+    var_explained = pca_object.explained_variance_ratio_
+    elbow_data = pd.DataFrame({
+        'PC': np.arange(1, len(var_explained) + 1),
+        'Variance': var_explained
+    })
+
+    pca_data = pd.DataFrame(pca_result, columns=[f'PC{ i +1}' for i in range(pca_result.shape[1])])
+    pca_data['sample'] = df.columns
+
+    x = f'PC{first_pc}'
+    y = f'PC{first_pc + 1}'
+    xlab = f'PC {first_pc} ({var_explained[first_pc - 1] * 100:.2f}%)'
+    ylab = f'PC {first_pc + 1} ({var_explained[first_pc] * 100:.2f}%)'
+
+    # K-means clustering
+    if k_means is not None:
+        if k_means >= pca_data.shape[0]:
+            raise ValueError("k_means needs to be lower than number of samples")
+        kmeans = KMeans(n_clusters=k_means, random_state=0).fit(pca_data.iloc[:, first_pc - 1: first_pc + 1])
+        pca_data['cluster'] = kmeans.labels_.astype(str)
+        silhouette_avg = silhouette_score(pca_data.iloc[:, first_pc - 1:first_pc + 1], kmeans.labels_)
+    else:
+        pca_data['cluster'] = "1"
+        silhouette_avg = None
+
+    # Plot PCA
+    plt.figure(figsize=(10, 7))
+    sns.scatterplot(data=pca_data, x=x, y=y, hue='cluster', palette='Set1', s=100)
+    for i in range(pca_data.shape[0]):
+        plt.text(pca_data.loc[i, x], pca_data.loc[i, y], pca_data.loc[i, 'sample'])
+    plt.title(title)
+    plt.xlabel(xlab)
+    plt.ylabel(ylab)
+    if silhouette_avg is not None:
+        # plt.suptitle(f'Silhouette mean score: {silhouette_avg:.2f}')
+        plt.text(0.5, -0.1, f'Silhouette mean score: {silhouette_avg:.2f}', ha='center', va='center',
+                 transform=plt.gca().transAxes)
+    pca_plot = plt.gcf()
+
+    # Plot Elbow
+    plt.figure(figsize=(10, 7))
+    sns.lineplot(data=elbow_data, x='PC', y='Variance', marker='o')
+    plt.title('Elbow Plot')
+    plt.xlabel('Principal Component')
+    plt.ylabel('Proportion of Variance Explained')
+    elbow_plot = plt.gcf()
+
+    # Variable genes plot
+    var_genes = pd.DataFrame(pca_object.components_.T, index=df_filtered.index,
+                             columns=[f'PC{ i +1}' for i in range(pca_result.shape[1])])
+
+    def plot_variable_genes(pc, num_genes):
+        df_pc = var_genes[[pc]].sort_values(by=pc)
+        top_bottom_genes = pd.concat([df_pc.head(num_genes), df_pc.tail(num_genes)])
+        plt.figure(figsize=(10, 7))
+        sns.barplot(x=top_bottom_genes.index, y=top_bottom_genes[pc], color='blue')
+        plt.xticks(rotation=45, ha='right')
+        plt.axhline(0, color='black')
+        plt.title(f'Top and Bottom {num_genes} Genes for {pc}')
+        plt.tight_layout()
+        return plt.gcf()
+
+    genes1_plot = plot_variable_genes(x, number_of_genes)
+    genes2_plot = plot_variable_genes(y, number_of_genes)
+
+    result = {
+        'plot_pca': pca_plot,
+        'plot_elbow': elbow_plot,
+        'pca_df': pca_data,
+        'variance': elbow_data,
+        'var_genes': var_genes,
+        'plot_genes': [genes1_plot, genes2_plot]
+    }
+
+    if silhouette_avg is not None:
+        result['silhouette'] = silhouette_avg
+    print(f'keys in output: {list(result.keys())}')
+    return result

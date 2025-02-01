@@ -15,10 +15,10 @@ import geopandas as gpd
 import warnings
 import re
 from shapely.affinity import scale
+import gc
 
 import ViziumHD_utils
 import ViziumHD_plot
-import SingleCell_utils
 
 
 class SingleCell:
@@ -32,6 +32,9 @@ class SingleCell:
         '''
         if not isinstance(adata_sc, ad._core.anndata.AnnData): 
             raise ValueError("Adata must be Anndata object")
+        adata_sc = adata_sc[adata_sc.obs["pxl_col_in_fullres"].notna(),:].copy()
+        if adata_sc.shape[0] == 0:
+            raise ValueError("Filtered AnnData object is empty. No valid rows remain.")
         
         scalefactor_json = vizium_instance.json
         adata_sc.obs["pxl_col_in_lowres"] = adata_sc.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
@@ -69,7 +72,9 @@ class SingleCell:
 
         microns_per_pixel = self.viz.json["microns_per_pixel"]
         gdf["geometry"] = gdf["geometry"].apply(lambda geom: scale(geom, xfact=microns_per_pixel, yfact=microns_per_pixel, origin=(0, 0)))
-        gdf["geometry"] = gdf["geometry"].apply(lambda geom: geom.wkt)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
+            gdf["geometry"] = gdf["geometry"].apply(lambda geom: geom.wkt)
         gdf = gdf.set_index(self.adata.obs.index.name)
     
         if "geometry" in self.adata.obs.columns:
@@ -216,6 +221,7 @@ class SingleCell:
         '''
         Exports the adata. path - path to save the h5 file
         '''
+        print(f"SAVING [{self.name}]")
         if not path:
             path = f"{self.path_output}/{self.viz.name}_viziumHD_cells.h5ad"
         self.adata.write(path)
@@ -255,6 +261,7 @@ class SingleCell:
         '''updates the methods in the instance'''
         ViziumHD_utils.update_instance_methods(self)
         ViziumHD_utils.update_instance_methods(self.plot)
+        _ = gc.collect()
     
     def head(self, n=5):
         return self.adata.obs.head(n) 
@@ -274,6 +281,24 @@ class SingleCell:
             self.adata.obs['UMAP_2'] = self.adata.obsm['X_umap'][:, 1]  
             
         obs = self.adata.obs.copy()
+        obs["Cell_ID"] = obs.index.tolist()
+        
+        # Shorten long column names in obs
+        def shorten_col_names(columns, max_len=28):
+            seen_names = {}
+            rename_dict = {}
+            for col in columns:
+                if len(col) > max_len:
+                    base_name = col[:max_len]  
+                    count = seen_names.get(base_name, 0)
+                    new_name = f"{base_name}_{count}"
+                    seen_names[base_name] = count + 1
+                    rename_dict[col] = new_name
+            return rename_dict
+        
+        rename_dict = shorten_col_names(obs.columns)
+        obs = obs.rename(columns=rename_dict)
+        
         def remove_non_ascii(d):
             return {re.sub(r'[^\x00-\x7F]+', '_', k): v for k, v in d.items()}
         
@@ -285,6 +310,7 @@ class SingleCell:
             if not os.path.exists(path):
                 os.makedirs(path)
             path = f"{path}/{self.name}.mat"
+        print("[Saving mat file]")
         scipy.io.savemat(path, {"genes": var_names, "mat": self.adata.X,"metadata":obs})
-        # self.adata.obs.to_csv(path.replace(".mat","metadata.csv"))
+        self.adata.obs.to_csv(path.replace(".mat","metadata.csv"))
         

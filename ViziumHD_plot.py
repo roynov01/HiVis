@@ -22,10 +22,8 @@ from adjustText import adjust_text
 import plotly.express as px
 from subprocess import Popen, PIPE
 import shapely.wkt
-# import shapely.geometry
 import shapely.affinity
 import geopandas as gpd
-from shapely.geometry import Polygon
 
 
 POINTS_PER_INCH = 72
@@ -220,7 +218,11 @@ class PlotVizium:
 
         if what: 
             values = self.main.get(what, cropped=True)
+            if values is None:
+                raise ValueError(f"{what} not found in adata")
             if np.issubdtype(values.dtype, np.number):  # Filter values that are 0
+                if np.nansum(values) == 0:
+                    raise ValueError(f"{what} is equal to zero in the specified xlim,ylim")
                 mask = values > 0
             else:
                 mask = [True for _ in values]   # No need for filtering
@@ -353,7 +355,6 @@ class PlotSC:
             pxl_col, pxl_row, scalef = 'pxl_col_in_highres', 'pxl_row_in_highres', self.main.viz.json['tissue_hires_scalef'] 
         else: 
             pxl_col, pxl_row, scalef = 'pxl_col_in_lowres', 'pxl_row_in_lowres', self.main.viz.json['tissue_lowres_scalef']  
-            
         microns_per_pixel = self.main.viz.json['microns_per_pixel'] 
         adjusted_microns_per_pixel = microns_per_pixel / scalef        
         xlim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in xlim]
@@ -445,6 +446,8 @@ class PlotSC:
 
         self._crop(xlim, ylim, resolution=img_resolution)
 
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
         ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,
                             contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution)
         
@@ -514,7 +517,7 @@ class PlotSC:
     
     def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, 
               figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,
-              legend=True, ax=None, title=None, legend_title=None, brightness=0,contrast=1):
+              legend=True, ax=None, title=None, legend_title=None, brightness=0,contrast=1,axis_labels=True):
         '''
         Plot a UMAP of self.adata.
         parameters:
@@ -526,7 +529,7 @@ class PlotSC:
                      or in categorical values case, a dict {"value":"color"}
             * xlim, ylim - two values each, in microns
             * save - svae the plot?
-            * figsize, line_color, legend, linewidth, title, legend_title - cosmetic parameters            
+            * figsize, line_color, legend, linewidth, title, legend_title, axis_labels - cosmetic parameters            
         '''
         if "geometry" not in self.main.adata.obs.columns:
             raise ValueError("No 'geometry' column found in adata.obs.")
@@ -539,8 +542,9 @@ class PlotSC:
         title = what if title is None else title
         if legend_title is None:
             legend_title = what.capitalize() if what and what==what.lower else what
-        
-        ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,axis_labels=axis_labels,
                             contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution)
         
         if ax is None:
@@ -550,6 +554,8 @@ class PlotSC:
         
         if what: 
             values = self.main.get(what, cropped=True, geometry=True) 
+            if values is None:
+                raise KeyError(f"No values in [{what}]")
             # if len(values) != len(self.main.adata_cropped):
             #     raise ValueError("Can only plot OBS or gene expression")
             self.geometry["temp"] = values
@@ -910,7 +916,13 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
     if np.issubdtype(values.dtype, np.number):
         if not show_zeroes:
             values = values[values > 0]
-        counts, edges, patches = ax.hist(values,bins=bins,color=color)
+        counts, edges, patches = ax.hist(values,bins=bins,color=None if cmap else color)
+        
+        if cmap is not None:
+            colormap = plt.cm.get_cmap(cmap, len(patches))  # Generate enough colors for all bins
+            for i, patch in enumerate(patches):
+                patch.set_facecolor(colormap(i))
+                
         if xlim:
             ax.set_xlim(xlim)
         lower, upper = ax.get_xlim()

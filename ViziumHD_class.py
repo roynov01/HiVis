@@ -18,6 +18,8 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from PIL import Image
+import gc
+import warnings
 
 import ViziumHD_utils
 import ViziumHD_sc_class
@@ -142,6 +144,7 @@ class ViziumHD:
             self.plot._init_img()
         if plot_qc:
             self.qc(save=True)
+            plt.show()
     
     def recolor(self, fluorescence=None, normalization_method="percentile"):
         '''
@@ -277,7 +280,9 @@ class ViziumHD:
               geometry=gpd.points_from_xy(self.adata.obs["pxl_col_in_fullres"],
                                           self.adata.obs["pxl_row_in_fullres"]))        
         
-        merged_obs = gpd.sjoin(obs,annotations,how="left",predicate="within")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
+            merged_obs = gpd.sjoin(obs,annotations,how="left",predicate="within")
         merged_obs = merged_obs[~merged_obs.index.duplicated(keep="first")]
         
         self.adata.obs = self.adata.obs.join(pd.DataFrame(merged_obs[cols]),how="left")
@@ -515,12 +520,16 @@ class ViziumHD:
             * crop_sc (bool) - crop the SC adata?
         '''
         adata = self.adata[what].copy()
-        adata_shifted, image_fullres_crop, image_highres_crop, image_lowres_crop = self.__crop_images(adata, remove_empty_pixels)
+        # adata_shifted, image_fullres_crop, image_highres_crop, image_lowres_crop = self.__crop_images(adata, remove_empty_pixels)
         image_fullres_crop, image_highres_crop, image_lowres_crop, xlim_pixels_fullres, ylim_pixels_fullres = self.__crop_images(adata, remove_empty_pixels)
         name = self.name + "_subset" if not self.name.endswith("_subset") else ""
         single_cell = None
         
         # update the link in SC to the new ViziumHD instance
+        adata_shifted = self.__shift_adata(adata, xlim_pixels_fullres, ylim_pixels_fullres)
+        new_obj = ViziumHD(adata_shifted, image_fullres_crop, image_highres_crop, 
+                           image_lowres_crop, self.json, name, self.path_output,SC=single_cell,
+                           properties=self.properties.copy(),fluorescence=self.fluorescence.copy() if self.fluorescence else None)    
         if self.SC is not None: 
             if crop_sc:
                 adata_sc = self.SC.adata.copy()
@@ -529,12 +538,6 @@ class ViziumHD:
                 adata_sc_shifted = self.__shift_adata(adata_sc_shifted, xlim_pixels_fullres, ylim_pixels_fullres)
             else:
                 adata_sc_shifted = self.SC.adata
-            
-        adata_shifted = self.__shift_adata(adata, xlim_pixels_fullres, ylim_pixels_fullres)
-        new_obj = ViziumHD(adata_shifted, image_fullres_crop, image_highres_crop, 
-                           image_lowres_crop, self.json, name, self.path_output,SC=single_cell,
-                           properties=self.properties.copy(),fluorescence=self.fluorescence.copy() if self.fluorescence else None)    
-        if self.SC is not None: 
             new_obj.SC = ViziumHD_sc_class.SingleCell(new_obj, adata_sc_shifted.copy())        
         return new_obj
    
@@ -674,7 +677,7 @@ class ViziumHD:
         new_obj = ViziumHD(self.adata.copy(),images[0],images[1],
                            images[2],self.json,name,self.path_output,
                            properties=self.properties.copy(),
-                           fluorescence=self.fluorescence.copy() if self.fluorescence else None)
+                           fluorescence=self.fluorescence.copy() if self.fluorescence else None)        
         return new_obj
 
         
@@ -689,7 +692,7 @@ class ViziumHD:
         s += '\n\nvar: '
         s += ', '.join(list(self.adata.var.columns))
         if self.SC is not None:
-            s += f"\tSingle cells shape: {self.SC.adata.shape[0]} x {self.SC.adata.shape[1]}"
+            s += f"\n\nSingle cells shape: {self.SC.adata.shape[0]} x {self.SC.adata.shape[1]}"
         return s
     
     def __repr__(self):
@@ -706,7 +709,7 @@ class ViziumHD:
                 del self.adata.var[key]
             else:
                 raise KeyError(f"'{key}' not found in adata.obs")
-            self.plot.__init_img()
+            self.plot._init_img()
         else:
             raise TypeError(f"Key must be a string, not {type(key).__name__}")
     
@@ -728,6 +731,8 @@ class ViziumHD:
         self.plot._init_img()
         if SC and self.SC is not None:
             self.SC.update()
+        else:
+            _ = gc.collect()
 
     def copy(self):
         return deepcopy(self)
