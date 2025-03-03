@@ -18,6 +18,7 @@ import tifffile
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba
 import scipy.sparse as sp
+from scipy.stats import mannwhitneyu, ttest_ind
 
 import ViziumHD_plot
 
@@ -75,34 +76,51 @@ def p_adjust(pvals, method="fdr_bh"):
         return qvals.tolist()
     
 
-def matnorm(df):
+def matnorm(df, axis="col"):
     '''
-    Normilizes a dataframe or matrix or array by the sum of columns.
+    Normalizes a dataframe or matrix by the sum of columns or rows.
+    
+    Parameters:
+    - df: np.ndarray, sparse matrix, or pandas DataFrame
+    - axis: "col" for column-wise normalization, "row" for row-wise normalization
+    
+    Returns:
+    - Normalized matrix of the same type as input
     '''
-    if isinstance(df, pd.core.series.Series):
+    if isinstance(df, pd.Series):
         return df.div(df.sum())
+
     if isinstance(df, (np.ndarray, np.matrix)):
-        column_sums = df.sum(axis=0)
-        column_sums[column_sums == 0] = 1
-        return df / column_sums
-    if isinstance(df, pd.core.frame.DataFrame):
-        numeric_columns = df.select_dtypes(include='number')
-        column_sums = numeric_columns.sum(axis=0)
-        column_sums[column_sums == 0] = 1  # Avoid division by zero
-        normalized_df = numeric_columns.divide(column_sums, axis=1)
-        return normalized_df.astype(np.float32)
-    if isinstance(df, list):
-        return (pd.Series(df) / sum(df)).tolist()
+        axis_num = 1 if axis == "row" else 0
+        sums = df.sum(axis=axis_num, keepdims=True)
+        sums[sums == 0] = 1  # Avoid division by zero
+        return df / sums
+
+    if isinstance(df, pd.DataFrame):
+        if axis == "row":
+            row_sums = df.sum(axis=1).to_numpy().reshape(-1, 1)
+            row_sums[row_sums == 0] = 1  # Avoid division by zero
+            return df.div(row_sums, axis=0).astype(np.float32)
+        else:
+            col_sums = df.sum(axis=0)
+            col_sums[col_sums == 0] = 1  # Avoid division by zero
+            return df.div(col_sums, axis=1).astype(np.float32)
+
     if sp.isspmatrix_csr(df):
-        column_sums = np.array(df.sum(axis=0)).ravel()
-        column_sums[column_sums == 0] = 1  # Avoid division by zero
-        inv_col_sums = 1 / column_sums
-        # Create a diagonal sparse matrix of inverse sums
-        diag_inv = sp.diags(inv_col_sums)
-        # Multiply the original CSR by this diagonal to normalize columns
-        return df.dot(diag_inv)
-    else: # pandas
-        raise ValueError("df is not a list,numpy or a dataframe")
+        if axis == "row":
+            row_sums = np.array(df.sum(axis=1)).ravel()
+            row_sums[row_sums == 0] = 1  # Avoid division by zero
+            diag_inv = sp.diags(1 / row_sums)
+            return diag_inv.dot(df)  # Normalize rows
+        else:
+            col_sums = np.array(df.sum(axis=0)).ravel()
+            col_sums[col_sums == 0] = 1  # Avoid division by zero
+            diag_inv = sp.diags(1 / col_sums)
+            return df.dot(diag_inv)  # Normalize columns
+
+    raise ValueError("df is not a supported type (list, numpy array, sparse matrix, or dataframe)")
+
+
         
 
 def validate_exists(file_path):
@@ -117,7 +135,73 @@ def validate_exists(file_path):
              
              
              
-def dge(adata, column, group1, group2=None, umi_thresh=0,
+# def dge(adata, column, group1, group2=None, umi_thresh=0,layer=None,
+#                  method="wilcox",alternative="two-sided",inplace=False):
+#     '''
+#     Runs differential gene expression analysis between two groups.
+#     Values will be saved in self.var: expression_mean, log2fc, pval
+#     parameters:
+#         * column - which column in obs has the groups classification
+#         * group1 - specific value in the "column"
+#         * group2 - specific value in the "column". 
+#                    if None,will run agains all other values, and will be called "rest"
+#         * method - either "wilcox" or "t_test"
+#         * alternative - {"two-sided", "less", "greater"}
+#         * umi_thresh - use only spots with more UMIs than this number
+#         * inplace - modify the adata.var with log2fc, pval and expression columns?
+#     '''
+#     df = adata.var.copy()
+        
+#     # Get the expression of the two groups
+#     group1_exp = adata[adata.obs[column] == group1].copy()
+#     group1_exp = group1_exp[group1_exp.X.sum(axis=1) > umi_thresh].copy()  # delete low quality spots
+#     print(f'Normilizing "{group1}" spots')
+#     group1_exp.X = matnorm(group1_exp.X,axis="row") 
+
+#     # group1_exp.X = group1_exp.X / group1_exp.X.sum(axis=1).A1[:, None]  # matnorm
+#     group1_exp = group1_exp.X.todense()
+#     df[group1] = group1_exp.mean(axis=0).A1  # save avarage expression of group1 to vars
+        
+#     if group2 is None:
+#         group2_exp = adata[(adata.obs[column] != group1) & ~adata.obs[column].isna()].copy()
+#         group2 = "rest"
+#     else:
+#         group2_exp = adata[adata.obs[column] == group2].copy()
+#     group2_exp = group2_exp[group2_exp.X.sum(axis=1) > umi_thresh].copy()  # delete empty spots
+
+#     print(f'Normilizing "{group2}" spots')
+#     group2_exp.X = matnorm(group2_exp.X,axis="row") 
+#     # group2_exp.X = group2_exp.X / group2_exp.X.sum(axis=1).A1[:, None]  # matnorm
+#     group2_exp = group2_exp.X.todense()
+#     df[group2] = group2_exp.mean(axis=0).A1  # save avarage expression of group2 to vars
+#     # df[group2 + "_med"] = np.median(group2_exp, axis=0).A1
+#     # df[group2+"_med"] = group2_exp.median(axis=0).A1  
+#     print(f"Number of spots in group1: {group1_exp.shape}, in group2: {group2_exp.shape}")
+#     # Calculate mean expression in each group and log2(group1/group2)
+#     df[f"expression_mean_{column}"] = df[[group1,group2]].mean(axis=1)
+#     pn = df[f"expression_mean_{column}"][df[f"expression_mean_{column}"]>0].min()
+#     df[f"log2fc_{column}"] = (df[group1] + pn) / (df[group2] + pn)
+#     df[f"log2fc_{column}"] = np.log2(df[f"log2fc_{column}"])  
+
+#     # Wilcoxon rank-sum test
+#     df[f"pval_{column}"] = np.nan
+#     for j, gene in enumerate(tqdm(df.index, desc=f"Running wilcoxon on [{column}]")):
+#         if (df.loc[gene,group1] == 0) and (df.loc[gene,group2] == 0):
+#             p_value = np.nan
+#         else:
+#             cur_gene_group1 = group1_exp[:,j]
+#             cur_gene_group2 = group2_exp[:,j]
+#             if method == "wilcox":
+                
+#                 _, p_value = mannwhitneyu(cur_gene_group1, cur_gene_group2, alternative=alternative)
+#             elif method == "t_test":
+#                 _, p_value = ttest_ind(cur_gene_group1, cur_gene_group2, alternative=alternative)
+#         df.loc[gene,f"pval_{column}"] = p_value
+#     if inplace:
+#         adata.var = adata.var.join(df, how="left")
+#     return df
+
+def dge(adata, column, group1, group2=None, umi_thresh=0,layer=None,
                  method="wilcox",alternative="two-sided",inplace=False):
     '''
     Runs differential gene expression analysis between two groups.
@@ -127,59 +211,83 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,
         * group1 - specific value in the "column"
         * group2 - specific value in the "column". 
                    if None,will run agains all other values, and will be called "rest"
+        * layer - which layer to get the data from (if None will get from adata.X)
         * method - either "wilcox" or "t_test"
         * alternative - {"two-sided", "less", "greater"}
-        * umi_thresh - use only spots with more UMIs than this number
+        * umi_thresh - use only cells with more UMIs than this number
         * inplace - modify the adata.var with log2fc, pval and expression columns?
     '''
+    def get_data(ann, lyr):
+        return ann.X if lyr is None else ann.layers[lyr]
+
     df = adata.var.copy()
-        
-    # Get the expression of the two groups
-    group1_exp = adata[adata.obs[column] == group1].copy()
-    group1_exp = group1_exp[group1_exp.X.sum(axis=1) > umi_thresh]  # delete low quality spots
-    print(f'Normilizing "{group1}" spots')
-    group1_exp.X = group1_exp.X / group1_exp.X.sum(axis=1).A1[:, None]  # matnorm
-    group1_exp = group1_exp.X.todense()
-    df[group1] = group1_exp.mean(axis=0).A1  # save avarage expression of group1 to vars
-        
+
+    group1_adata = adata[adata.obs[column] == group1].copy()
+    group1_data = get_data(group1_adata, layer)
+    if umi_thresh:
+        # Filter out low-UMI rows
+        mask1 = group1_data.sum(axis=1) > umi_thresh
+        group1_adata = group1_adata[mask1].copy()
+        group1_data = get_data(group1_adata, layer)
+
+    print(f'Normalizing "{group1}" spots')
+    if layer is None:
+        group1_adata.X = matnorm(group1_data, axis="row")
+        group1_exp = group1_adata.X.todense()
+    else:
+        group1_adata.layers[layer] = matnorm(group1_data, axis="row")
+        group1_exp = group1_adata.layers[layer].todense()
+    df[group1] = group1_exp.mean(axis=0).A1
+
     if group2 is None:
-        group2_exp = adata[(adata.obs[column] != group1) & ~adata.obs[column].isna()].copy()
+        group2_adata = adata[(adata.obs[column] != group1) & ~adata.obs[column].isna()].copy()
         group2 = "rest"
     else:
-        group2_exp = adata[adata.obs[column] == group2].copy()
-    group2_exp = group2_exp[group2_exp.X.sum(axis=1) > umi_thresh]  # delete empty spots
+        group2_adata = adata[adata.obs[column] == group2].copy()
+    group2_data = get_data(group2_adata, layer)
+    if umi_thresh:
+        mask2 = group2_data.sum(axis=1) > umi_thresh
+        group2_adata = group2_adata[mask2].copy()
+        group2_data = get_data(group2_adata, layer)
+    print(f'Normalizing "{group2}" spots')
+    if layer is None:
+        group2_adata.X = matnorm(group2_data, axis="row")
+        group2_exp = group2_adata.X.todense()
+    else:
+        group2_adata.layers[layer] = matnorm(group2_data, axis="row")
+        group2_exp = group2_adata.layers[layer].todense()
 
-    print(f'Normilizing "{group2}" spots')
-    group2_exp.X = group2_exp.X / group2_exp.X.sum(axis=1).A1[:, None]  # matnorm
-    group2_exp = group2_exp.X.todense()
-    df[group2] = group2_exp.mean(axis=0).A1  # save avarage expression of group2 to vars
-    # df[group2 + "_med"] = np.median(group2_exp, axis=0).A1
-    # df[group2+"_med"] = group2_exp.median(axis=0).A1  
-    print(f"Number of spots in group1: {group1_exp.shape}, in group2: {group2_exp.shape}")
-    # Calculate mean expression in each group and log2(group1/group2)
-    df[f"expression_mean_{column}"] = df[[group1,group2]].mean(axis=1)
-    pn = df[f"expression_mean_{column}"][df[f"expression_mean_{column}"]>0].min()
+    df[group2] = group2_exp.mean(axis=0).A1
+
+    print(f"Number of entries in group1: {group1_exp.shape}, in group2: {group2_exp.shape}")
+
+    # Calculate mean expression in each group and log2(group1 / group2)
+    df[f"expression_mean_{column}"] = df[[group1, group2]].mean(axis=1)
+    # Small pseudonumber (pn) to avoid division by zero
+    pn = df[f"expression_mean_{column}"][df[f"expression_mean_{column}"] > 0].min()
     df[f"log2fc_{column}"] = (df[group1] + pn) / (df[group2] + pn)
-    df[f"log2fc_{column}"] = np.log2(df[f"log2fc_{column}"])  
-
-    # Wilcoxon rank-sum test
+    df[f"log2fc_{column}"] = np.log2(df[f"log2fc_{column}"])
     df[f"pval_{column}"] = np.nan
-    for j, gene in enumerate(tqdm(df.index, desc=f"Running wilcoxon on [{column}]")):
-        if (df.loc[gene,group1] == 0) and (df.loc[gene,group2] == 0):
+
+    for j, gene in enumerate(tqdm(df.index, desc=f"Running {method} on [{column}]")):
+        if (df.loc[gene, group1] == 0) and (df.loc[gene, group2] == 0):
             p_value = np.nan
         else:
-            cur_gene_group1 = group1_exp[:,j]
-            cur_gene_group2 = group2_exp[:,j]
+            cur_gene_group1 = group1_exp[:, j]
+            cur_gene_group2 = group2_exp[:, j]
             if method == "wilcox":
-                from scipy.stats import mannwhitneyu
                 _, p_value = mannwhitneyu(cur_gene_group1, cur_gene_group2, alternative=alternative)
             elif method == "t_test":
-                from scipy.stats import ttest_ind
                 _, p_value = ttest_ind(cur_gene_group1, cur_gene_group2, alternative=alternative)
-        df.loc[gene,f"pval_{column}"] = p_value
+            else:
+                p_value = np.nan
+        df.loc[gene, f"pval_{column}"] = p_value
+
     if inplace:
         adata.var = adata.var.join(df, how="left")
+
     return df
+
 
 
 def load_images(path_image_fullres, path_image_highres, path_image_lowres):

@@ -264,14 +264,23 @@ def _aggregate_data_two_nuclei(adata, cells_nuc,
     return cell_data, cells_ids, layers, {"nuc_by_genes":df,"nuc_cell_dict":nuc_cell_dict}
 
 
-def processcells_2nucs(df, nuc_cell_dict, n_perm=10, func=np.mean):
+def processcells_2nucs(df, nuc_cell_dict, n_perm=10, func=np.mean,method="diff"):
     '''
     Find genes that are enriched in one out of two nuclei in double-nucleated cells
     '''
     
-    def calculate_val(nuc1, nuc2):
-        nucs_ratio = (nuc1 + 1) / (nuc2 + 1)  # Add pseudonumber and calculate ratio
-        return np.abs(np.log2(nucs_ratio))  
+    def calculate_val(nuc1, nuc2, method):
+        if method=="ratio":
+            pn = 1
+            nucs_ratio = (nuc1 + pn) / (nuc2 + pn)  # Add pseudonumber and calculate ratio
+            return np.abs(np.log2(nucs_ratio))  
+            # return np.log2(nucs_ratio)
+        elif method=="diff":
+            nucs_ratio = nuc1 - nuc2  
+            return np.abs(nucs_ratio)
+            return nucs_ratio
+        else:
+            raise ValueError("methods available - diff, ratio")        
     
     genes = df.columns
     n_genes = len(genes)
@@ -284,7 +293,7 @@ def processcells_2nucs(df, nuc_cell_dict, n_perm=10, func=np.mean):
     for ind_cell, (cell, (nuc1_ind, nuc2_ind)) in enumerate(nuc_cell_dict.items()):
         counts_nuc1 = df.iloc[nuc1_ind] 
         counts_nuc2 = df.iloc[nuc2_ind]
-        real_result[ind_cell] = calculate_val(counts_nuc1, counts_nuc2)
+        real_result[ind_cell] = calculate_val(counts_nuc1, counts_nuc2,method)
         expression[ind_cell] = (counts_nuc1 + counts_nuc2) / 2
         
     # Get single statistic
@@ -310,21 +319,30 @@ def processcells_2nucs(df, nuc_cell_dict, n_perm=10, func=np.mean):
         # For each "cell" (pair of nuclei), compute ratio again
         rand_result = np.full((n_cells, n_genes), np.nan)
         for ind_cell, (cell, (nuc1_idx, nuc2_idx)) in enumerate(nuc_cell_dict.items()):
-            rand_nuc1 = random_matrix[nuc1_ind]
-            rand_nuc2 = random_matrix[nuc2_ind]
-            rand_result[ind_cell] = calculate_val(rand_nuc1, rand_nuc2)
+            rand_nuc1 = random_matrix[nuc1_idx]
+            rand_nuc2 = random_matrix[nuc2_idx]
+            rand_result[ind_cell] = calculate_val(rand_nuc1, rand_nuc2,method)
         simulations[i,:] = func(rand_result, axis=0) 
 
-    above_rand = np.sum(simulations >= real_value, axis=0)
-    above_rand[above_rand == 0] = 1  # Pval can't be lower than 1/n_perm
-    pvals = above_rand / n_perm
+    count_above = np.sum(simulations >= real_value, axis=0)
+    # count_below = np.sum(simulations <= real_value, axis=0)
+    count_above[count_above == 0] = 1
+    # count_below[count_below == 0] = 1
+    # pvals = 2 * np.minimum(count_above, count_below) / n_perm
+    pvals = count_above / n_perm
+    # pvals[pvals > 1] = 1
     
     results = pd.Series(real_value, index=genes, name="statistic")
     results = pd.DataFrame(results)
     results["pval"] = pvals
     results["qval"] = ViziumHD_utils.p_adjust(results["pval"])
-    mean_expr = df.mean(axis=0)  # Series with the same index as 'genes'
-    results["expression_mean"] = mean_expr.values
+    results["rand_mean"] = simulations.mean(axis=0)
+    results["rand_sd"] = simulations.std(axis=0)
+    results["Z_score"] = (results["statistic"] - results["rand_mean"])  / results["rand_sd"] + 1e-6
+    
+    ViziumHD_utils.matnorm(df,"row").mean(axis=0).values
+    # results["expression_mean"] = df.mean(axis=0).values
+    results["expression_mean"] = ViziumHD_utils.matnorm(df,"row").mean(axis=0)
     
     return results
 

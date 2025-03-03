@@ -14,6 +14,7 @@ import json
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+from shapely import wkt, affinity
 # Plotting libraries
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -252,6 +253,7 @@ class ViziumHD:
         ViziumHD_utils.validate_exists(path)
         annotations = gpd.read_file(path)
         if "classification" in annotations.columns:
+            annotations["classification"] = annotations["classification"].apply(json.loads)
             annotations[name] = [x["name"] for x in annotations["classification"]]
         else:
             annotations[name] = annotations.index
@@ -308,7 +310,7 @@ class ViziumHD:
         '''
         alternative = "two-sided" if two_sided else "greater"
         df = ViziumHD_utils.dge(self.adata, column, group1, group2, umi_thresh,
-                     method=method, alternative=alternative, inplace=False)
+                     method=method, alternative=alternative, inplace=inplace)
         df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
         df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
         if not two_sided:
@@ -400,7 +402,7 @@ class ViziumHD:
         n_genes = self.adata.n_vars  
         result = np.zeros((n_groups, n_genes))
         for i, group in enumerate(unique_groups):
-            mask = self.adata.obs[by] == group
+            mask = (self.adata.obs[by] == group).values
             group_sum = self.adata.X[mask].sum(axis=0)  
             group_mean = group_sum / mask.sum() 
             result[i, :] = group_mean.A1     
@@ -535,6 +537,7 @@ class ViziumHD:
                 adata_sc = self.SC.adata.copy()
                 cell_col = adata_sc.obs.index.name
                 adata_sc_shifted = adata_sc[adata_sc.obs.index.isin(adata_shifted.obs[cell_col]),adata_shifted.var_names]
+                adata_sc_shifted.var = adata_sc_shifted.var.loc[:,~adata_sc_shifted.var.columns.str.startswith(("cor_","exp_"))]
                 adata_sc_shifted = self.__shift_adata(adata_sc_shifted, xlim_pixels_fullres, ylim_pixels_fullres)
             else:
                 adata_sc_shifted = self.SC.adata
@@ -587,16 +590,51 @@ class ViziumHD:
         return image_fullres_crop, image_highres_crop, image_lowres_crop,xlim_pixels_fullres, ylim_pixels_fullres
     
 
+    # def __shift_adata2(self, adata, xlim_pixels_fullres, ylim_pixels_fullres):
+    #     '''
+    #     Shifts the coordinates in an adata, based on xlim, ylim
+    #     '''
+    #     adata_shifted = adata.copy()
+    #     drop_columns = ["pxl_col_in_lowres","pxl_row_in_lowres","pxl_col_in_highres",
+    #                     "pxl_row_in_highres","um_x","um_y"]
+    #     adata_shifted.obs.drop(columns=drop_columns, inplace=True)
+    #     adata_shifted.obs["pxl_col_in_fullres"] -= xlim_pixels_fullres[0]
+    #     adata_shifted.obs["pxl_row_in_fullres"] -= ylim_pixels_fullres[0]
+    #     return adata_shifted
+    
     def __shift_adata(self, adata, xlim_pixels_fullres, ylim_pixels_fullres):
-        '''
-        Shifts the coordinates in an adata, based on xlim, ylim
-        '''
+        """
+        Shifts the coordinates in an adata, based on xlim, ylim (in pixel space).
+        Also shifts the geometry WKT in micron space.
+        """
         adata_shifted = adata.copy()
-        drop_columns = ["pxl_col_in_lowres","pxl_row_in_lowres","pxl_col_in_highres",
-                        "pxl_row_in_highres","um_x","um_y"]
-        adata_shifted.obs.drop(columns=drop_columns, inplace=True)
+        drop_columns = ["pxl_col_in_lowres","pxl_row_in_lowres",
+                        "pxl_col_in_highres","pxl_row_in_highres",
+                        "um_x","um_y"]
+        adata_shifted.obs.drop(columns=drop_columns, inplace=True, errors="ignore")
+    
+        # Shift the coordinates
         adata_shifted.obs["pxl_col_in_fullres"] -= xlim_pixels_fullres[0]
         adata_shifted.obs["pxl_row_in_fullres"] -= ylim_pixels_fullres[0]
+    
+        # Shift the geometry in micron space
+        if "geometry" in adata_shifted.obs.columns:
+            x_offset_microns = xlim_pixels_fullres[0] * self.json["microns_per_pixel"]
+            y_offset_microns = ylim_pixels_fullres[0] * self.json["microns_per_pixel"]
+    
+            def _shift_wkt_geometry(geom_wkt):
+                if isinstance(geom_wkt, str) and geom_wkt.strip():
+                    geom = wkt.loads(geom_wkt)
+                    geom = affinity.translate(geom, xoff=-x_offset_microns, yoff=-y_offset_microns)
+                    return geom.wkt  # Store back as WKT
+                return np.nan
+    
+            adata_shifted.obs["geometry"] = (
+                adata_shifted.obs["geometry"]
+                .fillna("")
+                .apply(_shift_wkt_geometry)
+            )
+    
         return adata_shifted
         
     def __getitem__(self, what):
@@ -724,6 +762,20 @@ class ViziumHD:
     def columns(self):
         return self.adata.obs.columns.copy()
     
+    def rename(self, new_name, full=False):
+        '''
+        Renames the object and changes the path_output.
+        If full is False, the name will be added to the previous name
+        '''
+        if full:
+            self.name = new_name
+        else:
+            self.name = self.name.replace("_subset","")
+            self.name = f"{self.name}_{new_name}"
+        self.path_output = self.path_output + f"/{new_name}"
+        
+        
+    
     def update(self, SC=False):
         '''Updates the methods in the instance'''
         ViziumHD_utils.update_instance_methods(self)
@@ -746,6 +798,6 @@ class ViziumHD:
             if not path.endswith(".pkl"):
                 path += ".pkl"
         with open(path, "wb") as f:
-            dill.dump(self, f)
+            dill.dump(self, f)            
         return path
 

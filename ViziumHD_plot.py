@@ -8,12 +8,11 @@ Created on Wed Oct 30 10:29:05 2024
 import os
 import numpy as np
 import pandas as pd
-# import geopandas as gpd
 import scanpy as sc
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib import colormaps
-from matplotlib.colors import LinearSegmentedColormap, ListedColormap
+from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.patches as patches
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
@@ -34,7 +33,6 @@ DEFAULT_COLOR ='None' # for plotting categorical
 chrome_path = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
 FULLRES_THRESH = 1000 # in microns, below which, a full-res image will be plotted
 HIGHRES_THRESH = 3000 # in microns, below which, a high-res image will be plotted
-# DEFAULT_COLORS = ["white","purple","blue","yellow","red"]
 
 class PlotVizium:
     '''Handles all plotting for ViziumHD object'''
@@ -362,8 +360,6 @@ class PlotSC:
  
         self.pixel_x = self.main.adata_cropped.obs[pxl_col] - xlim_pxl[0]
         self.pixel_y = self.main.adata_cropped.obs[pxl_row] - ylim_pxl[0]
-        # self.pixel_x = self.main.adata_cropped.obs[pxl_col] 
-        # self.pixel_y = self.main.adata_cropped.obs[pxl_row] 
         
         if geometry:
             self._init_geometry(adjusted_microns_per_pixel, xlim_pxl, ylim_pxl)
@@ -550,7 +546,8 @@ class PlotSC:
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
         
-        self.geometry.boundary.plot(ax=ax, color=line_color, linewidth=linewidth)
+        if line_color is not None:
+            self.geometry.boundary.plot(ax=ax, color=line_color, linewidth=linewidth)
         
         if what: 
             values = self.main.get(what, cropped=True, geometry=True) 
@@ -658,15 +655,58 @@ class PlotSC:
             self.save(f"{features}_UMAP")
         return ax
     
+    
+    def cor(self, gene, number_of_genes=10,ax=None,figsize=(8,8),
+            save=False,color="black", color_genes="red",size=15,text=True,cmap="copper"):
+        
+        if f"cor_{gene}" in self.main.adata.var:
+            df = pd.DataFrame({"r":self.main.adata.var[f"cor_{gene}"],
+                               "expression_mean":self.main.adata.var[f"exp_{gene}"],
+                               "qval":self.main.adata.var[f"cor_qval_{gene}"],
+                               "gene":self.main.adata.var_names})
+        else:
+            df = self.main.gene_cor(gene,inplace=True)
+            df.rename(columns={f"exp_{gene}":"expression_mean"},inplace=True)
+            df.rename(columns={f"cor_qval_{gene}":"qval"},inplace=True)
+            
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)    
+        
+        df["expression_mean_log10"] = np.log10(df["expression_mean"])
+        df["qval_log10"] = -np.log(df["qval"] + df["qval"][df["qval"]>0].min())
+        df.index = df["gene"].values
+        df = df.dropna(subset=["expression_mean_log10", "r", "qval_log10"])
+        cor_series_clean = df["r"]
+        top_abs_indices = cor_series_clean.abs().nlargest(number_of_genes).index
+
+        # Retrieve the original correlations (with their sign) in the order of their absolute value
+        top_cor = cor_series_clean.loc[top_abs_indices]
+        # top_cor = cor_series_clean.nlargest(number_of_genes)
+        if top_cor.iloc[0] > 0.9:
+            df.loc[top_cor.index[0],"r"] = np.nan
+        
+        top_genes = list(top_cor.index)
+
+        ax = plot_scatter_signif(df, "expression_mean_log10", "r",genes=top_genes,
+                            title=gene,text=text,color="qval_log10",ax=ax,
+                            xlab="log10(mean expression)",size=size,cmap=cmap,
+                            ylab="Spearman correlation",legend=True,color_genes="black")
+        print(top_cor)
+        self.current_ax = ax
+        if save:
+            self.save(f"{gene}_COR")
+        return ax 
+        
+    
     def __repr__(self):
-        s = f"Plots available for [{self.main.name}].sc:\n\tsave(), spatial(), hist(), cells(), umpa()"
+        s = f"Plots available for [{self.main.name}].sc:\n\tsave(), spatial(), hist(), cells(), umap(), cor()"
         return s
 
 
 def save_fig(path, fig, open_file=False, format_='png', dpi=300): 
     '''Save a fig object'''
     if isinstance(fig, pd.DataFrame):
-        path = path.replace(f".{format}",".csv")
+        path = path.replace(f".{format_}",".csv")
         fig.to_csv(path)
         return path
     fig.savefig(path, format=format_, dpi=dpi, bbox_inches='tight')
@@ -732,108 +772,126 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
     if title:
         ax.set_title(title)
     return ax
+
     
-# def plot_polygons(geometry,values=None,ax=None,title=None,cmap="winter",color="black",
-#     alpha=1.0,legend=True,xlab=None, ylab=None,legend_title=None,size=1,figsize=(8,8)):
-    
-#     if ax is None:
-#         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
-#     if isinstance(geometry, pd.Series):
-#         geometry = geometry.values
-#     geometry = list(geometry)
-#     if values is not None:
-#         # Ensure 'values' is an array-like object
-#         if not isinstance(values, pd.Series):
-#             values = pd.Series(values, index=range(len(values)))
-#         # Use your existing `get_colors` to map values -> colors
-#         fill_colors = get_colors(values, cmap)
-#     else:
-#         fill_colors = ["none"] * len(geometry)
-#     for geom_item, fill_color in zip(geometry, fill_colors):
-#         # Parse WKT strings into Shapely Polygons if needed
-#         if isinstance(geom_item, str):
-#             geom_item = shapely.wkt.loads(geom_item)
-#         if not isinstance(geom_item, Polygon):
-#             continue  # Skip anything not a Polygon
-        
-#         polygon_coords = np.array(geom_item.exterior.coords)
-#         patch = patches.Polygon(
-#             polygon_coords,
-#             facecolor=fill_color,  # Fill color based on 'values' or 'none'
-#             edgecolor=color,       # Line color from 'color'
-#             linewidth=size,        # Line thickness
-#             alpha=alpha
-#         )
-#         ax.add_patch(patch)
-#     if legend and values is not None:
-#         unique_vals = values.unique()
-#         color_list = get_colors(unique_vals, cmap)
-#         handles = [patches.Patch(facecolor=c, edgecolor="black", label=str(val))
-#             for c, val in zip(color_list, unique_vals)]
-#         ax.legend(handles=handles, title=legend_title, loc="best")
-#     if xlab:
-#         ax.set_xlabel(xlab)
-#     if ylab:
-#         ax.set_ylabel(ylab)
-#     if title:
-#         ax.set_title(title)
-#     return ax
-    
-    
-def plot_scatter_signif(df,x_col,y_col,genes=None,text=True,figsize=(8,8),size=10,legend=False,title=None,
-                    ax=None,xlab=None,ylab=None,out_path=None,color="blue",color_genes="red",x_line=None,y_line=None):
+def plot_scatter_signif(df, x_col, y_col,
+                        genes=None, genes2=None,  # genes for group1 and group2
+                        text=True, figsize=(8,8), size=10, legend=False, title=None,
+                        ax=None, xlab=None, ylab=None, out_path=None,
+                        color="black", color_genes="red", color_genes2="blue",
+                        x_line=None, y_line=None,cmap="viridis",repel=False):
     '''
     Plots a scatterplot based on a dataframe.
-    parameters:
-        * df - pd.Data.Frame
-        * x_col, y_col - names of columns in the df to plot
-        * genes - list of genes to color
-        * text - show names of genes?
-        * out_path - path to save the image. if None, won't save'
-        * x_line, y_line (numbers) - add vertical and/or horizontal 
-        * figsize, size, legend, xlab, ylab, color, color_genes - cosmetic parameters
+    
+    Parameters:
+        df: pd.DataFrame
+        x_col, y_col: names of the columns in df to plot
+        genes: list of gene names to highlight as group 1
+        genes2: list of gene names to highlight as group 2 (optional)
+        text: bool, whether to annotate gene names on the plot
+        figsize: tuple, figure size
+        size: marker size
+        legend: bool, whether to include legend
+        title: str, plot title
+        ax: matplotlib Axes, if provided
+        xlab, ylab: labels for the x and y axes
+        out_path: str, path to save the figure (if None, the plot is not saved)
+        color: color for background points
+        color_genes: color for genes in group 1
+        color_genes2: color for genes in group 2
+        x_line, y_line: numbers to add vertical and horizontal reference lines
     '''
+    
+    # Create an axis if not provided
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
-    df["type"] = ""
+        
+    # Create a column to mark gene groups. (Empty string means "not selected".)
+    df["group"] = ""
     
-    sns.scatterplot(data=df[df["type"] == ""], x=x_col, y=y_col,s=size,legend=legend,
-                    ax=ax,color=color,edgecolor=None)
+    # Ensure there is a column named "gene" to work with.
+    if "gene" not in df.columns:
+        df["gene"] = df.index.values
+    
+    # Mark genes for group 1 if provided.
+    if genes is True:
+        df["distance"] = np.sqrt(df[x_col]**2 + df[y_col]**2)
+        top_genes = df.nlargest(100, "distance")["gene"].tolist()
+        df.loc[df["gene"].isin(top_genes), "group"] = "group1"
+    elif genes:
+        df.loc[df["gene"].isin(genes), "group"] = "group1"
+    
+    # Mark genes for group 2 if provided.
+    if genes2:
+        df.loc[df["gene"].isin(genes2), "group"] = "group2"
+    
+    # Plot background points (those not in any group)
+    if color in df.columns:
+        ax = sns.scatterplot(data=df, x=x_col, y=y_col,palette=cmap,
+                        s=size, legend=legend,ax=ax, hue=color, edgecolor=None)
+    else:
+        ax = sns.scatterplot(data=df[df["group"] == ""], x=x_col, y=y_col,
+                        s=size, legend=legend,ax=ax, color=color, edgecolor=None)
+    
+    # Add reference lines if specified.
     if y_line is not None:
-        ax.axhline(y=y_line if y_line is not True else 0,color="k",linestyle="--")
+        ax.axhline(y=y_line if y_line is not True else 0,
+                   color="k", linestyle="--")
     if x_line is not None:
-        ax.axvline(x=x_line if x_line is not True else 0,color="k",linestyle="--")
-    if genes:
-        if "gene" not in df.columns:
-            df["gene"] = df.index
-        df.loc[df["gene"].isin(genes),"type"] = "selected"
-        subplot = df[df["type"] != ""]
-        if not subplot.empty:
-            sns.scatterplot(data=subplot, x=x_col, y=y_col,color=color_genes,
-                            s=size,legend=False,ax=ax,edgecolor="k")
-            if text:
-                texts = [ax.text(
-                    subplot[x_col].iloc[i], 
-                    subplot[y_col].iloc[i], 
-                    subplot["gene"].iloc[i],
-                    color=color_genes,
-                    fontsize=14,
-                    ) for i in range(len(subplot))]
-                adjust_text(texts, arrowprops=dict(arrowstyle="-", color="black", lw=0.5),
-                            force_text=(0.6, 0.6),ax=ax)
+        ax.axvline(x=x_line if x_line is not True else 0,
+                   color="k", linestyle="--")
+    
+    # Prepare a list to collect text objects so that they can be adjusted together.
+    texts = []
+    # Plot group 1 points and (optionally) add text labels.
+    group1_df = df[df["group"] == "group1"]
+    if not group1_df.empty:
+        if not color in df.columns:
+            sns.scatterplot(data=group1_df,
+                            x=x_col, y=y_col,
+                            color=color_genes,
+                            s=size, legend=False, ax=ax, edgecolor="k")
+        if text:
+            for _, row in group1_df.iterrows():
+                texts.append(ax.text(row[x_col], row[y_col], row["gene"],
+                                     color=color_genes, fontsize=14))
+    
+    # Plot group 2 points and (optionally) add text labels.
+    group2_df = df[df["group"] == "group2"]
+    if not group2_df.empty:
+        sns.scatterplot(data=group2_df,
+                        x=x_col, y=y_col,
+                        color=color_genes2,
+                        s=size, legend=False, ax=ax, edgecolor="k")
+        if text:
+            for _, row in group2_df.iterrows():
+                texts.append(ax.text(row[x_col], row[y_col], row["gene"],
+                                     color=color_genes2, fontsize=14))
+    if repel:
+    # Adjust text to reduce overlap if any text labels were added.
+        if text and texts:
+            adjust_text(texts,
+                        arrowprops=dict(arrowstyle="-", color="black", lw=0.5),
+                        force_text=(0.1, 0.1),   # Instead of (3, 3)
+                        ax=ax)
+    
+    # Set labels and title
     ax.set_xlabel(xlab, fontsize=14)
     ax.set_ylabel(ylab, fontsize=14)
     ax.set_title(title)
+    
+    # Save the figure if an output path is provided.
     if out_path:
         if not out_path.endswith(".png"):
             out_path += ".png"
         plt.savefig(out_path, format="png", dpi=300, bbox_inches="tight")
+    
     return ax
 
 
 def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=None, title=None,
             size=10, colname_exp="expression_mean",colname_qval="qval", 
-            colname_fc="log2fc", n_texts=130, ylab="log2(ratio)"):
+            colname_fc="log2fc", n_texts=130, ylab="log2(ratio)",repel=False):
     '''
     Plots a MA plot of the output of ViziumHD.dge().
     parameters:
@@ -853,7 +911,7 @@ def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=N
     signif_genes = plot.loc[plot["signif"]==True,"gene"].tolist()
     text = True if len(signif_genes) < n_texts else False
     ax = plot_scatter_signif(plot, "exp", colname_fc, genes=signif_genes,
-                             text=text, title=title,ax=ax,size=size,
+                             text=text, title=title,ax=ax,size=size,repel=repel,
                              xlab=f"log10({colname_exp.replace('_',' ')})",
                              ylab=ylab,y_line=0,color_genes="red", color="gray")
     return ax
@@ -1133,4 +1191,176 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
         ax.set_ylabel(ylab)
     if title:
         ax.set_title(title)
+    return ax
+
+
+def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True, 
+                 sort_method="sum",ax=None, xlab=None, ylab=None, title=None,
+                 cmap="coolwarm",figsize=(8,16),legend=True, legend_title=None):
+    '''
+    Plots a heatmap.
+    parameters:
+        * heatmap_data - either a "heatmap ready" df, where genes are index,
+                                or three columns, of category(x), gene (y), value
+        * x_y_val (list) - if the heatmap_data is three columns, specify. 
+                                category(x), gene (y), value
+        * normilize - whether to normilize each row to the maximal value of the row
+        * sort - sort the rows?
+        * sort_method - if sort is True, how to sort? possible values are "sum","std","mean"
+        * ax - matplotlib Axes, if provided
+        * figsize, cmap, legend, xlab, ylab, title, legend_title - cosmetic parameters
+    '''
+    if x_y_val:
+        heatmap_data = heatmap_data.pivot(index=x_y_val[1], columns=x_y_val[0], values=x_y_val[2])
+    if normilize:
+        heatmap_data = heatmap_data.div(heatmap_data.max(axis=1), axis=0)
+    if sort:
+        if sort_method == "sum":
+            heatmap_data["delta"] = heatmap_data.sum(axis=1, skipna=True)
+        elif sort_method == "mean":
+            heatmap_data["delta"] = heatmap_data.mean(axis=1, skipna=True)
+        elif sort_method == "std":
+            heatmap_data["delta"] = heatmap_data.std(axis=1, skipna=True)
+        else:
+            raise ValueError(f"Invalid sort_method: {sort_method}. "
+                             "Choose from ['sum','mean','std']")
+        heatmap_data = heatmap_data.sort_values(by="delta", ascending=False)
+        del heatmap_data["delta"]
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    img = ax.imshow(heatmap_data, aspect='auto',cmap=cmap)
+    ax.set_xticks(range(len(heatmap_data.columns)))
+    ax.set_yticks(range(len(heatmap_data.index)))
+    ax.set_xticklabels(heatmap_data.columns)
+    ax.set_yticklabels(heatmap_data.index)
+    
+    if xlab is not None:
+        ax.set_xlabel(xlab)
+    if ylab is not None:
+        ax.set_ylabel(ylab)
+    if title is not None:
+        ax.set_title(title)
+    if legend:
+        cbar = ax.figure.colorbar(img, ax=ax)    
+        if legend_title:
+            cbar.set_label(legend_title)
+    
+    return ax
+
+
+def plot_dotplot(df, x, y, size_col, val_col,
+                 normalize_size=False, normalize_col=False, sort=True, sort_method="sum",
+                 ax=None, xlab=None, ylab=None, title=None,max_dot_size=100, 
+                 cmap="coolwarm", figsize=(8,16),legend=True, rotate_xticklab=False,
+                 legend_col_title=None, legend_size_title=None):
+    '''
+    Plots a dotplot.
+    parameters:
+        * df - dataframe of 4 columns, x, y, size_col, val_col
+        * x, y, size_col, val_col - which columns to use
+        * normalize_size,normalize_col - whether to normilize each row to the maximal value of the row
+        * sort - sort the rows?
+        * sort_method - if sort is True, how to sort? possible values are "sum","std","mean"
+        * ax - matplotlib Axes, if provided
+        * figsize, cmap, legend, xlab, ylab, title, legend_col_title, 
+        legend_size_title, rotate_xticklab - cosmetic parameters
+    '''
+    color_data = df.pivot(index=y, columns=x, values=val_col)
+    size_data  = df.pivot(index=y, columns=x, values=size_col)
+    
+    if normalize_col:
+        color_data = color_data.div(color_data.max(axis=1), axis=0)
+    if normalize_size:
+        size_data  = size_data.div(size_data.max(axis=1), axis=0)
+
+    if sort:
+        if sort_method == "sum":
+            color_data["delta"] = color_data.sum(axis=1, skipna=True)
+        elif sort_method == "mean":
+            color_data["delta"] = color_data.mean(axis=1, skipna=True)
+        elif sort_method == "std":
+            color_data["delta"] = color_data.std(axis=1, skipna=True)
+        else:
+            raise ValueError(f"Invalid sort_method: {sort_method}. "
+                             "Choose from ['sum','mean','std']")
+        color_data = color_data.sort_values("delta", ascending=False)
+        size_data  = size_data.loc[color_data.index, :]
+        del color_data["delta"]
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure
+
+    row_labels, col_labels  = list(color_data.index), list(color_data.columns)
+
+    xvals, yvals, colors, sizes = [], [], [], []
+    for i, row_name in enumerate(row_labels):
+        for j, col_name in enumerate(col_labels):
+            xvals.append(j)
+            yvals.append(i)
+            c_val = color_data.loc[row_name, col_name]
+            colors.append(c_val)
+            s_val = size_data.loc[row_name, col_name]
+            sizes.append(np.nan_to_num(s_val, nan=0))
+
+    all_sizes_arr = np.array(sizes)
+    current_max = np.nanmax(all_sizes_arr)
+    if current_max > 0:
+        sizes_normed = all_sizes_arr / current_max
+    else:
+        sizes_normed = all_sizes_arr  # if all zero/NaN
+
+    # scale up to user-requested maximum size
+    scatter_sizes = [max_dot_size * s for s in sizes_normed]
+
+    if isinstance(cmap, list):
+        cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+
+    sc = ax.scatter(xvals, yvals,c=colors,
+        s=scatter_sizes,cmap=cmap,edgecolors="none")
+
+    ax.set_xticks(range(len(col_labels)))
+    ax.set_xticklabels(col_labels, rotation=90 if rotate_xticklab else 0)
+    ax.set_yticks(range(len(row_labels)))
+    ax.set_yticklabels(row_labels)
+    if xlab is not None:
+        ax.set_xlabel(xlab)
+    if ylab is not None:
+        ax.set_ylabel(ylab)
+    if title is not None:
+        ax.set_title(title)
+
+    if legend:
+        # Shrink main axis to free space on the right
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width*0.8, box.height])
+
+        # Create a new Axes in top half for colorbar
+        cbar_ax = fig.add_axes([box.x0 + box.width*0.85, box.y0 + box.height*0.5, 
+            0.03, box.height*0.45])
+        cbar = fig.colorbar(sc, cax=cbar_ax)
+        if legend_col_title:
+            cbar.set_label(legend_col_title)
+
+        if current_max > 0:
+            # Example fractions of original data's range
+            fraction_values = [0.25, 0.50, 0.75, 1.00]
+            # Convert fraction -> actual data scale
+            actual_sizes = [fraction * current_max for fraction in fraction_values]
+            # Human-readable labels
+            size_labels = [f"{v:.2g}" for v in actual_sizes]
+            
+            # Convert fraction -> scatter circle area
+            size_legend_scaled = [max_dot_size * f for f in fraction_values]
+
+            # Make dummy scatter patches to display in the legend
+            legend_patches = [plt.scatter([], [], s=s, color="gray",alpha=0.8) 
+                              for s in size_legend_scaled]
+            # Place them in the bottom half
+            ax.legend(legend_patches,size_labels,title=legend_size_title,loc="upper left",
+                bbox_to_anchor=(1.02, 0.45),frameon=True,
+                labelspacing=2,handletextpad=1.5 ,borderpad=1.5)
+
     return ax

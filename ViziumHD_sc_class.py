@@ -16,6 +16,8 @@ import warnings
 import re
 from shapely.affinity import scale
 import gc
+from scipy.stats import spearmanr
+from tqdm import tqdm
 
 import ViziumHD_utils
 import ViziumHD_plot
@@ -182,7 +184,11 @@ class SingleCell:
             return self.subset(what)
         
     def subset(self, what=(slice(None), slice(None))):
+        what = tuple(idx.to_numpy() if hasattr(idx, "to_numpy") else idx for idx in what)
         adata = self.adata[what].copy()
+        adata.var = adata.var.loc[:,~adata.var.columns.str.startswith(("cor_","exp_"))]
+        for layer in self.adata.layers.keys():
+            adata.layers[layer] = self.adata.layers[layer][what].copy()
         return SingleCell(self.viz, adata)
     
     def __getitem__(self, what):
@@ -192,18 +198,84 @@ class SingleCell:
             raise KeyError(f"[{what}] isn't in data or metadatas")
         return item
      
-    def pseudobulk(self, by=None):
+    def pseudobulk(self, by=None,layer=None):
+        if layer is None:
+            x = self.adata.X
+        else:
+            if layer not in self.adata.layers:
+                raise KeyError(f"Layer '{layer}' not found in self.adata.layers. Available layers: {list(self.adata.layers.keys())}")
+            x = self.adata.layers[layer]
+        
         if by is None:
-            pb = self.adata.X.mean(axis=0).A1
+            pb = x.mean(axis=0).A1
             return pd.Series(pb, index=self.adata.var_names)
     
-        expr_df = pd.DataFrame(self.adata.X.A,
+        expr_df = pd.DataFrame(x.toarray(),
                                index=self.adata.obs_names,
                                columns=self.adata.var_names)
         
         group_key = self.adata.obs[by]
         return expr_df.groupby(group_key).mean().T
     
+    def gene_cor(self, gene, self_corr_value=False, layer: str = None, inplace=False):
+        """
+        Computes Spearman correlation of a specific gene with all genes.
+        Now also normalizes the data first (via matnorm),
+        calculates each gene's mean expression,
+        and returns a DataFrame with columns [r, expression_mean, gene].
+        """
+        adata = self.adata
+        x = self[gene]
+        
+        if x.sum() == 0:
+            print("Gene is not expressed!")
+            return
+        
+        if len(x) != self.shape[0]:
+            raise ValueError(f"{gene} isn't a valid gene in this AnnData object.")
+        
+        if layer is not None:
+            matrix = adata.layers[layer]
+        else:
+            matrix = adata.X
+        
+        if hasattr(matrix, "toarray"):
+            matrix = matrix.toarray()
+        
+        # Normalize the matrix
+        matrix = ViziumHD_utils.matnorm(matrix,"row")
+        x_norm = x / x.sum()
+
+        # Calculate mean expression of each gene
+        gene_means = matrix.mean(axis=0)
+        
+        # Compute Spearman correlation for each gene
+        corrs = np.zeros(adata.n_vars, dtype=np.float64)
+        pvals = np.zeros(adata.n_vars, dtype=np.float64)
+        
+        for i in tqdm(range(adata.n_vars), desc=f"Computing correlation with {gene}"):
+            y = matrix[:, i]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")  # suppress warnings from spearmanr
+                r, p = spearmanr(x_norm, y)
+            corrs[i] = r
+            pvals[i] = p
+            
+        qvals = ViziumHD_utils.p_adjust(pvals)
+        
+        df = pd.DataFrame({"r": corrs,"expression_mean": gene_means,
+                           "gene": adata.var_names, "pval": pvals, 
+                           "qval":qvals})
+        if self_corr_value:
+            df.loc[df["gene"] == gene, "r"] = np.nan
+        
+        if inplace:
+            adata.var[f"cor_{gene}"] = df["r"].values
+            adata.var[f"exp_{gene}"] = df["expression_mean"].values
+            adata.var[f"cor_qval_{gene}"] = df["qval"].values
+        
+        return df   
+
     def sync_metadata_to_spots(self, what: str):
         '''
         Transfers metadata assignment from the single-cell to the spots.
@@ -226,6 +298,54 @@ class SingleCell:
             path = f"{self.path_output}/{self.viz.name}_viziumHD_cells.h5ad"
         self.adata.write(path)
         return path
+    
+    def dge(self, column, group1, group2=None, method="wilcox", two_sided=False,
+            umi_thresh=0, inplace=False, layer=None):
+        '''
+        Runs differential gene expression analysis between two groups.
+        Values will be saved in self.var: expression_mean, log2fc, pval
+        parameters:
+            * column - which column in obs has the groups classification
+            * group1 - specific value in the "column"
+            * group2 - specific value in the "column". 
+                       if None,will run agains all other values, and will be called "rest"
+            * method - either "wilcox" or "t_test"
+            * two_sided - if one sided, will give the pval for each group, 
+                          and the minimal of both groups (which will also be FDR adjusted)
+            * umi_thresh - use only spots with more UMIs than this number
+            * expression - function F {mean, mean, max} F(mean(group1),mean(group2))
+            * inplace - modify the adata.var with log2fc, pval and expression columns?
+        '''
+        alternative = "two-sided" if two_sided else "greater"
+        df = ViziumHD_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
+                     method=method, alternative=alternative, inplace=inplace)
+        df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
+        df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
+        if not two_sided:
+            df[f"pval_{group1}"] = 1 - df[f"pval_{column}"]
+            df[f"pval_{group2}"] = df[f"pval_{column}"]
+            df["pval"] = df[[f"pval_{group1}",f"pval_{group2}"]].min(axis=1)
+        else:
+            df["pval"] = df[f"pval_{column}"]
+        del df[f"pval_{column}"]
+        df["qval"] = ViziumHD_utils.p_adjust(df["pval"])
+        df["expression_mean"] = df[[group1, group2]].mean(axis=1)
+        df["expression_min"] = df[[group1, group2]].min(axis=1)
+        df["expression_max"] = df[[group1, group2]].max(axis=1)
+        df["gene"] = df.index
+        if inplace:
+            var = df.copy()
+            var.rename(columns={
+                "qval":f"qval_{column}",
+                "pval":f"pval_{column}",
+                "log2fc":f"log2fc_{column}",
+                "expression_mean":f"expression_mean_{column}",
+                "expression_min":f"expression_min_{column}",
+                "expression_max":f"expression_max_{column}",
+                },inplace=True)
+            del var["gene"]
+            self.adata.var = self.adata.var.join(var, how="left")
+        return df
    
     @property
     def shape(self):
@@ -236,8 +356,13 @@ class SingleCell:
         s += f"\tSize: {self.adata.shape[0]} x {self.adata.shape[1]}\n"
         s += '\nobs: '
         s += ', '.join(list(self.adata.obs.columns))
-        s += '\n\nvar: '
-        s += ', '.join(list(self.adata.var.columns))
+        if not self.adata.var.columns.empty:
+            s += '\n\nvar: '
+            s += ', '.join(list(self.adata.var.columns))
+        layers = list(self.adata.layers.keys())
+        if layers:
+            s += '\n\nlayers: '
+            s += ', '.join(layers)
         return s
     
     def __repr__(self):
@@ -271,7 +396,11 @@ class SingleCell:
         return self.viz.name + "_sc"
     
     def copy(self):
-        return deepcopy(self)
+        new = deepcopy(self)
+        new.viz = self.viz
+        gc.collect()
+        return new
+        # return deepcopy(self)
     
     def export_to_matlab(self, path=None):
         '''exports gene names, data (sparse matrix) and metadata to a .mat file'''
