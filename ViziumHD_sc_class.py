@@ -304,71 +304,12 @@ class SingleCell:
         return ViziumHD_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
                                                signif_thresh=signif_thresh, **kwargs)
         
-    # def cor(self, what, self_corr_value=np.nan, layer: str = None, inplace=False):
-    #     '''
-    #     Computes Spearman correlation of a specific gene with all genes.
-    #     parameters:
-    #         * self_corr_value - replace self correlation with this value. 
-    #         if False will not replace.
-    #         * layer - layer in adata to compute the correlation from
-    #         * inplace - return a dataframe or add it to self.adata.var
-    #     '''
-    #     adata = self.adata
-    #     x = self[what]
-        
-    #     if x.sum() == 0:
-    #         print("Gene is not expressed!")
-    #         return
-        
-    #     if len(x) != self.shape[0]:
-    #         raise ValueError(f"{what} isn't a valid gene or obs")
-        
-    #     if layer is not None:
-    #         matrix = adata.layers[layer]
-    #     else:
-    #         matrix = adata.X
-        
-    #     if hasattr(matrix, "toarray"):
-    #         matrix = matrix.toarray()
-        
-    #     # Normalize the matrix
-    #     matrix = ViziumHD_utils.matnorm(matrix,"row")
-    #     x_norm = x / x.sum()
-
-    #     # Calculate mean expression of each gene
-    #     gene_means = matrix.mean(axis=0)
-        
-    #     # Compute Spearman correlation for each gene
-    #     corrs = np.zeros(adata.n_vars, dtype=np.float64)
-    #     pvals = np.zeros(adata.n_vars, dtype=np.float64)
-        
-    #     for i in tqdm(range(adata.n_vars), desc=f"Computing correlation with {what}"):
-    #         y = matrix[:, i]
-    #         with warnings.catch_warnings():
-    #             warnings.simplefilter("ignore")  # suppress warnings from spearmanr
-    #             r, p = spearmanr(x_norm, y)
-    #         corrs[i] = r
-    #         pvals[i] = p
-            
-    #     qvals = ViziumHD_utils.p_adjust(pvals)
-        
-    #     df = pd.DataFrame({"r": corrs,"expression_mean": gene_means,
-    #                        "gene": adata.var_names, "pval": pvals, 
-    #                        "qval":qvals})
-    #     if self_corr_value:
-    #         df.loc[df["gene"] == what, "r"] = self_corr_value
-        
-    #     if inplace:
-    #         adata.var[f"cor_{what}"] = df["r"].values
-    #         adata.var[f"exp_{what}"] = df["expression_mean"].values
-    #         adata.var[f"cor_qval_{what}"] = df["qval"].values
-        
-    #     return df   
     
-    def cor(self, what, normilize=True, self_corr_value=np.nan,
-            layer: str = None, inplace=False):
-        x = self[what]
-        return ViziumHD_utils.cor(self.adata, x, what, normilize, self_corr_value, layer, inplace)
+    def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
+        if isinstance(what, str):
+            x = self[what]
+            return ViziumHD_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
+        return ViziumHD_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
 
     def sync_metadata_to_spots(self, what: str):
         '''

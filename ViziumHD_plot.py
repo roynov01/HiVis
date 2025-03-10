@@ -26,7 +26,7 @@ import geopandas as gpd
 import tempfile
 import time
 
-
+import ViziumHD_utils
 
 POINTS_PER_INCH = 72
 MAX_SQUARES_TO_DRAW_EXACT = 500 # how many squares to draw in perfect positions in spatial plot
@@ -660,45 +660,55 @@ class PlotSC:
         return ax
     
     
-    def cor(self, gene, number_of_genes=10,ax=None,figsize=(8,8),
-            save=False,color="black", color_genes="red",size=15,text=True,cmap="copper"):
+    def cor(self, what, number_of_genes=10, normilize=True, layer=None,
+            cluster=False, ax=None,figsize=(8,8),save=False,color="black", 
+            color_genes="red",size=15,text=True,cmap="copper",legend=True,legend_title=None):
         
-        if f"cor_{gene}" in self.main.adata.var:
-            df = pd.DataFrame({"r":self.main.adata.var[f"cor_{gene}"],
-                               "expression_mean":self.main.adata.var[f"exp_{gene}"],
-                               "qval":self.main.adata.var[f"cor_qval_{gene}"],
-                               "gene":self.main.adata.var_names})
-        else:
-            df = self.main.cor(gene,inplace=True)
-            df.rename(columns={f"exp_{gene}":"expression_mean"},inplace=True)
-            df.rename(columns={f"cor_qval_{gene}":"qval"},inplace=True)
-            
         if ax is None:
-            fig, ax = plt.subplots(figsize=figsize)    
+            fig, ax = plt.subplots(figsize=figsize)   
         
-        df["expression_mean_log10"] = np.log10(df["expression_mean"])
-        df["qval_log10"] = -np.log(df["qval"] + df["qval"][df["qval"]>0].min())
-        df.index = df["gene"].values
-        df = df.dropna(subset=["expression_mean_log10", "r", "qval_log10"])
-        cor_series_clean = df["r"]
-        top_abs_indices = cor_series_clean.abs().nlargest(number_of_genes).index
-
-        # Retrieve the original correlations (with their sign) in the order of their absolute value
-        top_cor = cor_series_clean.loc[top_abs_indices]
-        # top_cor = cor_series_clean.nlargest(number_of_genes)
-        # if top_cor.iloc[0] > 0.9:
-        #     df.loc[top_cor.index[0],"r"] = np.nan
+        if isinstance(what,str):
+            if f"cor_{what}" in self.main.adata.var:
+                df = pd.DataFrame({"r":self.main.adata.var[f"cor_{what}"],
+                                   "expression_mean":self.main.adata.var[f"exp_{what}"],
+                                   "qval":self.main.adata.var[f"cor_qval_{what}"],
+                                   "gene":self.main.adata.var_names})
+            else:
+                df = self.main.cor(what,normilize=normilize,layer=layer,
+                                        inplace=True)
+                df.rename(columns={f"exp_{what}":"expression_mean"},inplace=True)
+                df.rename(columns={f"cor_qval_{what}":"qval"},inplace=True)
+                
+            df["expression_mean_log10"] = np.log10(df["expression_mean"])
+            df["qval_log10"] = -np.log(df["qval"] + df["qval"][df["qval"]>0].min())
+            df.index = df["gene"].values
+            df = df.dropna(subset=["expression_mean_log10", "r", "qval_log10"])
+            cor_series_clean = df["r"]
+            top_abs_indices = cor_series_clean.abs().nlargest(number_of_genes).index
+    
+            # Retrieve the original correlations (with their sign) in the order of their absolute value
+            top_cor = cor_series_clean.loc[top_abs_indices]
+            # top_cor = cor_series_clean.nlargest(number_of_genes)
+            # if top_cor.iloc[0] > 0.9:
+            #     df.loc[top_cor.index[0],"r"] = np.nan
+            
+            top_genes = list(top_cor.index)
+    
+            ax = plot_scatter_signif(df, "expression_mean_log10", "r",genes=top_genes,
+                                title=what,text=text,color="qval_log10",ax=ax,
+                                xlab="log10(mean expression)",size=size,cmap=cmap,
+                                ylab="Spearman correlation",legend=legend,color_genes="black")
+            print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
+        else:
+            df = self.main.cor(what,normilize=normilize,layer=layer)
+            if cluster:
+                df = ViziumHD_utils.cluster_df(df,correlation=True)
+            df[np.isclose(df, 1)] = np.nan
+            ax = plot_heatmap(df,sort=False,ax=ax,cmap=cmap,legend=legend,legend_title=legend_title)
         
-        top_genes = list(top_cor.index)
-
-        ax = plot_scatter_signif(df, "expression_mean_log10", "r",genes=top_genes,
-                            title=gene,text=text,color="qval_log10",ax=ax,
-                            xlab="log10(mean expression)",size=size,cmap=cmap,
-                            ylab="Spearman correlation",legend=True,color_genes="black")
-        print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
         self.current_ax = ax
         if save:
-            self.save(f"{gene}_COR")
+            self.save(f"{what}_COR")
         return ax 
         
     
@@ -1249,6 +1259,10 @@ def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True,
     
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
+    
+    if isinstance(cmap, list):
+        cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+        
     img = ax.imshow(heatmap_data, aspect='auto',cmap=cmap)
     ax.set_xticks(range(len(heatmap_data.columns)))
     ax.set_yticks(range(len(heatmap_data.index)))

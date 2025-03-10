@@ -17,12 +17,15 @@ import tifffile
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba
 import scipy.sparse as sp
-
 from scipy.stats import mannwhitneyu, ttest_ind, spearmanr
+from scipy.spatial.distance import pdist, squareform
+from scipy.cluster.hierarchy import linkage, dendrogram
 from statsmodels.stats.multitest import multipletests
 import statsmodels.api as sm
 
 import ViziumHD_plot
+
+MAX_RAM = 50 # maximum GB RAM to use for a variable
 
 def update_instance_methods(instance):
     '''reloads the methods in an instance'''
@@ -830,7 +833,7 @@ def noise_mean_curve(adata, plot=False, layer=None,signif_thresh=0.95, **kwargs)
     return df
 
 
-def cor(adata, vec, gene_name, normalize=True, self_corr_value=np.nan, layer: str = None, inplace=False):
+def cor_gene(adata, vec, gene_name, self_corr_value=None, normalize=True,  layer: str = None, inplace=False):
     '''
     Computes Spearman correlation of a given gene (represented by vec) with all genes.
     Parameters:
@@ -843,6 +846,7 @@ def cor(adata, vec, gene_name, normalize=True, self_corr_value=np.nan, layer: st
         * layer - Layer in adata to compute the correlation from (default uses adata.X).
         * inplace - If True, add the computed values to adata.var; otherwise return the DataFrame.
     '''
+
     # Check if the gene is expressed
     if vec.sum() == 0:
         print("Gene is not expressed!")
@@ -857,41 +861,38 @@ def cor(adata, vec, gene_name, normalize=True, self_corr_value=np.nan, layer: st
     else:
         matrix = adata.X
 
-    # Convert to dense array if needed
-    if hasattr(matrix, "toarray"):
-        matrix = matrix.toarray()
-
     # Normalize
     if normalize:
         matrix = matnorm(matrix, "row")
         vec = vec / vec.sum()
 
     # Calculate mean expression of each gene 
-    gene_means = matrix.mean(axis=0)
+    gene_means = np.asarray(matrix.mean(axis=0)).ravel()
 
     corrs = np.zeros(adata.n_vars, dtype=np.float64)
     pvals = np.zeros(adata.n_vars, dtype=np.float64)
+    if hasattr(matrix, "toarray"):
+        estimated_memory = estimate_dense_memory(matrix)
+        if estimated_memory < MAX_RAM:
+            matrix = matrix.toarray()
 
     # Compute Spearman correlation for each gene
     for i in tqdm(range(adata.n_vars), desc=f"Computing correlation with {gene_name}"):
         y = matrix[:, i]
+        if hasattr(y, "toarray"):
+            y = y.toarray().ravel() 
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")  # suppress warnings from spearmanr
+            warnings.simplefilter("ignore") 
             r, p = spearmanr(vec, y)
         corrs[i] = r
         pvals[i] = p
     qvals = p_adjust(pvals)
     
-    df = pd.DataFrame({
-        "r": corrs,
-        "expression_mean": gene_means,
-        "gene": adata.var_names,
-        "pval": pvals,
-        "qval": qvals
-    })
+    df = pd.DataFrame({"r": corrs,"expression_mean": gene_means,
+        "gene": adata.var_names,"pval": pvals,"qval": qvals})
 
     # Replace the self-correlation value if specified
-    if self_corr_value:
+    if self_corr_value is not None:
         df.loc[df["gene"] == gene_name, "r"] = self_corr_value
 
     # If inplace, add the results to adata.var
@@ -901,3 +902,147 @@ def cor(adata, vec, gene_name, normalize=True, self_corr_value=np.nan, layer: st
         adata.var[f"cor_qval_{gene_name}"] = df["qval"].values
 
     return df
+
+
+def cor_genes(adata,gene_list,self_corr_value=None, normalize=True, layer=None):
+    """
+    Compute a pairwise correlation matrix among all genes in gene_list.
+    Returns a DataFrame of correlation, and q-value matrices.
+    """
+
+    for g in gene_list:
+        if g not in adata.var_names:
+            raise ValueError(f"Gene {g} not found in adata.var_names.")
+    
+    gene_indices = [adata.var_names.get_loc(g) for g in gene_list]
+    if layer is not None:
+        matrix = adata.layers[layer]
+    else:
+        matrix = adata.X
+    sub_matrix = matrix[:, gene_indices] 
+    if sp.issparse(sub_matrix):
+        sub_matrix = sub_matrix.toarray() 
+    
+    if normalize:
+        sub_matrix = matnorm(sub_matrix, "row")
+    
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        corr_mat, pval_mat = spearmanr(sub_matrix, axis=0)
+    
+    # Adjust p-values
+    qvals_flat = p_adjust(pval_mat.flatten())
+    qval_mat = np.array(qvals_flat).reshape(pval_mat.shape)
+
+    if self_corr_value is not None:
+        np.fill_diagonal(corr_mat, self_corr_value)
+        np.fill_diagonal(qval_mat, np.nan)
+    
+    corr_df = pd.DataFrame(corr_mat, index=gene_list, columns=gene_list)
+    qval_df = pd.DataFrame(qval_mat, index=gene_list, columns=gene_list)
+    
+    return corr_df
+
+
+def cluster_df(df, correlation=False, cluster_rows=True,
+               cluster_cols=True, method="average", metric="euclidean"):
+    '''
+    Clusters a DataFrame by rows and/or columns using hierarchical clustering.
+    
+    Parameters:
+        * df - If correlation=True, df must be a square, symmetric correlation matrix.
+        * correlation - If True, interpret df as a correlation matrix and transform it via 
+            distance = (1 - correlation) before clustering.
+        * cluster_rows - Whether to cluster (reorder) the rows.
+        * cluster_cols - Whether to cluster (reorder) the columns.
+        * method - Linkage method for hierarchical clustering(e.g. "single", "complete", "average", "ward", ...).
+        * metric - Distance metric for `pdist` or `linkage`. Ignored if `correlation=True`, 
+            because we simply do `distance = 1 - df` and feed it to `linkage(...)` via `squareform()`.
+    
+    Returns a new DataFrame, reordered according to the clustering of rows and/or columns.
+    '''
+    def _get_dendrogram_order(data, method="average"):
+        # When correlation=True, we assume data is already the appropriate
+        # distance matrix (1 - correlation), and it is square.
+        dist_mat = 1 - data
+        dist_condensed = squareform(dist_mat.to_numpy(), checks=False)
+        Z = linkage(dist_condensed, method=method)
+        dend = dendrogram(Z, no_plot=True)
+        return dend["leaves"]
+    
+    df_out = df.copy()  # so as not to mutate the original
+
+    # For a correlation matrix, the row and column ordering should be the same.
+    if correlation:
+        if cluster_rows or cluster_cols:
+            # Compute ordering once using the original symmetric matrix.
+            order = _get_dendrogram_order(df_out, method=method)
+            # Apply the same order to both rows and columns.
+            df_out = df_out.iloc[order, order]
+    else:
+        # Normal clustering on data (not a correlation matrix)
+        if cluster_rows:
+            row_order = _get_dendrogram_order(df_out, method=method) if cluster_rows else None
+            df_out = df_out.iloc[row_order, :]
+        if cluster_cols:
+            col_order = _get_dendrogram_order(df_out.T, method=method) if cluster_cols else None
+            df_out = df_out.iloc[:, col_order]
+
+    return df_out
+
+
+def estimate_dense_memory(matrix):
+    '''return size (in GB) of a sparse matrix upon convertion'''
+    n_rows, n_cols = matrix.shape
+    element_size = matrix.dtype.itemsize  # e.g., 8 for float64
+    total_bytes = n_rows * n_cols * element_size
+    total_gb = total_bytes / (1024 ** 3)
+    return total_gb
+
+
+
+
+# def cluster_df(df,correlation=False,cluster_rows=True,
+#                cluster_cols=True,method="average",metric="euclidean"):
+    
+#     def _get_dendrogram_order(df,correlation=False, method="average", metric="euclidean", axis="rows"):
+#         '''
+#         Computes the order of either rows or columns (axis) based on hierarchical clustering.
+#         '''
+#         if axis not in ("rows", "columns"):
+#             raise ValueError('axis must be either "rows" or "columns".')
+#         data_for_clustering = df if axis == "rows" else df.T
+#         # If we're told it's a correlation matrix:
+#         # - Must be square & symmetric, so distance = 1 - df.
+#         if correlation:
+#             if cluster_rows or cluster_cols:
+#                 # data_for_clustering here is the correlation matrix for the chosen axis
+#                 dist_mat = 1 - data_for_clustering
+#                 # Convert to condensed form for linkage
+#                 dist_condensed = squareform(dist_mat.to_numpy(), checks=False)
+#                 Z = linkage(dist_condensed, method=method) 
+#                 # note: metric is typically irrelevant here because we gave `Z` precomputed distances
+#         else:
+#             # data_for_clustering is normal row-based data. We compute pairwise distances.
+#             # (In row clustering, each row is an observation. 
+#             #  In column clustering, each column is an observation after transpose.)
+#             dist_condensed = pdist(data_for_clustering, metric=metric)
+#             Z = linkage(dist_condensed, method=method)
+#         dend = dendrogram(Z, no_plot=True)
+#         idx_order = dend["leaves"]
+#         return idx_order
+#     df_out = df.copy()  # so as not to mutate the original
+
+#     if cluster_rows:
+#         row_order = _get_dendrogram_order(df_out,correlation=correlation, 
+#             method=method, metric=metric,axis="rows")
+#         df_out = df_out.iloc[row_order, :]
+
+#     if cluster_cols:
+#         col_order = _get_dendrogram_order( df_out, correlation=correlation, 
+#             method=method,metric=metric,axis="columns")
+#         df_out = df_out.iloc[:, col_order]
+
+#     return df_out
+
+

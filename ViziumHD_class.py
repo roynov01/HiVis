@@ -413,6 +413,12 @@ class ViziumHD:
     def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, **kwargs):
         return ViziumHD_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
                                                signif_thresh=signif_thresh, **kwargs)
+    
+    def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
+        if isinstance(what, str):
+            x = self[what]
+            return ViziumHD_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
+        return ViziumHD_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
         
                 
     def export_h5(self, path=None, force=False):
