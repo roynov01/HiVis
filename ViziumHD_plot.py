@@ -23,6 +23,9 @@ from subprocess import Popen, PIPE
 import shapely.wkt
 import shapely.affinity
 import geopandas as gpd
+import tempfile
+import time
+
 
 
 POINTS_PER_INCH = 72
@@ -445,7 +448,8 @@ class PlotSC:
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
         ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,
-                            contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution)
+                            contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution,
+                            axis_labels=axis_labels)
         
         if what: 
             if ax is None:
@@ -665,7 +669,7 @@ class PlotSC:
                                "qval":self.main.adata.var[f"cor_qval_{gene}"],
                                "gene":self.main.adata.var_names})
         else:
-            df = self.main.gene_cor(gene,inplace=True)
+            df = self.main.cor(gene,inplace=True)
             df.rename(columns={f"exp_{gene}":"expression_mean"},inplace=True)
             df.rename(columns={f"cor_qval_{gene}":"qval"},inplace=True)
             
@@ -682,8 +686,8 @@ class PlotSC:
         # Retrieve the original correlations (with their sign) in the order of their absolute value
         top_cor = cor_series_clean.loc[top_abs_indices]
         # top_cor = cor_series_clean.nlargest(number_of_genes)
-        if top_cor.iloc[0] > 0.9:
-            df.loc[top_cor.index[0],"r"] = np.nan
+        # if top_cor.iloc[0] > 0.9:
+        #     df.loc[top_cor.index[0],"r"] = np.nan
         
         top_genes = list(top_cor.index)
 
@@ -691,7 +695,7 @@ class PlotSC:
                             title=gene,text=text,color="qval_log10",ax=ax,
                             xlab="log10(mean expression)",size=size,cmap=cmap,
                             ylab="Spearman correlation",legend=True,color_genes="black")
-        print(top_cor)
+        print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
         self.current_ax = ax
         if save:
             self.save(f"{gene}_COR")
@@ -885,6 +889,7 @@ def plot_scatter_signif(df, x_col, y_col,
         if not out_path.endswith(".png"):
             out_path += ".png"
         plt.savefig(out_path, format="png", dpi=300, bbox_inches="tight")
+    del df["group"]
     
     return ax
 
@@ -917,45 +922,60 @@ def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=N
     return ax
 
 
-def plot_scatter_html(df,x,y,save_path,text="gene",color=None,size=None,
-                      xlab=None,ylab=None,title=None,open_fig=True,legend_title=None):
+def plot_scatter_html(df,x,y,save_path=None,text="gene",color="black",size=1,
+                      xlab=None,ylab=None,title=None,legend_title=None):
     '''
     Creates plotly express interactive scatterplot.
     parameters:
-        * save_path - path of html file, where to save the plot.
+        * df, x, y - data, x axis column name, y axis column name
         * color - color spots by a column in the df
         * size - change size of dots by a column in the df
         * open_fig - open the file with default machine software?
+        * save_path - path of html file, where to save the plot.
         * xlab, ylab, title, legend_title - cosmetic parameters
     '''
     def open_html(html_file,chrome_path=chrome_path):
         process = Popen(['cmd.exe', '/c', chrome_path, html_file], stdout=PIPE, stderr=PIPE)
+    
+    plot_kwargs = {"x": x,"y": y,"hover_data": [text],"labels": {}}
 
-    if color:
-        if size:
-            legend_title = [color, size] if not legend_title else legend_title
-            fig = px.scatter(df, x=x, y=y,hover_data=[text],color=color,size=size, labels={color: legend_title[0],size: legend_title[1]})
-        else:
-            legend_title = color if not legend_title else legend_title
-            fig = px.scatter(df, x=x, y=y,hover_data=[text],color=color, labels={color: legend_title})
+    # Handle color (categorical vs fixed color)
+    if color in df.columns:
+        plot_kwargs["color"] = color
+        plot_kwargs["labels"][color] = legend_title if legend_title else color
+        plot_kwargs["hover_data"].append(color)
+    elif isinstance(color, str):  # If it's a fixed color
+        plot_kwargs["color_discrete_sequence"] = [color]
     else:
-        fig = px.scatter(df, x=x, y=y,hover_data=[text],color=color,size=size)
-    fig.update_traces(marker_size=10, 
-        hoverinfo='text+x+y',
-        # text=df[text], 
-        mode='markers+text')
-    if legend_title is None:
-        legend_title = color
+        plot_kwargs["color_discrete_sequence"] = ["black"] 
+
+    if size in df.columns:
+        plot_kwargs["size"] = size
+        plot_kwargs["labels"][size] = legend_title if legend_title else size
+        plot_kwargs["hover_data"].append(size)
+    else:
+        plot_kwargs["size_max"] = 10  # Default size for points
+        
+    fig = px.scatter(df, **plot_kwargs)    
+    fig.update_traces(marker_size=10,hoverinfo='text+x+y',mode='markers+text')
+
     fig.update_layout(template="simple_white",
-        title=title,
-        xaxis_title=xlab,
-        yaxis_title=ylab,
+        title=title,xaxis_title=xlab,yaxis_title=ylab,
         title_font=dict(size=30, family="Arial", color="Black"),
         xaxis_title_font=dict(size=24, family="Arial", color="Black"),
         yaxis_title_font=dict(size=24, family="Arial", color="Black"))
-    fig.write_html(save_path) 
-    if open_fig:
-        open_html(save_path)   
+    
+
+    if save_path is None:
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+        fig.write_html(tmp_path)
+        open_html(tmp_path)
+        time.sleep(2)  # Allow some time for the browser to load the file
+        os.remove(tmp_path)  # Delete the temporary file
+    else:
+        fig.write_html(save_path) 
+ 
 
 def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, figsize=(8,8), 
               cmap=None, color="blue", ylab="Count",xlab=None,ax=None):

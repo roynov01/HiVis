@@ -7,6 +7,9 @@ Created on Sun Sep 15 13:28:30 2024
 # General libraries
 import os
 import dill
+import gc
+import warnings
+
 from tqdm import tqdm
 from copy import deepcopy
 # Data libraries
@@ -19,8 +22,7 @@ from shapely import wkt, affinity
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from PIL import Image
-import gc
-import warnings
+
 
 import ViziumHD_utils
 import ViziumHD_sc_class
@@ -407,6 +409,10 @@ class ViziumHD:
             group_mean = group_sum / mask.sum() 
             result[i, :] = group_mean.A1     
         return pd.DataFrame(result.T, index=self.adata.var_names, columns=unique_groups)
+    
+    def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, **kwargs):
+        return ViziumHD_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
+                                               signif_thresh=signif_thresh, **kwargs)
         
                 
     def export_h5(self, path=None, force=False):
@@ -451,17 +457,6 @@ class ViziumHD:
         
         return images
 
-    # def aggregate_cells(self, input_df, columns=None, custom_agg=None, sep="\t"):
-    #     if self.SC:
-    #         if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
-    #             return
-    #     self.SC = ViziumHD_sc_class.new_from_segmentation(self, input_df,columns,custom_agg,sep)
-
-    # def aggregate_annotations(self,group_col,columns=None,custom_agg=None):
-    #     if self.SC:
-    #         if input('Single cell allready exists, if you want to aggregate again pres "y"') not in ("y","Y"):
-    #             return
-    #     self.SC = ViziumHD_sc_class.new_from_annotations(self, group_col,columns,custom_agg)
     
     def get(self, what, cropped=False):
         '''
@@ -773,7 +768,6 @@ class ViziumHD:
             self.name = self.name.replace("_subset","")
             self.name = f"{self.name}_{new_name}"
         self.path_output = self.path_output + f"/{new_name}"
-        
         
     
     def update(self, SC=False):

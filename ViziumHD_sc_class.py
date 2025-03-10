@@ -5,19 +5,25 @@ Created on Tue Nov  5 20:57:45 2024
 @author: royno
 """
 
+
+from copy import deepcopy
+import warnings
+import re
+import gc
+import os
+
 import numpy as np
 import pandas as pd
 import anndata as ad
-import os
-import scipy.io
-from copy import deepcopy
-import geopandas as gpd
-import warnings
-import re
+
 from shapely.affinity import scale
-import gc
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, mode
+import scipy.io
+from scipy.spatial import cKDTree
+
 from tqdm import tqdm
+import geopandas as gpd
+
 
 import ViziumHD_utils
 import ViziumHD_plot
@@ -53,6 +59,7 @@ class SingleCell:
             os.makedirs(self.path_output)
         self.plot = ViziumHD_plot.PlotSC(self)
         self.adata_cropped = None
+        self.tree = None
         if geojson_cells_path:
             self.import_geometry(geojson_cells_path,object_type="cell")
 
@@ -217,64 +224,151 @@ class SingleCell:
         group_key = self.adata.obs[by]
         return expr_df.groupby(group_key).mean().T
     
-    def gene_cor(self, gene, self_corr_value=False, layer: str = None, inplace=False):
-        """
-        Computes Spearman correlation of a specific gene with all genes.
-        Now also normalizes the data first (via matnorm),
-        calculates each gene's mean expression,
-        and returns a DataFrame with columns [r, expression_mean, gene].
-        """
-        adata = self.adata
-        x = self[gene]
-        
-        if x.sum() == 0:
-            print("Gene is not expressed!")
-            return
-        
-        if len(x) != self.shape[0]:
-            raise ValueError(f"{gene} isn't a valid gene in this AnnData object.")
-        
-        if layer is not None:
-            matrix = adata.layers[layer]
-        else:
-            matrix = adata.X
-        
-        if hasattr(matrix, "toarray"):
-            matrix = matrix.toarray()
-        
-        # Normalize the matrix
-        matrix = ViziumHD_utils.matnorm(matrix,"row")
-        x_norm = x / x.sum()
+    
+    def smooth(self, what, radius, method="median", new_col_name=None, **kwargs):
+        '''
+        Applies median smoothing to the specified column in adata.obs using spatial neighbors.
+        parameters:
+            * what (str) - what to smooth. either a gene name or column name from self.adata.obs
+            * radius (float) - in microns
+            * method - ["mode","median", "mean", "gaussian", "log"]
+            * new_col_name (str) - Optional custom name for the output column.
+            **kwargs - Additional parameters for specific methods (e.g., sigma for gaussian, offset for log).
+        '''
+        coords = self.adata.obs[['um_x', 'um_y']].values
 
-        # Calculate mean expression of each gene
-        gene_means = matrix.mean(axis=0)
+        if self.tree is None:
+            # Build a KDTree for fast neighbor look-up.
+            print("Building coordinate tree")
+            self.tree = cKDTree(coords)
         
-        # Compute Spearman correlation for each gene
-        corrs = np.zeros(adata.n_vars, dtype=np.float64)
-        pvals = np.zeros(adata.n_vars, dtype=np.float64)
-        
-        for i in tqdm(range(adata.n_vars), desc=f"Computing correlation with {gene}"):
-            y = matrix[:, i]
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")  # suppress warnings from spearmanr
-                r, p = spearmanr(x_norm, y)
-            corrs[i] = r
-            pvals[i] = p
+        values = self[what]
+        if len(values) != self.adata.shape[0]:
+            raise ValueError(f"{what} not in adata.obs or a gene name")
             
-        qvals = ViziumHD_utils.p_adjust(pvals)
+        if isinstance(values[0], str):
+            if method != "mode":
+                raise ValueError("Smoothing on string columns is only supported using the 'mode' method.")
+    
+            
+        smoothed_values = []
         
-        df = pd.DataFrame({"r": corrs,"expression_mean": gene_means,
-                           "gene": adata.var_names, "pval": pvals, 
-                           "qval":qvals})
-        if self_corr_value:
-            df.loc[df["gene"] == gene, "r"] = np.nan
+        if method == "log":
+            offset = kwargs.get("offset", 1.0)
+            if np.min(values) < -offset:
+                raise ValueError(f"Negative values detected in '{what}'. Log smoothing requires all values >= {-offset}.")
+        elif method == "gaussian":
+            sigma = kwargs.get("sigma", radius / 2)
+    
+        # Iterate through each cell's coordinates, find neighbors, and compute the median.
+        for i, point in enumerate(tqdm(coords, desc=f"{method} filtering '{what}' in radius {radius}")):
+            # Find all neighbors within the given radius.
+            indices = self.tree.query_ball_point(point, radius)
+            if not indices:
+                # Assign the original value or np.nan if no neighbor is found.
+                new_val = values[i]
+            neighbor_values = values[indices]
+            
+            if method == "median":
+                new_val = np.median(neighbor_values)
+            elif method == "mean":
+                new_val = np.mean(neighbor_values)
+            elif method == "mode":
+                if isinstance(neighbor_values[0], str):
+                    unique_vals, counts = np.unique(neighbor_values, return_counts=True)
+                    new_val = unique_vals[np.argmax(counts)] 
+                else:
+                    new_val = mode(neighbor_values).mode
+            elif method == "gaussian":
+                # Calculate distances to neighbors.
+                distances = np.linalg.norm(coords[indices] - point, axis=1)
+                
+                # Compute Gaussian weights.
+                weights = np.exp(- (distances**2) / (2 * sigma**2))
+                new_val = np.sum(neighbor_values * weights) / np.sum(weights)
+            elif method == "log":
+                # Apply a log1p transform to handle zero values; add an offset if necessary.
+                offset = kwargs.get("offset", 1.0)
+                # It is assumed that neighbor_values + offset > 0.
+                new_val = np.expm1(np.median(np.log1p(neighbor_values + offset))) - offset
+            else:
+                raise ValueError(f"Unknown smoothing method: {method}")
+
+            smoothed_values.append(new_val)
+
+        if not new_col_name:
+            new_col_name = f'{what}_smooth_r{radius}'
+        self.adata.obs[new_col_name] = smoothed_values
         
-        if inplace:
-            adata.var[f"cor_{gene}"] = df["r"].values
-            adata.var[f"exp_{gene}"] = df["expression_mean"].values
-            adata.var[f"cor_qval_{gene}"] = df["qval"].values
+    def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, **kwargs):
+        return ViziumHD_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
+                                               signif_thresh=signif_thresh, **kwargs)
         
-        return df   
+    # def cor(self, what, self_corr_value=np.nan, layer: str = None, inplace=False):
+    #     '''
+    #     Computes Spearman correlation of a specific gene with all genes.
+    #     parameters:
+    #         * self_corr_value - replace self correlation with this value. 
+    #         if False will not replace.
+    #         * layer - layer in adata to compute the correlation from
+    #         * inplace - return a dataframe or add it to self.adata.var
+    #     '''
+    #     adata = self.adata
+    #     x = self[what]
+        
+    #     if x.sum() == 0:
+    #         print("Gene is not expressed!")
+    #         return
+        
+    #     if len(x) != self.shape[0]:
+    #         raise ValueError(f"{what} isn't a valid gene or obs")
+        
+    #     if layer is not None:
+    #         matrix = adata.layers[layer]
+    #     else:
+    #         matrix = adata.X
+        
+    #     if hasattr(matrix, "toarray"):
+    #         matrix = matrix.toarray()
+        
+    #     # Normalize the matrix
+    #     matrix = ViziumHD_utils.matnorm(matrix,"row")
+    #     x_norm = x / x.sum()
+
+    #     # Calculate mean expression of each gene
+    #     gene_means = matrix.mean(axis=0)
+        
+    #     # Compute Spearman correlation for each gene
+    #     corrs = np.zeros(adata.n_vars, dtype=np.float64)
+    #     pvals = np.zeros(adata.n_vars, dtype=np.float64)
+        
+    #     for i in tqdm(range(adata.n_vars), desc=f"Computing correlation with {what}"):
+    #         y = matrix[:, i]
+    #         with warnings.catch_warnings():
+    #             warnings.simplefilter("ignore")  # suppress warnings from spearmanr
+    #             r, p = spearmanr(x_norm, y)
+    #         corrs[i] = r
+    #         pvals[i] = p
+            
+    #     qvals = ViziumHD_utils.p_adjust(pvals)
+        
+    #     df = pd.DataFrame({"r": corrs,"expression_mean": gene_means,
+    #                        "gene": adata.var_names, "pval": pvals, 
+    #                        "qval":qvals})
+    #     if self_corr_value:
+    #         df.loc[df["gene"] == what, "r"] = self_corr_value
+        
+    #     if inplace:
+    #         adata.var[f"cor_{what}"] = df["r"].values
+    #         adata.var[f"exp_{what}"] = df["expression_mean"].values
+    #         adata.var[f"cor_qval_{what}"] = df["qval"].values
+        
+    #     return df   
+    
+    def cor(self, what, normilize=True, self_corr_value=np.nan,
+            layer: str = None, inplace=False):
+        x = self[what]
+        return ViziumHD_utils.cor(self.adata, x, what, normilize, self_corr_value, layer, inplace)
 
     def sync_metadata_to_spots(self, what: str):
         '''
@@ -369,6 +463,18 @@ class SingleCell:
         # s = f"SingleCell[{self.viz.name}]"
         s = self.__str__()
         return s
+    
+    
+    def __add__(self, other):
+        '''combines two SingleCell objects into one adata'''
+        if not isinstance(other, SingleCell):
+            raise ValueError("Addition supported only for SingleCell class")
+        self.adata.obs["source"] = self.name
+        other.adata.obs["source"] = other.name
+        adata = ad.concat([self.adata, other.adata], join='outer')
+        del self.adata.obs["source"]
+        del other.adata.obs["source"]
+        return adata
     
     def __delitem__(self, key):
         '''deletes metadata'''

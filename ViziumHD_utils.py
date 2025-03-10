@@ -10,7 +10,6 @@ import sys
 import importlib
 import os
 from tqdm import tqdm
-from statsmodels.stats.multitest import multipletests
 import math
 import warnings
 import scanpy as sc
@@ -18,7 +17,10 @@ import tifffile
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba
 import scipy.sparse as sp
-from scipy.stats import mannwhitneyu, ttest_ind
+
+from scipy.stats import mannwhitneyu, ttest_ind, spearmanr
+from statsmodels.stats.multitest import multipletests
+import statsmodels.api as sm
 
 import ViziumHD_plot
 
@@ -776,3 +778,126 @@ def pca(df, k_means=None, first_pc=1, title="PCA", number_of_genes=20):
         result['silhouette'] = silhouette_avg
     print(f'keys in output: {list(result.keys())}')
     return result
+
+
+def noise_mean_curve(adata, plot=False, layer=None,signif_thresh=0.95, **kwargs):
+    if layer is None:
+        X = adata.X
+    else:
+        if layer not in adata.layers.keys():
+            raise KeyError(f"Layer {layer} doesn't exist in the adata")
+        X = adata.layers[layer]
+    
+    if sp.issparse(X):
+        # Compute mean per gene over cells
+        mean_expression = np.array(X.mean(axis=0)).ravel()
+        # Compute mean of squares for each gene using the .power(2) method
+        mean_square = np.array(X.power(2).mean(axis=0)).ravel()
+        # Standard deviation computed using the formula: sqrt(E[x^2] - (E[x])^2)
+        sd_expression = np.sqrt(np.maximum(mean_square - mean_expression**2, 0))
+    else:
+        # For dense matrices, standard operations work
+        mean_expression = np.mean(X, axis=0)
+        sd_expression = np.std(X, axis=0)
+    pn = mean_expression[mean_expression > 0].min()
+    cv = sd_expression / (mean_expression + pn)
+    
+    valid_genes = mean_expression > 0
+    cv_pn = cv[cv > 0].min()
+    cv_log = np.log10(cv[valid_genes] + cv_pn)
+    exp_log = np.log10(mean_expression[valid_genes])
+    
+    # Fit an Ordinary Least Squares regression model
+    X = sm.add_constant(exp_log)
+    model = sm.OLS(cv_log, X).fit()
+    cv_log_pred = model.predict(X)
+    residuals = cv_log - cv_log_pred
+    
+    df = pd.DataFrame({
+        "gene": np.array(adata.var_names)[valid_genes],
+        "mean": mean_expression[valid_genes],
+        "mean_log": exp_log,
+        "cv": cv[valid_genes],
+        "cv_log": cv_log,
+        "residual": residuals
+    })
+    
+    if plot:
+        thresh = np.quantile(np.abs(residuals), signif_thresh)
+        signif_genes = df.loc[np.abs(df["residual"]) > thresh, "gene"]
+        ax = ViziumHD_plot.plot_scatter_signif(df, "mean_log", "cv_log", color="residual", genes=list(signif_genes), **kwargs)
+        return df, ax
+    return df
+
+
+def cor(adata, vec, gene_name, normalize=True, self_corr_value=np.nan, layer: str = None, inplace=False):
+    '''
+    Computes Spearman correlation of a given gene (represented by vec) with all genes.
+    Parameters:
+        * adata - AnnData object containing the data.
+        * vec - Expression vector for the gene of interest.
+        * gene_name - Identifier (name) of the gene.
+        * normalize - normilize data and vector (matnorm)?
+        * self_corr_value - Replace self-correlation with this value if provided.
+                         If False, no replacement is done.
+        * layer - Layer in adata to compute the correlation from (default uses adata.X).
+        * inplace - If True, add the computed values to adata.var; otherwise return the DataFrame.
+    '''
+    # Check if the gene is expressed
+    if vec.sum() == 0:
+        print("Gene is not expressed!")
+        return None
+
+    # Check if the vector length matches the number of observations
+    if len(vec) != adata.shape[0]:
+        raise ValueError(f"{gene_name} isn't a valid gene or obs")
+
+    if layer is not None:
+        matrix = adata.layers[layer]
+    else:
+        matrix = adata.X
+
+    # Convert to dense array if needed
+    if hasattr(matrix, "toarray"):
+        matrix = matrix.toarray()
+
+    # Normalize
+    if normalize:
+        matrix = matnorm(matrix, "row")
+        vec = vec / vec.sum()
+
+    # Calculate mean expression of each gene 
+    gene_means = matrix.mean(axis=0)
+
+    corrs = np.zeros(adata.n_vars, dtype=np.float64)
+    pvals = np.zeros(adata.n_vars, dtype=np.float64)
+
+    # Compute Spearman correlation for each gene
+    for i in tqdm(range(adata.n_vars), desc=f"Computing correlation with {gene_name}"):
+        y = matrix[:, i]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # suppress warnings from spearmanr
+            r, p = spearmanr(vec, y)
+        corrs[i] = r
+        pvals[i] = p
+    qvals = p_adjust(pvals)
+    
+    df = pd.DataFrame({
+        "r": corrs,
+        "expression_mean": gene_means,
+        "gene": adata.var_names,
+        "pval": pvals,
+        "qval": qvals
+    })
+
+    # Replace the self-correlation value if specified
+    if self_corr_value:
+        df.loc[df["gene"] == gene_name, "r"] = self_corr_value
+
+    # If inplace, add the results to adata.var
+    if inplace:
+        adata.var[f"cor_{gene_name}"] = df["r"].values
+        adata.var[f"exp_{gene_name}"] = df["expression_mean"].values
+        adata.var[f"cor_qval_{gene_name}"] = df["qval"].values
+
+    return df
