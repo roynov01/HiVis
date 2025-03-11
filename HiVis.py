@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """
+HD Integrated Visium Interactive Suite (HiVis)
+
 Created on Sun Sep 15 13:28:30 2024
 
 @author: royno
@@ -24,9 +26,9 @@ from matplotlib.patches import Patch
 from PIL import Image
 
 
-import ViziumHD_utils
-import ViziumHD_sc_class
-import ViziumHD_plot
+import HiVis_utils
+import Aggregation
+import HiVis_plot
 
 Image.MAX_IMAGE_PIXELS = 1063425001 # Enable large images loading
 
@@ -41,13 +43,13 @@ def load(filename, directory=''):
         filename = filename + ".pkl"
     if directory:
         filename = f"{directory}/{filename}"
-    ViziumHD_utils.validate_exists(filename)
+    HiVis_utils.validate_exists(filename)
     with open(filename, "rb") as f:
         instance = dill.load(f)
     return instance
 
 def new(path_image_fullres:str, path_input_data:str, path_output:str,
-             name:str, properties: dict = None, on_tissue_only=True,min_reads_in_spot=1,
+             name:str, crop_images=True, properties: dict = None, on_tissue_only=True,min_reads_in_spot=1,
              min_reads_gene=10, fluorescence=False, plot_qc=True):
     '''
     - Loads images (fullres, highres, lowres)
@@ -60,7 +62,8 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
         * path_input_data - folder with outs of the Visium. typically square_002um
                             (with h5 files and with folders filtered_feature_bc_matrix, spatial)
         * path_output - path where to save plots and files
-        * name - name of the instance
+        * name (str) - name of the instance
+        * crop_images (bool) - crop the regions outside of the spots cover area
         * properties - dict of properties, such as organism, organ, sample_id
         * on_tissue_only - remove spots that are not classified as "on tissue"?
         * min_reads_in_spot - filter out spots with less than X UMIs
@@ -75,53 +78,54 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
     path_image_lowres = path_input_data + "/spatial/tissue_lowres_image.png"
     json_path = path_input_data + "/spatial/scalefactors_json.json"
     metadata_path = path_input_data + "/spatial/tissue_positions.parquet"
-    ViziumHD_utils.validate_exists([path_image_fullres,path_image_highres,path_image_lowres,json_path,metadata_path])
+    HiVis_utils.validate_exists([path_image_fullres,path_image_highres,path_image_lowres,json_path,metadata_path])
     
     # Load images
-    image_fullres, image_highres, image_lowres = ViziumHD_utils.load_images(path_image_fullres, path_image_highres, path_image_lowres)
+    image_fullres, image_highres, image_lowres = HiVis_utils.load_images(path_image_fullres, path_image_highres, path_image_lowres)
     
     # Load scalefactor_json
     with open(json_path) as file:
         scalefactor_json = json.load(file)
     
    # Load data + metadata
-    adata = ViziumHD_utils._import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_only)
+    adata = HiVis_utils._import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_only)
     
-    # Crop images and initiates micron to pixel conversions for plotting
-    adata, image_fullres, image_highres, image_lowres = ViziumHD_utils._crop_images_permenent(
-        adata, image_fullres, image_highres, image_lowres, scalefactor_json)
-    
-    # Save cropped images
-    path_image_fullres_cropped = path_image_fullres.replace("." + path_image_fullres.split(".")[-1], "_cropped.tif")
-    path_image_highres_cropped = path_image_highres.replace("." + path_image_highres.split(".")[-1], "_cropped.tif")
-    path_image_lowres_cropped = path_image_lowres.replace("." + path_image_lowres.split(".")[-1], "_cropped.tif")
-    ViziumHD_utils._export_images(path_image_fullres_cropped, path_image_highres_cropped, 
-                                  path_image_lowres_cropped,image_fullres,
-                                  image_highres, image_lowres)
+    if crop_images:
+        # Crop images
+        adata, image_fullres, image_highres, image_lowres = HiVis_utils._crop_images_permenent(
+            adata, image_fullres, image_highres, image_lowres, scalefactor_json)
+        
+        # Save cropped images
+        path_image_fullres_cropped = path_image_fullres.replace("." + path_image_fullres.split(".")[-1], "_cropped.tif")
+        path_image_highres_cropped = path_image_highres.replace("." + path_image_highres.split(".")[-1], "_cropped.tif")
+        path_image_lowres_cropped = path_image_lowres.replace("." + path_image_lowres.split(".")[-1], "_cropped.tif")
+        HiVis_utils._export_images(path_image_fullres_cropped, path_image_highres_cropped, 
+                                      path_image_lowres_cropped,image_fullres,
+                                      image_highres, image_lowres)
     
     if fluorescence:
-        ViziumHD_utils._measure_fluorescence(adata, image_fullres, list(fluorescence.keys()), scalefactor_json["spot_diameter_fullres"])
+        HiVis_utils._measure_fluorescence(adata, image_fullres, list(fluorescence.keys()), scalefactor_json["spot_diameter_fullres"])
 
     # Add QC (nUMI, mito %) and unit transformation
     mito_name_prefix = "MT-" if properties.get("organism") == "human" else "mt-"
-    ViziumHD_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
+    HiVis_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
 
     # Filter low quality spots and lowly expressed genes
     adata = adata[adata.obs["nUMI"] >= min_reads_in_spot, adata.var["nUMI_gene"] >= min_reads_gene].copy()
 
-    return ViziumHD(adata, image_fullres, image_highres, image_lowres, scalefactor_json, 
-                    name, path_output, properties, SC=None, fluorescence=fluorescence, plot_qc=plot_qc)
+    return HiVis(adata, image_fullres, image_highres, image_lowres, scalefactor_json, 
+                    name, path_output, properties, agg=None, fluorescence=fluorescence, plot_qc=plot_qc)
 
 
-class ViziumHD:
+class HiVis:
     def __init__(self, adata, image_fullres, image_highres, image_lowres, scalefactor_json, 
-                 name, path_output, properties=None, SC=None, fluorescence=False, plot_qc=True):
-        self.SC = SC
+                 name, path_output, properties=None, agg=None, fluorescence=False, plot_qc=True):
+        self.agg = agg
         self.name, self.path_output = name, path_output 
         self.properties = properties if properties else {}
         self.organism = self.properties.get("organism")
         if isinstance(image_fullres, str): # paths of images, not the images themselves
-            image_fullres, image_highres, image_lowres = ViziumHD_utils.load_images(image_fullres, image_highres, image_lowres)
+            image_fullres, image_highres, image_lowres = HiVis_utils.load_images(image_fullres, image_highres, image_lowres)
         
         self.image_fullres, self.image_highres, self.image_lowres = image_fullres, image_highres, image_lowres
         self.fluorescence = fluorescence
@@ -139,7 +143,7 @@ class ViziumHD:
         adata.obs["um_x"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["microns_per_pixel"]
         adata.obs["um_y"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["microns_per_pixel"]
         
-        self.plot = ViziumHD_plot.PlotVizium(self)
+        self.plot = HiVis_plot.PlotVizium(self)
         if fluorescence:
             self.image_fullres_orig = self.image_fullres.copy()
             self.recolor(fluorescence)
@@ -172,7 +176,7 @@ class ViziumHD:
             if list(fluorescence.keys()) != channels:
                 raise ValueError(f"Flurescence should include all channels: {channels}")
             self.fluorescence = fluorescence
-        self.image_fullres = ViziumHD_utils.fluorescence_to_RGB(self.image_fullres_orig, 
+        self.image_fullres = HiVis_utils.fluorescence_to_RGB(self.image_fullres_orig, 
                                                                 self.fluorescence.values(), 
                                                                 normalization_method)
         self.plot._init_img()
@@ -198,7 +202,7 @@ class ViziumHD:
             * plot - plot the mask?
             * cmap - colormap for plotting
         '''
-        ViziumHD_utils.validate_exists(mask_path)
+        HiVis_utils.validate_exists(mask_path)
         
         def _import_mask(mask_path):
             '''imports the mask'''
@@ -252,7 +256,7 @@ class ViziumHD:
             * name -  name of the annotation (that will be called in the metadata)
             * measurements - include measurements columns? 
         '''
-        ViziumHD_utils.validate_exists(path)
+        HiVis_utils.validate_exists(path)
         annotations = gpd.read_file(path)
         if "classification" in annotations.columns:
             annotations["classification"] = annotations["classification"].apply(json.loads)
@@ -311,7 +315,7 @@ class ViziumHD:
             * inplace - modify the adata.var with log2fc, pval and expression columns?
         '''
         alternative = "two-sided" if two_sided else "greater"
-        df = ViziumHD_utils.dge(self.adata, column, group1, group2, umi_thresh,
+        df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,
                      method=method, alternative=alternative, inplace=inplace)
         df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
         df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
@@ -322,7 +326,7 @@ class ViziumHD:
         else:
             df["pval"] = df[f"pval_{column}"]
         del df[f"pval_{column}"]
-        df["qval"] = ViziumHD_utils.p_adjust(df["pval"])
+        df["qval"] = HiVis_utils.p_adjust(df["pval"])
         df["expression_mean"] = df[[group1, group2]].mean(axis=1)
         df["expression_min"] = df[[group1, group2]].min(axis=1)
         df["expression_max"] = df[[group1, group2]].max(axis=1)
@@ -411,14 +415,14 @@ class ViziumHD:
         return pd.DataFrame(result.T, index=self.adata.var_names, columns=unique_groups)
     
     def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, **kwargs):
-        return ViziumHD_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
+        return HiVis_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
                                                signif_thresh=signif_thresh, **kwargs)
     
     def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
         if isinstance(what, str):
             x = self[what]
-            return ViziumHD_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
-        return ViziumHD_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
+            return HiVis_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
+        return HiVis_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
         
                 
     def export_h5(self, path=None, force=False):
@@ -451,7 +455,7 @@ class ViziumHD:
         image_fullres = self.image_fullres_orig if self.fluorescence else self.image_fullres
         path_image_highres = f"{path}/{self.name}_highres.tif"
         path_image_lowres = f"{path}/{self.name}_lowres.tif"
-        images = ViziumHD_utils._export_images(path_image_fullres, path_image_highres, 
+        images = HiVis_utils._export_images(path_image_fullres, path_image_highres, 
                                       path_image_lowres, image_fullres, 
                                       self.image_highres, self.image_lowres, force=force)
         
@@ -509,7 +513,7 @@ class ViziumHD:
             # Create a new ViziumHD object based on adata subsetting
             return self.subset(what, remove_empty_pixels=False)
             
-    def subset(self, what=(slice(None), slice(None)), remove_empty_pixels=False, crop_sc=True):
+    def subset(self, what=(slice(None), slice(None)), remove_empty_pixels=False, crop_agg=True):
         '''
         Create a new ViziumHD objects based on adata subsetting.
         parameters:
@@ -520,29 +524,27 @@ class ViziumHD:
                 - (adata.obs['obs1'] == 'value', slice(None)): Select spots where 
                   the 'obs1' column in adata.obs is 'value', and all genes.
             * remove_empty_pixels - if True, the images will only contain pixels under visium spots
-            * crop_sc (bool) - crop the SC adata?
+            * crop_agg (bool) - crop agg objects?
         '''
         adata = self.adata[what].copy()
-        # adata_shifted, image_fullres_crop, image_highres_crop, image_lowres_crop = self.__crop_images(adata, remove_empty_pixels)
         image_fullres_crop, image_highres_crop, image_lowres_crop, xlim_pixels_fullres, ylim_pixels_fullres = self.__crop_images(adata, remove_empty_pixels)
         name = self.name + "_subset" if not self.name.endswith("_subset") else ""
-        single_cell = None
-        
-        # update the link in SC to the new ViziumHD instance
         adata_shifted = self.__shift_adata(adata, xlim_pixels_fullres, ylim_pixels_fullres)
-        new_obj = ViziumHD(adata_shifted, image_fullres_crop, image_highres_crop, 
-                           image_lowres_crop, self.json, name, self.path_output,SC=single_cell,
+        new_obj = HiVis(adata_shifted, image_fullres_crop, image_highres_crop, 
+                           image_lowres_crop, self.json, name, self.path_output,agg=None,
                            properties=self.properties.copy(),fluorescence=self.fluorescence.copy() if self.fluorescence else None)    
-        if self.SC is not None: 
-            if crop_sc:
-                adata_sc = self.SC.adata.copy()
-                cell_col = adata_sc.obs.index.name
-                adata_sc_shifted = adata_sc[adata_sc.obs.index.isin(adata_shifted.obs[cell_col]),adata_shifted.var_names]
-                adata_sc_shifted.var = adata_sc_shifted.var.loc[:,~adata_sc_shifted.var.columns.str.startswith(("cor_","exp_"))]
-                adata_sc_shifted = self.__shift_adata(adata_sc_shifted, xlim_pixels_fullres, ylim_pixels_fullres)
-            else:
-                adata_sc_shifted = self.SC.adata
-            new_obj.SC = ViziumHD_sc_class.SingleCell(new_obj, adata_sc_shifted.copy())        
+        # update the link in all aggregations to the new ViziumHD instance
+        if self.agg is not None: 
+            for agg in self.agg:
+                if crop_agg:
+                    adata_agg = self.agg[agg].adata.copy()
+                    idx_col = adata_agg.obs.index.name
+                    adata_agg_shifted = adata_agg[adata_agg.obs.index.isin(adata_shifted.obs[idx_col]),adata_shifted.var_names]
+                    adata_agg_shifted.var = adata_agg_shifted.var.loc[:,~adata_agg_shifted.var.columns.str.startswith(("cor_","exp_"))]
+                    adata_agg_shifted = self.__shift_adata(adata_agg_shifted, xlim_pixels_fullres, ylim_pixels_fullres)
+                else:
+                    adata_agg_shifted = self.agg[agg].adata
+                new_obj.agg[agg] = ViziumHD_Aggregation_class.Aggregation(new_obj, adata_agg_shifted.copy())        
         return new_obj
    
 
@@ -713,7 +715,7 @@ class ViziumHD:
         
         # Create a new object with the modified images
         name = self.name + "_edited" if not self.name.endswith("_edited") else self.name
-        new_obj = ViziumHD(self.adata.copy(),images[0],images[1],
+        new_obj = HiVis(self.adata.copy(),images[0],images[1],
                            images[2],self.json,name,self.path_output,
                            properties=self.properties.copy(),
                            fluorescence=self.fluorescence.copy() if self.fluorescence else None)        
@@ -730,8 +732,9 @@ class ViziumHD:
         s += ', '.join(list(self.adata.obs.columns))
         s += '\n\nvar: '
         s += ', '.join(list(self.adata.var.columns))
-        if self.SC is not None:
-            s += f"\n\nSingle cells shape: {self.SC.adata.shape[0]} x {self.SC.adata.shape[1]}"
+        if self.agg is not None:
+            for agg in self.agg:
+                s += f"\n\n[{agg.name}] shape: {agg.adata.shape[0]} x {agg.adata.shape[1]}\n\n"
         return s
     
     def __repr__(self):
@@ -776,13 +779,14 @@ class ViziumHD:
         self.path_output = self.path_output + f"/{new_name}"
         
     
-    def update(self, SC=False):
+    def update(self, agg=False):
         '''Updates the methods in the instance'''
-        ViziumHD_utils.update_instance_methods(self)
-        ViziumHD_utils.update_instance_methods(self.plot)
+        HiVis_utils.update_instance_methods(self)
+        HiVis_utils.update_instance_methods(self.plot)
         self.plot._init_img()
-        if SC and self.SC is not None:
-            self.SC.update()
+        if agg and self.agg is not None:
+            for agg in self.agg:
+                self.agg[agg].update()
         else:
             _ = gc.collect()
 

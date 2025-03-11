@@ -26,7 +26,7 @@ import geopandas as gpd
 import tempfile
 import time
 
-import ViziumHD_utils
+import HiVis_utils
 
 POINTS_PER_INCH = 72
 MAX_SQUARES_TO_DRAW_EXACT = 500 # how many squares to draw in perfect positions in spatial plot
@@ -303,15 +303,15 @@ class PlotVizium:
     
     def __repr__(self):
         s = f"Plots available for [{self.main.name}]:\n\tsave(), spatial(), hist()"
-        if self.main.SC:
-            s += "\n\nand for sc:\n\tsave(), spatial(), hist(), cells(), umap()"
+        if self.main.agg:
+            s += "\n\nand for agg:\n\t, spatial(), hist(), cells(), umap()"
         return s
     
     
-class PlotSC:
-    '''Handles all plotting for SingleCell object'''
-    def __init__(self, sc_instance):
-        self.main = sc_instance
+class PlotAgg:
+    '''Handles all plotting for Aggregation object'''
+    def __init__(self, agg_instance):
+        self.main = agg_instance
         self.current_ax = None
         self.xlim_max = (self.main.viz.adata.obs['um_x'].min(), self.main.viz.adata.obs['um_x'].max())
         self.ylim_max = (self.main.viz.adata.obs['um_y'].min(), self.main.viz.adata.obs['um_y'].max())
@@ -429,8 +429,8 @@ class PlotSC:
         '''
         Plot a spatial representation of self.adata.
         parameters:
-            * what - what to color the cells with (fill) - can be column from obs or a gene
-            * image - plot the image underneath the cells?
+            * what - what to color the objects with (fill) - can be column from obs or a gene
+            * image - plot the image underneath the objects?
             * img_resolution - which resolution to use for the image - can be "full","high","low"
             * brightness, contrast - for image modification
             * cmap - can be string (name of pellate), list of colors, 
@@ -471,13 +471,10 @@ class PlotSC:
                 x, y, values = x.iloc[argsort_values], y.iloc[argsort_values], values[argsort_values]
             
             # Plot scatter:
-            
             ax = plot_scatter(x, y, values, size=size,title=title,
                           alpha=alpha,cmap=cmap,ax=ax,
                           legend=legend,xlab=None,ylab=None, 
                           legend_title=legend_title,marker="o")
-
-
 
         # Save figure:
         self.current_ax = ax
@@ -521,8 +518,8 @@ class PlotSC:
         '''
         Plot a UMAP of self.adata.
         parameters:
-            * what - what to color the cells with (fill) - can be column from obs or a gene
-            * image - plot the image underneath the cells?
+            * what - what to color the objects with (fill) - can be column from obs or a gene
+            * image - plot the image underneath the objects?
             * img_resolution - which resolution to use for the image - can be "full","high","low"
             * brightness, contrast - for image modification
             * cmap - can be string (name of pellate), list of colors, 
@@ -537,7 +534,7 @@ class PlotSC:
         self._crop(xlim=xlim, ylim=ylim, resolution=img_resolution, geometry=True)
         
         if self.geometry.empty:
-            raise ValueError(f"No cells found in limits x={xlim}, y={ylim}")
+            raise ValueError(f"No objects found in limits x={xlim}, y={ylim}")
         
         title = what if title is None else title
         if legend_title is None:
@@ -702,7 +699,7 @@ class PlotSC:
         else:
             df = self.main.cor(what,normilize=normilize,layer=layer)
             if cluster:
-                df = ViziumHD_utils.cluster_df(df,correlation=True)
+                df = HiVis_utils.cluster_df(df,correlation=True)
             df[np.isclose(df, 1)] = np.nan
             ax = plot_heatmap(df,sort=False,ax=ax,cmap=cmap,legend=legend,legend_title=legend_title)
         
@@ -713,7 +710,7 @@ class PlotSC:
         
     
     def __repr__(self):
-        s = f"Plots available for [{self.main.name}].sc:\n\tsave(), spatial(), hist(), cells(), umap(), cor()"
+        s = f"Plots available for [{self.main.name}]:\n\t spatial(), hist(), cells(), umap(), cor()"
         return s
 
 
@@ -1352,7 +1349,7 @@ def plot_dotplot(df, x, y, size_col, val_col,
     if isinstance(cmap, list):
         cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap)
 
-    sc = ax.scatter(xvals, yvals,c=colors,
+    sca = ax.scatter(xvals, yvals,c=colors,
         s=scatter_sizes,cmap=cmap,edgecolors="none")
 
     ax.set_xticks(range(len(col_labels)))
@@ -1374,7 +1371,7 @@ def plot_dotplot(df, x, y, size_col, val_col,
         # Create a new Axes in top half for colorbar
         cbar_ax = fig.add_axes([box.x0 + box.width*0.85, box.y0 + box.height*0.5, 
             0.03, box.height*0.45])
-        cbar = fig.colorbar(sc, cax=cbar_ax)
+        cbar = fig.colorbar(sca, cax=cbar_ax)
         if legend_col_title:
             cbar.set_label(legend_col_title)
 

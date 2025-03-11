@@ -5,63 +5,61 @@ Created on Tue Nov  5 20:57:45 2024
 @author: royno
 """
 
-
 from copy import deepcopy
 import warnings
 import re
 import gc
 import os
-
 import numpy as np
 import pandas as pd
 import anndata as ad
-
 from shapely.affinity import scale
-from scipy.stats import spearmanr, mode
+from scipy.stats import mode
 import scipy.io
 from scipy.spatial import cKDTree
-
 from tqdm import tqdm
 import geopandas as gpd
 
+import HiVis_utils
+import HiVis_plot
 
-import ViziumHD_utils
-import ViziumHD_plot
 
-
-class SingleCell:
-    def __init__(self, vizium_instance, adata_sc, geojson_cells_path=None):
+class Aggregation:
+    def __init__(self, vizium_instance, adata_agg, name=None, geojson_agg_path=None):
         '''
-        Creates a new instance that is linked to a ViziumHD object and has a PlosSC object.
+        Creates a new instance that is linked to a ViziumHD object and has a PlosAgg object.
         parameters:
             * vizium_instance - ViziumHD object
-            * adata_sc - anndata of single cells
-            * geojson_path - path of geojson, exported cells
+            * adata_agg - anndata of aggregations
+            * name - name of object
+            * geojson_path - path of geojson, exported annotations
         '''
-        if not isinstance(adata_sc, ad._core.anndata.AnnData): 
+        if not isinstance(adata_agg, ad._core.anndata.AnnData): 
             raise ValueError("Adata must be Anndata object")
-        adata_sc = adata_sc[adata_sc.obs["pxl_col_in_fullres"].notna(),:].copy()
-        if adata_sc.shape[0] == 0:
+        adata_agg = adata_agg[adata_agg.obs["pxl_col_in_fullres"].notna(),:].copy()
+        if adata_agg.shape[0] == 0:
             raise ValueError("Filtered AnnData object is empty. No valid rows remain.")
         
         scalefactor_json = vizium_instance.json
-        adata_sc.obs["pxl_col_in_lowres"] = adata_sc.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
-        adata_sc.obs["pxl_row_in_lowres"] = adata_sc.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
-        adata_sc.obs["pxl_col_in_highres"] = adata_sc.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
-        adata_sc.obs["pxl_row_in_highres"] = adata_sc.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
-        adata_sc.obs["um_x"] = adata_sc.obs["pxl_col_in_fullres"] * scalefactor_json["microns_per_pixel"]
-        adata_sc.obs["um_y"] = adata_sc.obs["pxl_row_in_fullres"] * scalefactor_json["microns_per_pixel"]
+        adata_agg.obs["pxl_col_in_lowres"] = adata_agg.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
+        adata_agg.obs["pxl_row_in_lowres"] = adata_agg.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
+        adata_agg.obs["pxl_col_in_highres"] = adata_agg.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
+        adata_agg.obs["pxl_row_in_highres"] = adata_agg.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
+        adata_agg.obs["um_x"] = adata_agg.obs["pxl_col_in_fullres"] * scalefactor_json["microns_per_pixel"]
+        adata_agg.obs["um_y"] = adata_agg.obs["pxl_row_in_fullres"] * scalefactor_json["microns_per_pixel"]
         
-        self.adata = adata_sc
+        self.adata = adata_agg
         self.viz = vizium_instance
-        self.path_output = self.viz.path_output + "/single_cell"
+        self.name = name if name is not None else f"{self.viz.name}_agg"
+        self.path_output = self.viz.path_output + f"/{self.name}"
         if not os.path.exists(self.path_output):
             os.makedirs(self.path_output)
-        self.plot = ViziumHD_plot.PlotSC(self)
+        self.plot = HiViz_plot.PlotAgg(self)
         self.adata_cropped = None
         self.tree = None
-        if geojson_cells_path:
-            self.import_geometry(geojson_cells_path,object_type="cell")
+        
+        if geojson_agg_path:
+            self.import_geometry(geojson_agg_path,object_type="cell")
 
 
     def import_geometry(self, geojson_path, object_type="cell"):
@@ -147,10 +145,10 @@ class SingleCell:
         get a vector from data (a gene) or metadata (from obs or var). or subset the object.
         parameters:
             * what - if string, will get data or metadata. 
-                     else, will return a new SingleCell object that is spliced.
+                     else, will return a new Aggregation object that is spliced.
                      the splicing is passed to the self.adata.
             * cropped - get the data from the adata_cropped after crop() or plotting methods?
-            * geometry - include only cells which have geometry
+            * geometry - include only objects which have geometry
         '''
         adata = self.adata_cropped if cropped else self.adata
         if geometry and self.plot.geometry is not None:
@@ -187,7 +185,7 @@ class SingleCell:
                     return column_data.astype(str).values
                 return column_data.values
         else:
-            # Create a new SingleCell object based on adata subsetting
+            # Create a new Aggregation object based on adata subsetting
             return self.subset(what)
         
     def subset(self, what=(slice(None), slice(None))):
@@ -196,7 +194,7 @@ class SingleCell:
         adata.var = adata.var.loc[:,~adata.var.columns.str.startswith(("cor_","exp_"))]
         for layer in self.adata.layers.keys():
             adata.layers[layer] = self.adata.layers[layer][what].copy()
-        return SingleCell(self.viz, adata)
+        return Aggregation(self.viz, adata)
     
     def __getitem__(self, what):
         '''get a vector from data (a gene) or metadata (from obs or var). or subset the object.'''
@@ -260,7 +258,7 @@ class SingleCell:
         elif method == "gaussian":
             sigma = kwargs.get("sigma", radius / 2)
     
-        # Iterate through each cell's coordinates, find neighbors, and compute the median.
+        # Iterate through each object's coordinates, find neighbors, and compute the median.
         for i, point in enumerate(tqdm(coords, desc=f"{method} filtering '{what}' in radius {radius}")):
             # Find all neighbors within the given radius.
             indices = self.tree.query_ball_point(point, radius)
@@ -301,28 +299,28 @@ class SingleCell:
         self.adata.obs[new_col_name] = smoothed_values
         
     def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, **kwargs):
-        return ViziumHD_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
+        return HiViz_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
                                                signif_thresh=signif_thresh, **kwargs)
         
     
     def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
         if isinstance(what, str):
             x = self[what]
-            return ViziumHD_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
-        return ViziumHD_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
+            return HiViz_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
+        return HiViz_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
 
     def sync_metadata_to_spots(self, what: str):
         '''
-        Transfers metadata assignment from the single-cell to the spots.
+        Transfers metadata assignment from the Aggregation to the spots.
         what - obs column name to pass to ViziumHD object
         '''
         if what not in self.adata.obs:
-            raise KeyError(f"'{what}' does not exist in SC.adata.obs.")
-        cell_id_col = self.adata.obs.index.name
-        if cell_id_col not in self.viz.adata.obs.columns:
-            raise KeyError(f"'{cell_id_col}' does not exist in ViziumHD.adata.obs.")
+            raise KeyError(f"'{what}' does not exist in agg.adata.obs.")
+        agg_id_col = self.adata.obs.index.name
+        if agg_id_col not in self.viz.adata.obs.columns:
+            raise KeyError(f"'{agg_id_col}' does not exist in ViziumHD.adata.obs.")
         mapping = self.adata.obs[what]
-        self.viz.adata.obs[what] = self.viz.adata.obs[cell_id_col].map(mapping)
+        self.viz.adata.obs[what] = self.viz.adata.obs[agg_id_col].map(mapping)
         
     def export_h5(self, path=None):
         '''
@@ -330,7 +328,7 @@ class SingleCell:
         '''
         print(f"SAVING [{self.name}]")
         if not path:
-            path = f"{self.path_output}/{self.viz.name}_viziumHD_cells.h5ad"
+            path = f"{self.path_output}/{self.name}.h5ad"
         self.adata.write(path)
         return path
     
@@ -352,7 +350,7 @@ class SingleCell:
             * inplace - modify the adata.var with log2fc, pval and expression columns?
         '''
         alternative = "two-sided" if two_sided else "greater"
-        df = ViziumHD_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
+        df = HiViz_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
                      method=method, alternative=alternative, inplace=inplace)
         df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
         df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
@@ -363,7 +361,7 @@ class SingleCell:
         else:
             df["pval"] = df[f"pval_{column}"]
         del df[f"pval_{column}"]
-        df["qval"] = ViziumHD_utils.p_adjust(df["pval"])
+        df["qval"] = HiViz_utils.p_adjust(df["pval"])
         df["expression_mean"] = df[[group1, group2]].mean(axis=1)
         df["expression_min"] = df[[group1, group2]].min(axis=1)
         df["expression_max"] = df[[group1, group2]].max(axis=1)
@@ -387,7 +385,8 @@ class SingleCell:
         return self.adata.shape
     
     def __str__(self):
-        s = f"# single-cells # {self.viz.name} #\n"
+        s = f"# Aggregation # {self.name} #\n"
+        s = f"# Parent: {self.viz.name} #\n"
         s += f"\tSize: {self.adata.shape[0]} x {self.adata.shape[1]}\n"
         s += '\nobs: '
         s += ', '.join(list(self.adata.obs.columns))
@@ -401,17 +400,17 @@ class SingleCell:
         return s
     
     def __repr__(self):
-        # s = f"SingleCell[{self.viz.name}]"
+        # s = f"Aggregation[{self.name}]"
         s = self.__str__()
         return s
     
     
     def __add__(self, other):
-        '''combines two SingleCell objects into one adata'''
-        if not isinstance(other, SingleCell):
-            raise ValueError("Addition supported only for SingleCell class")
+        '''combines two Aggregation objects into one adata'''
+        if not isinstance(other, Aggregation):
+            raise ValueError("Addition supported only for Aggregation class")
         self.adata.obs["source"] = self.name
-        other.adata.obs["source"] = other.name
+        other.adata.obs["source"] = other.name if other.name != self.name else f"{self.name}_1"
         adata = ad.concat([self.adata, other.adata], join='outer')
         del self.adata.obs["source"]
         del other.adata.obs["source"]
@@ -431,16 +430,13 @@ class SingleCell:
     
     def update(self):
         '''updates the methods in the instance'''
-        ViziumHD_utils.update_instance_methods(self)
-        ViziumHD_utils.update_instance_methods(self.plot)
+        HiViz_utils.update_instance_methods(self)
+        HiViz_utils.update_instance_methods(self.plot)
         _ = gc.collect()
     
     def head(self, n=5):
         return self.adata.obs.head(n) 
     
-    @property
-    def name(self):
-        return self.viz.name + "_sc"
     
     def copy(self):
         new = deepcopy(self)

@@ -18,12 +18,12 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba
 import scipy.sparse as sp
 from scipy.stats import mannwhitneyu, ttest_ind, spearmanr
-from scipy.spatial.distance import pdist, squareform
+from scipy.spatial.distance import squareform
 from scipy.cluster.hierarchy import linkage, dendrogram
 from statsmodels.stats.multitest import multipletests
 import statsmodels.api as sm
 
-import ViziumHD_plot
+import HiVis_plot
 
 MAX_RAM = 50 # maximum GB RAM to use for a variable
 
@@ -368,7 +368,7 @@ def find_markers(exp_df, celltypes=None, ratio_thresh=2, exp_thresh=0,
     plot["other"] = np.log10(plot["other"])
 
     text = True if len(genes) <= 120 else False
-    ax = ViziumHD_plot.plot_scatter_signif(plot, "chosen_cell", "other",
+    ax = HiViz_plot.plot_scatter_signif(plot, "chosen_cell", "other",
                                            genes,text=text,color="lightgray",
                                            xlab=f"log10({chosen_fun}({celltypes}))",
                                            ylab=f"log10({other_fun}(other cellstypes))")
@@ -463,7 +463,7 @@ def _export_images(path_image_fullres, path_image_highres, path_image_lowres,
         nonlocal printed_message
         if not os.path.exists(path) or force:
             if not printed_message:
-                print(f"[Saving cropped images] path_image_fullres")
+                print(f"[Saving cropped images] {path_image_fullres}")
                 printed_message = True
             if img.max() <= 1:
                 img = (img * 255).astype(np.uint8)
@@ -828,7 +828,7 @@ def noise_mean_curve(adata, plot=False, layer=None,signif_thresh=0.95, **kwargs)
     if plot:
         thresh = np.quantile(np.abs(residuals), signif_thresh)
         signif_genes = df.loc[np.abs(df["residual"]) > thresh, "gene"]
-        ax = ViziumHD_plot.plot_scatter_signif(df, "mean_log", "cv_log", color="residual", genes=list(signif_genes), **kwargs)
+        ax = HiViz_plot.plot_scatter_signif(df, "mean_log", "cv_log", color="residual", genes=list(signif_genes), **kwargs)
         return df, ax
     return df
 
@@ -1000,49 +1000,5 @@ def estimate_dense_memory(matrix):
     return total_gb
 
 
-
-
-# def cluster_df(df,correlation=False,cluster_rows=True,
-#                cluster_cols=True,method="average",metric="euclidean"):
-    
-#     def _get_dendrogram_order(df,correlation=False, method="average", metric="euclidean", axis="rows"):
-#         '''
-#         Computes the order of either rows or columns (axis) based on hierarchical clustering.
-#         '''
-#         if axis not in ("rows", "columns"):
-#             raise ValueError('axis must be either "rows" or "columns".')
-#         data_for_clustering = df if axis == "rows" else df.T
-#         # If we're told it's a correlation matrix:
-#         # - Must be square & symmetric, so distance = 1 - df.
-#         if correlation:
-#             if cluster_rows or cluster_cols:
-#                 # data_for_clustering here is the correlation matrix for the chosen axis
-#                 dist_mat = 1 - data_for_clustering
-#                 # Convert to condensed form for linkage
-#                 dist_condensed = squareform(dist_mat.to_numpy(), checks=False)
-#                 Z = linkage(dist_condensed, method=method) 
-#                 # note: metric is typically irrelevant here because we gave `Z` precomputed distances
-#         else:
-#             # data_for_clustering is normal row-based data. We compute pairwise distances.
-#             # (In row clustering, each row is an observation. 
-#             #  In column clustering, each column is an observation after transpose.)
-#             dist_condensed = pdist(data_for_clustering, metric=metric)
-#             Z = linkage(dist_condensed, method=method)
-#         dend = dendrogram(Z, no_plot=True)
-#         idx_order = dend["leaves"]
-#         return idx_order
-#     df_out = df.copy()  # so as not to mutate the original
-
-#     if cluster_rows:
-#         row_order = _get_dendrogram_order(df_out,correlation=correlation, 
-#             method=method, metric=metric,axis="rows")
-#         df_out = df_out.iloc[row_order, :]
-
-#     if cluster_cols:
-#         col_order = _get_dendrogram_order( df_out, correlation=correlation, 
-#             method=method,metric=metric,axis="columns")
-#         df_out = df_out.iloc[:, col_order]
-
-#     return df_out
 
 

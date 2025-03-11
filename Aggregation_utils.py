@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
+"""
+Created on Tue Nov  5 20:55:04 2024
+
+@author: royno
+"""
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import scanpy as sc
 from scipy.sparse import lil_matrix
 from scipy.stats import multinomial
-import ViziumHD_utils
+
+import HiVis_utils
 
 def new_adata(vizium_instance,aggregate_by,aggregation_func,columns=None,
     custom_agg=None,additional_obs=None,**aggregation_kwargs):
@@ -45,17 +51,17 @@ def new_adata(vizium_instance,aggregate_by,aggregation_func,columns=None,
 
     meta_df = meta_df.reindex(expr_ids)
 
-    adata_sc = sc.AnnData(X=expr_data,obs=meta_df,var=pd.DataFrame(index=adata.var_names))
+    adata_agg = sc.AnnData(X=expr_data,obs=meta_df,var=pd.DataFrame(index=adata.var_names))
 
     if layers:
         for layer_name, layer_data in layers.items():
-            adata_sc.layers[layer_name] = layer_data
+            adata_agg.layers[layer_name] = layer_data
 
-    adata_sc.obs.rename(columns={"nUMI": "nUMI_spots_avg"}, inplace=True)
-    if "nUMI_spots_avg" in adata_sc.obs and "spot_count" in adata_sc.obs:
-        adata_sc.obs["nUMI"] = adata_sc.obs["nUMI_spots_avg"] * adata_sc.obs["spot_count"]
+    adata_agg.obs.rename(columns={"nUMI": "nUMI_spots_avg"}, inplace=True)
+    if "nUMI_spots_avg" in adata_agg.obs and "spot_count" in adata_agg.obs:
+        adata_agg.obs["nUMI"] = adata_agg.obs["nUMI_spots_avg"] * adata_agg.obs["spot_count"]
 
-    return adata_sc, other_results
+    return adata_agg, other_results
 
 
 def _aggregate_meta(adata, aggregate_by, columns, custom_agg=None):
@@ -335,14 +341,14 @@ def processcells_2nucs(df, nuc_cell_dict, n_perm=10, func=np.mean,method="diff")
     results = pd.Series(real_value, index=genes, name="statistic")
     results = pd.DataFrame(results)
     results["pval"] = pvals
-    results["qval"] = ViziumHD_utils.p_adjust(results["pval"])
+    results["qval"] = HiViz_utils.p_adjust(results["pval"])
     results["rand_mean"] = simulations.mean(axis=0)
     results["rand_sd"] = simulations.std(axis=0)
     results["Z_score"] = (results["statistic"] - results["rand_mean"])  / results["rand_sd"] + 1e-6
     
-    ViziumHD_utils.matnorm(df,"row").mean(axis=0).values
+    HiViz_utils.matnorm(df,"row").mean(axis=0).values
     # results["expression_mean"] = df.mean(axis=0).values
-    results["expression_mean"] = ViziumHD_utils.matnorm(df,"row").mean(axis=0)
+    results["expression_mean"] = HiViz_utils.matnorm(df,"row").mean(axis=0)
     
     return results
 

@@ -83,6 +83,7 @@ dependencies:
       - jaraco-functools==4.1.0
       - jedi==0.19.2
       - jellyfish==1.1.3
+      - jenkspy==0.4.1
       - jinja2==3.1.5
       - joblib==1.4.2
       - jsonschema==4.23.0
