@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from shapely import wkt, affinity
+import anndata as ad
 # Plotting libraries
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -27,7 +28,7 @@ from PIL import Image
 
 
 import HiVis_utils
-import Aggregation
+from Aggregation import Aggregation
 import HiVis_plot
 
 Image.MAX_IMAGE_PIXELS = 1063425001 # Enable large images loading
@@ -143,7 +144,7 @@ class HiVis:
         adata.obs["um_x"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["microns_per_pixel"]
         adata.obs["um_y"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["microns_per_pixel"]
         
-        self.plot = HiVis_plot.PlotVizium(self)
+        self.plot = HiVis_plot.PlotVisium(self)
         if fluorescence:
             self.image_fullres_orig = self.image_fullres.copy()
             self.recolor(fluorescence)
@@ -345,6 +346,25 @@ class HiVis:
             self.adata.var = self.adata.var.join(var, how="left")
         return df
     
+    
+    def add_agg(self, adata_agg, name):
+        '''
+        Creates and adds Aggregation to the HiVis instance. Can be accessed by self.agg[name].
+        parameters:
+            * adata_agg (adata) - anndata containing aggregations
+            * name (str) - name of the agg
+        '''
+        if not isinstance(adata_agg, ad.AnnData):
+            raise TypeError("adata_agg must be anndata")
+        if self.agg:
+            if name in self.agg:
+                raise KeyError(f"{name} allready in {self.name}")
+        else:
+            self.agg = {}
+        agg = Aggregation(self, adata_agg)
+        self.agg[name] = agg
+        
+    
     def add_meta(self, name:str, values, type_="obs"):
         '''
         adds a vector to metadata (obs or var)
@@ -434,7 +454,7 @@ class HiVis:
         '''
         if path is None:
             path = self.path_output
-        path = f"{path}/{self.name}_viziumHD.h5ad"
+        path = f"{path}/{self.name}_HiVis.h5ad"
         if not os.path.exists(path) or force:
             print("[Writing h5]")
             self.adata.write(path)
@@ -473,7 +493,7 @@ class HiVis:
         get a vector from data (a gene) or metadata (from obs or var). or subset the object.
         parameters:
             * what - if string, will get data or metadata. 
-                     else, will return a new ViziumHD object that is spliced.
+                     else, will return a new HiVis object that is spliced.
                      the splicing is passed to the self.adata
             * cropped - get the data from the adata_cropped after crop() or plotting methods?
         '''
@@ -510,12 +530,12 @@ class HiVis:
                     return column_data.astype(str).values
                 return column_data.values
         else:
-            # Create a new ViziumHD object based on adata subsetting
+            # Create a new HiVis object based on adata subsetting
             return self.subset(what, remove_empty_pixels=False)
             
     def subset(self, what=(slice(None), slice(None)), remove_empty_pixels=False, crop_agg=True):
         '''
-        Create a new ViziumHD objects based on adata subsetting.
+        Create a new HiVis objects based on adata subsetting.
         parameters:
             * what - tuple of two elements. slicing instruction for adata. examples:
                 - (slice(None), slice(None)): Select all spots and all genes.
@@ -533,8 +553,8 @@ class HiVis:
         new_obj = HiVis(adata_shifted, image_fullres_crop, image_highres_crop, 
                            image_lowres_crop, self.json, name, self.path_output,agg=None,
                            properties=self.properties.copy(),fluorescence=self.fluorescence.copy() if self.fluorescence else None)    
-        # update the link in all aggregations to the new ViziumHD instance
-        if self.agg is not None: 
+        # update the link in all aggregations to the new HiVis instance
+        if self.agg: 
             for agg in self.agg:
                 if crop_agg:
                     adata_agg = self.agg[agg].adata.copy()
@@ -544,7 +564,7 @@ class HiVis:
                     adata_agg_shifted = self.__shift_adata(adata_agg_shifted, xlim_pixels_fullres, ylim_pixels_fullres)
                 else:
                     adata_agg_shifted = self.agg[agg].adata
-                new_obj.agg[agg] = ViziumHD_Aggregation_class.Aggregation(new_obj, adata_agg_shifted.copy())        
+                new_obj.add_agg(adata_agg_shifted.copy(),agg)
         return new_obj
    
 
@@ -651,7 +671,7 @@ class HiVis:
         '''
         Removes pixels in images, based on adata.obs[column].isin(values).
         marging - how many pixels to extend the removed pixels.
-        returns new ViziumHD object.
+        returns new HiVis object.
         '''
         # Identify which pixels to remove based on the given condition
         obs_values = self.adata.obs[column]
@@ -732,13 +752,13 @@ class HiVis:
         s += ', '.join(list(self.adata.obs.columns))
         s += '\n\nvar: '
         s += ', '.join(list(self.adata.var.columns))
-        if self.agg is not None:
+        if not self.agg:
             for agg in self.agg:
-                s += f"\n\n[{agg.name}] shape: {agg.adata.shape[0]} x {agg.adata.shape[1]}\n\n"
+                s += f"\n\n[{self.agg[agg].name}] shape: {agg.adata.shape[0]} x {agg.adata.shape[1]}\n\n"
         return s
     
     def __repr__(self):
-        # s = f"ViziumHD[{self.name}]"
+        # s = f"HiVis[{self.name}]"
         s = self.__str__()
         return s
     
@@ -784,7 +804,7 @@ class HiVis:
         HiVis_utils.update_instance_methods(self)
         HiVis_utils.update_instance_methods(self.plot)
         self.plot._init_img()
-        if agg and self.agg is not None:
+        if agg and self.agg:
             for agg in self.agg:
                 self.agg[agg].update()
         else:

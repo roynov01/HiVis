@@ -20,9 +20,8 @@ from scipy.spatial import cKDTree
 from tqdm import tqdm
 import geopandas as gpd
 
-import HiVis_utils
 import HiVis_plot
-
+import HiVis_utils
 
 class Aggregation:
     def __init__(self, vizium_instance, adata_agg, name=None, geojson_agg_path=None):
@@ -54,7 +53,7 @@ class Aggregation:
         self.path_output = self.viz.path_output + f"/{self.name}"
         if not os.path.exists(self.path_output):
             os.makedirs(self.path_output)
-        self.plot = HiViz_plot.PlotAgg(self)
+        self.plot = HiVis_plot.PlotAgg(self)
         self.adata_cropped = None
         self.tree = None
         
@@ -299,15 +298,15 @@ class Aggregation:
         self.adata.obs[new_col_name] = smoothed_values
         
     def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, **kwargs):
-        return HiViz_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
+        return HiVis_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
                                                signif_thresh=signif_thresh, **kwargs)
         
     
     def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
         if isinstance(what, str):
             x = self[what]
-            return HiViz_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
-        return HiViz_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
+            return HiVis_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
+        return HiVis_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
 
     def sync_metadata_to_spots(self, what: str):
         '''
@@ -350,7 +349,7 @@ class Aggregation:
             * inplace - modify the adata.var with log2fc, pval and expression columns?
         '''
         alternative = "two-sided" if two_sided else "greater"
-        df = HiViz_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
+        df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
                      method=method, alternative=alternative, inplace=inplace)
         df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
         df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
@@ -361,7 +360,7 @@ class Aggregation:
         else:
             df["pval"] = df[f"pval_{column}"]
         del df[f"pval_{column}"]
-        df["qval"] = HiViz_utils.p_adjust(df["pval"])
+        df["qval"] = HiVis_utils.p_adjust(df["pval"])
         df["expression_mean"] = df[[group1, group2]].mean(axis=1)
         df["expression_min"] = df[[group1, group2]].min(axis=1)
         df["expression_max"] = df[[group1, group2]].max(axis=1)
@@ -385,8 +384,8 @@ class Aggregation:
         return self.adata.shape
     
     def __str__(self):
-        s = f"# Aggregation # {self.name} #\n"
-        s = f"# Parent: {self.viz.name} #\n"
+        s = f"# Aggregation # {self.name} #\n\n"
+        s += f"# Parent: {self.viz.name} #\n"
         s += f"\tSize: {self.adata.shape[0]} x {self.adata.shape[1]}\n"
         s += '\nobs: '
         s += ', '.join(list(self.adata.obs.columns))
@@ -430,8 +429,8 @@ class Aggregation:
     
     def update(self):
         '''updates the methods in the instance'''
-        HiViz_utils.update_instance_methods(self)
-        HiViz_utils.update_instance_methods(self.plot)
+        HiVis_utils.update_instance_methods(self)
+        HiVis_utils.update_instance_methods(self.plot)
         _ = gc.collect()
     
     def head(self, n=5):

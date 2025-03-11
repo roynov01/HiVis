@@ -368,7 +368,7 @@ def find_markers(exp_df, celltypes=None, ratio_thresh=2, exp_thresh=0,
     plot["other"] = np.log10(plot["other"])
 
     text = True if len(genes) <= 120 else False
-    ax = HiViz_plot.plot_scatter_signif(plot, "chosen_cell", "other",
+    ax = HiVis_plot.plot_scatter_signif(plot, "chosen_cell", "other",
                                            genes,text=text,color="lightgray",
                                            xlab=f"log10({chosen_fun}({celltypes}))",
                                            ylab=f"log10({other_fun}(other cellstypes))")
@@ -828,7 +828,7 @@ def noise_mean_curve(adata, plot=False, layer=None,signif_thresh=0.95, **kwargs)
     if plot:
         thresh = np.quantile(np.abs(residuals), signif_thresh)
         signif_genes = df.loc[np.abs(df["residual"]) > thresh, "gene"]
-        ax = HiViz_plot.plot_scatter_signif(df, "mean_log", "cv_log", color="residual", genes=list(signif_genes), **kwargs)
+        ax = HiVis_plot.plot_scatter_signif(df, "mean_log", "cv_log", color="residual", genes=list(signif_genes), **kwargs)
         return df, ax
     return df
 

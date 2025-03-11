@@ -37,13 +37,13 @@ chrome_path = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
 FULLRES_THRESH = 1000 # in microns, below which, a full-res image will be plotted
 HIGHRES_THRESH = 3000 # in microns, below which, a high-res image will be plotted
 
-class PlotVizium:
-    '''Handles all plotting for ViziumHD object'''
-    def __init__(self, vizium_instance):
-        self.main = vizium_instance
+class PlotVisium:
+    '''Handles all plotting for HiVis object'''
+    def __init__(self, viz_instance):
+        self.main = viz_instance
         self.current_ax = None
-        self.xlim_max = (vizium_instance.adata.obs['um_x'].min(), vizium_instance.adata.obs['um_x'].max())
-        self.ylim_max = (vizium_instance.adata.obs['um_y'].min(), vizium_instance.adata.obs['um_y'].max())
+        self.xlim_max = (viz_instance.adata.obs['um_x'].min(), viz_instance.adata.obs['um_x'].max())
+        self.ylim_max = (viz_instance.adata.obs['um_y'].min(), viz_instance.adata.obs['um_y'].max())
         
     def _crop(self, xlim=None, ylim=None, resolution=None):
         '''
@@ -905,7 +905,7 @@ def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=N
             size=10, colname_exp="expression_mean",colname_qval="qval", 
             colname_fc="log2fc", n_texts=130, ylab="log2(ratio)",repel=False):
     '''
-    Plots a MA plot of the output of ViziumHD.dge().
+    Plots a MA plot of the output of HiVis.dge().
     parameters:
         * exp_thresh - show only genes with expression higher than this value
         * qval_thresh, fc_thresh - values above/below which consider a pojnt as significant
