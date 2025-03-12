@@ -53,24 +53,22 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
              name:str, crop_images=True, properties: dict = None, on_tissue_only=True,min_reads_in_spot=1,
              min_reads_gene=10, fluorescence=False, plot_qc=True):
     '''
-    - Loads images (fullres, highres, lowres)
-    - Loads data and metadata
-    - croppes the images based on the data
-    - initializes the connection from the data and metadata to the images coordinates
-    - adds basic QC to the metadata (nUMI, mitochondrial %)
+    - Loads images, data and metada.
+    - Initializes the connection from the data and metadata to the images coordinates
+    - Adds basic QC to the metadata (nUMI, mitochondrial %)
     parameters:
-        * path_input_fullres_image - path for the fullres image
-        * path_input_data - folder with outs of the Visium. typically square_002um
+        * path_input_fullres_image (str) - path of the fullres image
+        * path_input_data (str) - folder with outs of the Visium. typically square_002um
                             (with h5 files and with folders filtered_feature_bc_matrix, spatial)
-        * path_output - path where to save plots and files
+        * path_output (str) - path where to save plots and files
         * name (str) - name of the instance
         * crop_images (bool) - crop the regions outside of the spots cover area
-        * properties - dict of properties, such as organism, organ, sample_id
-        * on_tissue_only - remove spots that are not classified as "on tissue"?
-        * min_reads_in_spot - filter out spots with less than X UMIs
-        * min_reads_gene - filter out gene that is present in less than X spots
-        * fluorescence - either False for H&E, or a dict of channel names and colors
-        * plot_qc - plot QC when object is being created
+        * properties (dict) - can be any metadata, such as organism, organ, sample_id
+        * on_tissue_only (bool) - remove spots that are not classified as "on tissue"?
+        * min_reads_in_spot (int) - filter out spots with less than X UMIs
+        * min_reads_gene (int) - filter out gene that is present in less than X spots
+        * fluorescence - either False for H&E, or a dict of channel names and colors. color can be None.
+        * plot_qc (bool) - plot QC when object is being created
     '''
     # Validate paths of metadata and images
     if not os.path.exists(path_output):
@@ -158,7 +156,7 @@ class HiVis:
         '''
         Recolors a flurescence image
         parameters:
-            * fluorescence is either list of colors or dict {channel: color...}
+            * fluorescence is either list of colors or dict {channel: color...}. color can be None.
             * normalization_method - {"percentile", "histogram","clahe","sqrt" or None for minmax}
         '''
         if not self.fluorescence:
@@ -198,10 +196,10 @@ class HiVis:
         '''
         assigns each spot a value based on mask (image).
         parameters:
-            * mask_path - path to mask image
-            * name - name of the mask (that will be called in the metadata)
-            * plot - plot the mask?
-            * cmap - colormap for plotting
+            * mask_path (str) - path to mask image
+            * name (str) - name of the mask (that will be called in the metadata)
+            * plot (bool) - plot the mask?
+            * cmap (str) - colormap for plotting
         '''
         HiVis_utils.validate_exists(mask_path)
         
@@ -253,9 +251,9 @@ class HiVis:
         '''
         Adds annotations made in Qupath (geojson)
         parameters:
-            * path - path to geojson file
-            * name -  name of the annotation (that will be called in the metadata)
-            * measurements - include measurements columns? 
+            * path (str) - path to geojson file
+            * name (str) - name of the annotation (that will be called in the obs)
+            * measurements (bool) - include measurements columns? 
         '''
         HiVis_utils.validate_exists(path)
         annotations = gpd.read_file(path)
@@ -302,18 +300,16 @@ class HiVis:
             umi_thresh=0, inplace=False):
         '''
         Runs differential gene expression analysis between two groups.
-        Values will be saved in self.var: expression_mean, log2fc, pval
         parameters:
-            * column - which column in obs has the groups classification
+            * column (str) - which column in obs has the groups classification
             * group1 - specific value in the "column"
             * group2 - specific value in the "column". 
                        if None,will run agains all other values, and will be called "rest"
             * method - either "wilcox" or "t_test"
-            * two_sided - if one sided, will give the pval for each group, 
+            * two_sided (bool) - if one sided, will give the pval for each group, 
                           and the minimal of both groups (which will also be FDR adjusted)
-            * umi_thresh - use only spots with more UMIs than this number
-            * expression - function F {mean, mean, max} F(mean(group1),mean(group2))
-            * inplace - modify the adata.var with log2fc, pval and expression columns?
+            * umi_thresh (int) - use only spots with more UMIs than this number
+            * inplace (bool) - modify the adata.var with log2fc, pval and expression columns?
         '''
         alternative = "two-sided" if two_sided else "greater"
         df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,
@@ -350,8 +346,9 @@ class HiVis:
     def add_agg(self, adata_agg, name):
         '''
         Creates and adds Aggregation to the HiVis instance. Can be accessed by self.agg[name].
+        For example single-cells, tissue structures.
         parameters:
-            * adata_agg (adata) - anndata containing aggregations
+            * adata_agg (ad.AnnData) - anndata containing aggregations
             * name (str) - name of the agg
         '''
         if not isinstance(adata_agg, ad.AnnData):
@@ -361,15 +358,16 @@ class HiVis:
                 raise KeyError(f"{name} allready in {self.name}")
         else:
             self.agg = {}
-        agg = Aggregation(self, adata_agg)
+        agg_name = f"{self.name}_{name}"
+        agg = Aggregation(self, adata_agg, name=agg_name)
         self.agg[name] = agg
         
     
     def add_meta(self, name:str, values, type_="obs"):
         '''
-        adds a vector to metadata (obs or var)
+        Adds a vector to metadata (obs or var)
         parameters:
-            * name - name of metadata
+            * name (str) - name of metadata
             * values (array like) - values to add
             * type_ - either "obs" or "var"
         '''
@@ -385,10 +383,10 @@ class HiVis:
     
     def update_meta(self, name:str, values:dict, type_="obs"):
         '''
-        updates values in metadata (obs or var)
+        Updates values in metadata (obs or var)
         parameters:
-            * name - name of metadata
-            * values - dict, {old_value:new_value}
+            * name (str) - name of metadata
+            * values (dict) -{old_value:new_value}
             * type_ - either "obs" or "var"
         '''
         if type_ == "obs":
@@ -416,7 +414,8 @@ class HiVis:
     
     def pseudobulk(self, by=None):
         '''
-        if by is None, will return the mean expression of every gene.
+        Returns the gene expression for each group in a single obs.
+        If "by" is None, will return the mean expression of every gene.
         Else, will return a dataframe, each column is a value in "by" (for example cluster), rows are genes.
         '''
         if by is None:
@@ -434,11 +433,29 @@ class HiVis:
             result[i, :] = group_mean.A1     
         return pd.DataFrame(result.T, index=self.adata.var_names, columns=unique_groups)
     
-    def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, **kwargs):
+    def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, inplace=False, **kwargs):
+        '''
+        Generates a noise-mean curve of the data.
+        Parameters:
+            * plot (bool) - plot the curve?
+            * layer - which layer in the anndata to use
+            * signif_thresh (float) - for plotting, add text for genes in this residual precentile
+            * inplace (bool) - add the mean_expression, cv and residuals to VAR?
+        '''
         return HiVis_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
-                                               signif_thresh=signif_thresh, **kwargs)
+                                               signif_thresh=signif_thresh,inplace=inplace, **kwargs)
     
     def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
+        '''
+        Calculates gene(s) correlation.
+        Parameters:
+            * what (str or list) - if str, computes Spearman correlation of a given gene with all genes.
+                                    if list, will compute correlation between all genes in the list
+            * self_corr_value - replace the correlation of the gene with itself by this value
+            * normilize (bool) - normilize expression before computing correlation?
+            * layer (str) - which layer in the anndata to use
+            * inplace (bool) - add the correlation to VAR?
+        '''
         if isinstance(what, str):
             x = self[what]
             return HiVis_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
@@ -447,10 +464,10 @@ class HiVis:
                 
     def export_h5(self, path=None, force=False):
         '''
-        Exports the adata.
+        Exports the adata as h5ad.
         Parameters:
-            * path - path to save the h5 file
-            * force - save file even if it allready exists
+            * path (str) - path to save the h5 file. If None, will save to path_output
+            * force (bool) - save file even if it allready exists
         '''
         if path is None:
             path = self.path_output
@@ -464,8 +481,8 @@ class HiVis:
         '''
         Exports full,high and low resolution images
         Parameters:
-            * path - path to save the image files
-            * force - save files even if they allready exists
+            * path (str) - path to save the image files. If None, will save to path_output
+            * force (bool)- save files even if they allready exists
         '''
         if path is None:
             path = self.path_output
@@ -544,7 +561,7 @@ class HiVis:
                 - (adata.obs['obs1'] == 'value', slice(None)): Select spots where 
                   the 'obs1' column in adata.obs is 'value', and all genes.
             * remove_empty_pixels - if True, the images will only contain pixels under visium spots
-            * crop_agg (bool) - crop agg objects?
+            * crop_agg (bool) - crop agg objects? If False, plotting of aggregations might break.
         '''
         adata = self.adata[what].copy()
         image_fullres_crop, image_highres_crop, image_lowres_crop, xlim_pixels_fullres, ylim_pixels_fullres = self.__crop_images(adata, remove_empty_pixels)
@@ -612,18 +629,6 @@ class HiVis:
 
         return image_fullres_crop, image_highres_crop, image_lowres_crop,xlim_pixels_fullres, ylim_pixels_fullres
     
-
-    # def __shift_adata2(self, adata, xlim_pixels_fullres, ylim_pixels_fullres):
-    #     '''
-    #     Shifts the coordinates in an adata, based on xlim, ylim
-    #     '''
-    #     adata_shifted = adata.copy()
-    #     drop_columns = ["pxl_col_in_lowres","pxl_row_in_lowres","pxl_col_in_highres",
-    #                     "pxl_row_in_highres","um_x","um_y"]
-    #     adata_shifted.obs.drop(columns=drop_columns, inplace=True)
-    #     adata_shifted.obs["pxl_col_in_fullres"] -= xlim_pixels_fullres[0]
-    #     adata_shifted.obs["pxl_row_in_fullres"] -= ylim_pixels_fullres[0]
-    #     return adata_shifted
     
     def __shift_adata(self, adata, xlim_pixels_fullres, ylim_pixels_fullres):
         """
@@ -670,7 +675,8 @@ class HiVis:
     def remove_pixels(self, column: str, values: list, marging=1):
         '''
         Removes pixels in images, based on adata.obs[column].isin(values).
-        marging - how many pixels to extend the removed pixels.
+        parameters:
+            * marging (int) - how many pixels to extend the removed pixels.
         returns new HiVis object.
         '''
         # Identify which pixels to remove based on the given condition
@@ -752,9 +758,10 @@ class HiVis:
         s += ', '.join(list(self.adata.obs.columns))
         s += '\n\nvar: '
         s += ', '.join(list(self.adata.var.columns))
-        if not self.agg:
+        if self.agg:
+            s += '\n\nAggregations:\n'
             for agg in self.agg:
-                s += f"\n\n[{self.agg[agg].name}] shape: {agg.adata.shape[0]} x {agg.adata.shape[1]}\n\n"
+                s += f"[{agg}]\tshape: {self.agg[agg].adata.shape[0]} x {self.agg[agg].adata.shape[1]}\n"
         return s
     
     def __repr__(self):
@@ -786,10 +793,10 @@ class HiVis:
     def columns(self):
         return self.adata.obs.columns.copy()
     
-    def rename(self, new_name, full=False):
+    def rename(self, new_name: str, full=False):
         '''
         Renames the object and changes the path_output.
-        If full is False, the name will be added to the previous name
+        If full is False, the name will be added to the current (previous) name
         '''
         if full:
             self.name = new_name
@@ -800,7 +807,7 @@ class HiVis:
         
     
     def update(self, agg=False):
-        '''Updates the methods in the instance'''
+        '''Updates the methods in the instance. Should be used after modifying the source code in the class'''
         HiVis_utils.update_instance_methods(self)
         HiVis_utils.update_instance_methods(self.plot)
         self.plot._init_img()
@@ -811,10 +818,14 @@ class HiVis:
             _ = gc.collect()
 
     def copy(self):
+        '''Creates a deep copy of the instance'''
         return deepcopy(self)
     
     def save(self, path=None):
-        '''saves the instance in pickle format'''
+        '''
+        Saves the instance in pickle format.
+        If no path specified, will save in the path_output as the name of the instance
+        '''
         print(f"SAVING [{self.name}]")
         if not path:
             path = f"{self.path_output}/{self.name}.pkl"

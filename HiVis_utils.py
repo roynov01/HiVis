@@ -783,7 +783,7 @@ def pca(df, k_means=None, first_pc=1, title="PCA", number_of_genes=20):
     return result
 
 
-def noise_mean_curve(adata, plot=False, layer=None,signif_thresh=0.95, **kwargs):
+def noise_mean_curve(adata, plot=False, layer=None,signif_thresh=0.95, inplace=False, **kwargs):
     if layer is None:
         X = adata.X
     else:
@@ -813,8 +813,7 @@ def noise_mean_curve(adata, plot=False, layer=None,signif_thresh=0.95, **kwargs)
     # Fit an Ordinary Least Squares regression model
     X = sm.add_constant(exp_log)
     model = sm.OLS(cv_log, X).fit()
-    cv_log_pred = model.predict(X)
-    residuals = cv_log - cv_log_pred
+    residuals = cv_log - model.predict(X)
     
     df = pd.DataFrame({
         "gene": np.array(adata.var_names)[valid_genes],
@@ -825,6 +824,10 @@ def noise_mean_curve(adata, plot=False, layer=None,signif_thresh=0.95, **kwargs)
         "residual": residuals
     })
     
+    if inplace:
+        adata.var.loc[df["gene"], "cv"] = df["cv"].values
+        adata.var.loc[df["gene"], "expression_mean"] = df["mean"].values
+        adata.var.loc[df["gene"], "residual"] = df["residual"].values
     if plot:
         thresh = np.quantile(np.abs(residuals), signif_thresh)
         signif_genes = df.loc[np.abs(df["residual"]) > thresh, "gene"]

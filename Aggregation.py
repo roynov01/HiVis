@@ -24,14 +24,14 @@ import HiVis_plot
 import HiVis_utils
 
 class Aggregation:
-    def __init__(self, vizium_instance, adata_agg, name=None, geojson_agg_path=None):
+    def __init__(self, hiviz_instance, adata_agg, name, geojson_agg_path=None):
         '''
-        Creates a new instance that is linked to a ViziumHD object and has a PlosAgg object.
+        Creates a new instance that is linked to a HiViz object.
         parameters:
-            * vizium_instance - ViziumHD object
-            * adata_agg - anndata of aggregations
-            * name - name of object
-            * geojson_path - path of geojson, exported annotations
+            * hiviz_instance (HiViz) - HiViz object
+            * adata_agg (ad.AnnData) - anndata of aggregations
+            * name (str) - name of object
+            * geojson_path (str) - path of geojson, exported annotations
         '''
         if not isinstance(adata_agg, ad._core.anndata.AnnData): 
             raise ValueError("Adata must be Anndata object")
@@ -39,7 +39,7 @@ class Aggregation:
         if adata_agg.shape[0] == 0:
             raise ValueError("Filtered AnnData object is empty. No valid rows remain.")
         
-        scalefactor_json = vizium_instance.json
+        scalefactor_json = hiviz_instance.json
         adata_agg.obs["pxl_col_in_lowres"] = adata_agg.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
         adata_agg.obs["pxl_row_in_lowres"] = adata_agg.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
         adata_agg.obs["pxl_col_in_highres"] = adata_agg.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
@@ -48,8 +48,8 @@ class Aggregation:
         adata_agg.obs["um_y"] = adata_agg.obs["pxl_row_in_fullres"] * scalefactor_json["microns_per_pixel"]
         
         self.adata = adata_agg
-        self.viz = vizium_instance
-        self.name = name if name is not None else f"{self.viz.name}_agg"
+        self.viz = hiviz_instance
+        self.name = name 
         self.path_output = self.viz.path_output + f"/{self.name}"
         if not os.path.exists(self.path_output):
             os.makedirs(self.path_output)
@@ -65,8 +65,8 @@ class Aggregation:
         '''
         Adds "geometry" column to self.adata.obs, based on Geojson exported from Qupath.
         parameters:
-            * geojson_path - path to geojson file
-            * object_type - which "objectType" to merge from the geojson
+            * geojson_path (str) - path to geojson file
+            * object_type (str) - which "objectType" to merge from the geojson
         '''
         if isinstance(geojson_path,str):
             gdf = gpd.read_file(geojson_path)
@@ -93,14 +93,14 @@ class Aggregation:
     
     def merge(self, adata, obs=None, var=None, umap=True, pca=True, hvg=True):
         '''
-        Merge info from an anndata to self.adata.
+        Merge info from an anndata to self.adata, in case genes have been filtered.
         parameters:
-            * adata - anndata where to get the values from
+            * adata (as.AnnData) - anndata where to get the values from
             * obs - single string or list of obs to merge
             * var - single string or list of var to merge
-            * umap - add umap to OBSM, and UMAP coordinates to obs?
-            * pca - add PCA to OBSM?
-            * hvg - add highly variable genes to vars?
+            * umap (bool) - add umap to OBSM, and UMAP coordinates to obs?
+            * pca (bool) - add PCA to OBSM?
+            * hvg (bool) - add highly variable genes to vars?
         '''
         if not obs:
             obs = []
@@ -146,8 +146,8 @@ class Aggregation:
             * what - if string, will get data or metadata. 
                      else, will return a new Aggregation object that is spliced.
                      the splicing is passed to the self.adata.
-            * cropped - get the data from the adata_cropped after crop() or plotting methods?
-            * geometry - include only objects which have geometry
+            * cropped (bool) - get the data from the adata_cropped after crop() or plotting methods?
+            * geometry (bool) - include only objects which have geometry
         '''
         adata = self.adata_cropped if cropped else self.adata
         if geometry and self.plot.geometry is not None:
@@ -188,6 +188,9 @@ class Aggregation:
             return self.subset(what)
         
     def subset(self, what=(slice(None), slice(None))):
+        '''
+        Create a new Aggregation object based on adata subsetting.
+        '''
         what = tuple(idx.to_numpy() if hasattr(idx, "to_numpy") else idx for idx in what)
         adata = self.adata[what].copy()
         adata.var = adata.var.loc[:,~adata.var.columns.str.startswith(("cor_","exp_"))]
@@ -203,6 +206,12 @@ class Aggregation:
         return item
      
     def pseudobulk(self, by=None,layer=None):
+        '''
+        Returns the gene expression for each group in a single obs.
+        If "by" is None, will return the mean expression of every gene.
+        Else, will return a dataframe, each column is a value in "by" (for example cluster), rows are genes.
+        layer - which layer in adata to use.
+        '''
         if layer is None:
             x = self.adata.X
         else:
@@ -247,7 +256,6 @@ class Aggregation:
             if method != "mode":
                 raise ValueError("Smoothing on string columns is only supported using the 'mode' method.")
     
-            
         smoothed_values = []
         
         if method == "log":
@@ -297,12 +305,30 @@ class Aggregation:
             new_col_name = f'{what}_smooth_r{radius}'
         self.adata.obs[new_col_name] = smoothed_values
         
-    def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, **kwargs):
+    def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, inplace=False, **kwargs):
+        '''
+        Generates a noise-mean curve of the data.
+        Parameters:
+            * plot (bool) - plot the curve?
+            * layer (str) - which layer in the anndata to use
+            * signif_thresh (float) - for plotting, add text for genes in this residual precentile
+            * inplace (bool) - add the mean_expression, cv and residuals to VAR?
+        '''
         return HiVis_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
-                                               signif_thresh=signif_thresh, **kwargs)
+                                               signif_thresh=signif_thresh,inplace=inplace, **kwargs)
         
     
     def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
+        '''
+        Calculates gene(s) correlation.
+        Parameters:
+            * what (str or list) - if str, computes Spearman correlation of a given gene with all genes.
+                                    if list, will compute correlation between all genes in the list
+            * self_corr_value - replace the correlation of the gene with itself by this value
+            * normilize (bool) - normilize expression before computing correlation?
+            * layer (str) - which layer in the anndata to use
+            * inplace (bool) - add the correlation to VAR?
+        '''
         if isinstance(what, str):
             x = self[what]
             return HiVis_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
@@ -311,19 +337,20 @@ class Aggregation:
     def sync_metadata_to_spots(self, what: str):
         '''
         Transfers metadata assignment from the Aggregation to the spots.
-        what - obs column name to pass to ViziumHD object
+        what - obs column name to pass to HiViz object
         '''
         if what not in self.adata.obs:
             raise KeyError(f"'{what}' does not exist in agg.adata.obs.")
         agg_id_col = self.adata.obs.index.name
         if agg_id_col not in self.viz.adata.obs.columns:
-            raise KeyError(f"'{agg_id_col}' does not exist in ViziumHD.adata.obs.")
+            raise KeyError(f"'{agg_id_col}' does not exist in HiViz.adata.obs.")
         mapping = self.adata.obs[what]
         self.viz.adata.obs[what] = self.viz.adata.obs[agg_id_col].map(mapping)
         
     def export_h5(self, path=None):
         '''
-        Exports the adata. path - path to save the h5 file
+        Exports the adata. 
+        * path (str) - path to save the h5 file. If None, will save to path_output
         '''
         print(f"SAVING [{self.name}]")
         if not path:
@@ -347,6 +374,7 @@ class Aggregation:
             * umi_thresh - use only spots with more UMIs than this number
             * expression - function F {mean, mean, max} F(mean(group1),mean(group2))
             * inplace - modify the adata.var with log2fc, pval and expression columns?
+            * layer (str) - which layer in the anndata to use
         '''
         alternative = "two-sided" if two_sided else "greater"
         df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
@@ -405,14 +433,14 @@ class Aggregation:
     
     
     def __add__(self, other):
-        '''combines two Aggregation objects into one adata'''
-        if not isinstance(other, Aggregation):
+        '''Combines two Aggregation objects into a single adata'''
+        if not isinstance(other, (Aggregation,Aggregation.Aggregation)):
             raise ValueError("Addition supported only for Aggregation class")
-        self.adata.obs["source"] = self.name
-        other.adata.obs["source"] = other.name if other.name != self.name else f"{self.name}_1"
+        self.adata.obs["source_"] = self.name
+        other.adata.obs["source_"] = other.name if other.name != self.name else f"{self.name}_1"
         adata = ad.concat([self.adata, other.adata], join='outer')
-        del self.adata.obs["source"]
-        del other.adata.obs["source"]
+        del self.adata.obs["source_"]
+        del other.adata.obs["source_"]
         return adata
     
     def __delitem__(self, key):
@@ -428,7 +456,7 @@ class Aggregation:
             raise TypeError(f"Key must be a string, not {type(key).__name__}")
     
     def update(self):
-        '''updates the methods in the instance'''
+        '''Updates the methods in the instance. Should be used after modifying the source code in the class'''
         HiVis_utils.update_instance_methods(self)
         HiVis_utils.update_instance_methods(self.plot)
         _ = gc.collect()
@@ -438,11 +466,11 @@ class Aggregation:
     
     
     def copy(self):
+        '''Creates a deep copy of the instance'''
         new = deepcopy(self)
         new.viz = self.viz
         gc.collect()
         return new
-        # return deepcopy(self)
     
     def export_to_matlab(self, path=None):
         '''exports gene names, data (sparse matrix) and metadata to a .mat file'''

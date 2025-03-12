@@ -31,7 +31,6 @@ import HiVis_utils
 POINTS_PER_INCH = 72
 MAX_SQUARES_TO_DRAW_EXACT = 500 # how many squares to draw in perfect positions in spatial plot
 MAX_BARS = 30 # in barplot
-PAD_CONSTANT = 0.3 # padding of squares in scatterplot
 DEFAULT_COLOR ='None' # for plotting categorical
 chrome_path = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
 FULLRES_THRESH = 1000 # in microns, below which, a full-res image will be plotted
@@ -49,7 +48,7 @@ class PlotVisium:
         '''
         Crops the images and adata based on xlim and ylim in microns. 
         saves it in self.adata_cropped and self.image_cropped
-        xlim, ylim: tuple of two values, in microns
+        xlim, ylim: tuple of two values each, in microns
         resolution - if None, will determine automatically, other wise, "full","high" or "low"
         '''
         microns_per_pixel = self.main.json['microns_per_pixel'] 
@@ -134,11 +133,11 @@ class PlotVisium:
         '''
         saves a figure or ax. 
         parameters:
-            * figname - name of plot
+            * figname (str) - name of plot
             * fig (optional) - plt.Figure object to save, can be a dataframe for writing csv.
             * ax - ax to save. if not passed, will use self.current_ax
-            * open_file - open the file?
-            * format - format of file
+            * open_file (bool) - open the file?
+            * format (str) - format of file
         '''
         path = f"{self.main.path_output}/{self.main.name}_{figname}.{format_}"
         if fig is None:
@@ -159,26 +158,26 @@ class PlotVisium:
         return dot_size
     
     
-    def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
-                  legend=True, alpha=1, figsize=(8, 8), save=False, exact=None,brightness=0,contrast=1,
+    def spatial(self, what=None, exact=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
+                  legend=True, alpha=1, figsize=(8, 8), save=False,brightness=0,contrast=1,
                   xlim=None, ylim=None, legend_title=None, axis_labels=True, pad=False):
         '''
         plots the image, and/or data/metadata (spatial plot)
         parameters:
-            * what - what to plot. can be metadata (obs/var colnames or a gene)
-            * image - plot image?
+            * what (str) - what to plot. can be metadata (obs/var colnames or a gene)
+            * exact (bool) - plot the squares at the exact size? more time costly
+            * image (bool) - plot image?
             * img_resolution - "low","high","full". If None, will determine automatically
             * ax - matplotlib ax, if not passed, new figure will be created with size=figsize
-            * cmap - colorbar to use
+            * cmap - colormap to use. can be string, or a list of colors.
             * title, legend_title, axis_labels - strings
-            * legend - show legend?
-            * xlim, ylim - two values each, in microns
-            * pad - scale the size of dots to be smaller
-            * alpha - transparency of scatterplot. value between 0 and 1
-            * save - save the image?
-            * exact - plot the squares at the exact size? more time costly
-            * brightness - increases brigtness, for example 0.2. 
-            * contrast - > 1 increases contrast, < 1 decreases.
+            * legend (bool)- show legend?
+            * xlim, ylim - two values each, in microns, example [50,100]
+            * pad (float) - scale the size of dots
+            * alpha (float) - transparency of scatterplot. value between 0 and 1
+            * save (bool) - save the image?
+            * brightness (float) - increases brigtness, for example 0.2. 
+            * contrast (float) - > 1 increases contrast, < 1 decreases.
         '''
         title = what if title is None else title
         if legend_title is None:
@@ -194,7 +193,7 @@ class PlotVisium:
         else: 
             size = self.__get_dot_size(adjusted_microns_per_pixel)
             if pad:
-                size *= PAD_CONSTANT
+                size *= pad
             
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
@@ -275,15 +274,15 @@ class PlotVisium:
         '''
         plots histogram of data or metadata. if categorical, will plot barplot
         parameters:
-            * what - what to plot. can be metadata (obs/var colnames or a gene)
-            * bins - number of bins of the histogram
+            * what (str) - what to plot. can be metadata (obs/var colnames or a gene)
+            * bins (int) - number of bins of the histogram
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
-            * cmap - colorbar to use. overrides the color argument for barplot
-            * color - color of the histogram
+            * cmap - colorbar to use. Can be string, list of colors, or dictionary of {val:color}. overrides the color argument for barplot
+            * color (str)- color of the histogram
             * title, xlab, ylab - strings
-            * xlim - two values, where to crop the x axis
-            * save - save the image?
-            * cropped - if False and plot.spatial was run with xlim, ylim hist will be on cropped area
+            * xlim - two values, where to crop the x axis, example [50,100]
+            * save (bool)- save the image?
+            * cropped (bool) - if False and plot.spatial was run with xlim, ylim hist will be on cropped area
         '''
         title = what if title is None else title
         if cropped:
@@ -405,13 +404,13 @@ class PlotAgg:
     
     def save(self, figname:str, fig=None, ax=None, open_file=False, format_='png', dpi=300):
         '''
-        saves a figure or ax. 
+        Saves a figure or ax. If no fig or ax are specified, will save the last plot.
         parameters:
-            * figname - name of plot
+            * figname (str) - name of plot
             * fig (optional) - plt.Figure object to save, can be a dataframe for writing csv.
             * ax - ax to save. if not passed, will use self.current_ax
-            * open_file - open the file?
-            * format_ - format of file
+            * open_file (bool) - open the file after saving?
+            * format_ (str) - format of file
         '''
         path = f"{self.main.path_output}/{self.main.viz.name}_{figname}.{format_}"
         if fig is None:
@@ -429,14 +428,17 @@ class PlotAgg:
         '''
         Plot a spatial representation of self.adata.
         parameters:
-            * what - what to color the objects with (fill) - can be column from obs or a gene
-            * image - plot the image underneath the objects?
+            * what (str) - what to color the objects with (fill) - can be column from obs or a gene
+            * image (bool) - plot the image underneath the objects?
             * img_resolution - which resolution to use for the image - can be "full","high","low"
             * brightness, contrast - for image modification
             * cmap - can be string (name of pellate), list of colors, 
                      or in categorical values case, a dict {"value":"color"}
-            * xlim, ylim - two values each, in microns
-            * save - save the plot?
+            * xlim, ylim - two values each, in microns. example: xlim=[50,100]
+            * save (bool) - save the plot?
+            * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
+            * brightness (float) - increases brigtness, for example 0.2. 
+            * contrast (float) - > 1 increases contrast, < 1 decreases.
             * figsize, legend, alpha, title, legend_title, axis_labels - cosmetic parameters  
         '''
         title = what if title is None else title
@@ -487,15 +489,15 @@ class PlotAgg:
         '''
         plots histogram of data or metadata. if categorical, will plot barplot.
         parameters:
-            * what - what to plot. can be metadata (obs/var colnames or a gene)
-            * bins - number of bins of the histogram
+            * what (str) - what to plot. can be metadata (obs/var colnames or a gene)
+            * bins (int) - number of bins of the histogram
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
-            * cmap - colorbar to use. overrides the color argument for barplot
-            * color - color of the histogram
+            * cmap - colorbar to use. Can be string, list of colors, or dictionary of {val:color}. overrides the color argument for barplot
+            * color (str) - color of the histogram
             * title, xlab, ylab - strings
-            * save - save the plot?
-            * xlim - two values, where to crop the x axis
-            * save - save the image?
+            * save (bool) - save the plot?
+            * xlim (list) - two values, where to crop the x axis. example [50,100]
+            * save (bool) - save the image?
         '''
         title = what if title is None else title
         if cropped:
@@ -516,16 +518,19 @@ class PlotAgg:
               figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,
               legend=True, ax=None, title=None, legend_title=None, brightness=0,contrast=1,axis_labels=True):
         '''
-        Plot a UMAP of self.adata.
+        Plot a spatial map of the objects. Can color the borders and fill.
         parameters:
-            * what - what to color the objects with (fill) - can be column from obs or a gene
-            * image - plot the image underneath the objects?
+            * what (str) - what to color the objects with (fill) - can be column from obs or a gene
+            * image (bool) - plot the image underneath the objects?
             * img_resolution - which resolution to use for the image - can be "full","high","low"
             * brightness, contrast - for image modification
             * cmap - can be string (name of pellate), list of colors, 
                      or in categorical values case, a dict {"value":"color"}
-            * xlim, ylim - two values each, in microns
-            * save - svae the plot?
+            * xlim, ylim - two values each, in microns [50,100]
+            * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
+            * save (bool) - svae the plot?
+            * brightness (float) - increases brigtness, for example 0.2. 
+            * contrast (float) - > 1 increases contrast, < 1 decreases.
             * figsize, line_color, legend, linewidth, title, legend_title, axis_labels - cosmetic parameters            
         '''
         if "geometry" not in self.main.adata.obs.columns:
@@ -602,15 +607,17 @@ class PlotAgg:
     def umap(self, features=None, title=None, size=None,layer=None,legend=True,texts=False,
               legend_loc='right margin', save=False, ax=None, figsize=(8,8),cmap="viridis"):
         '''
-        Plot a UMAP of self.adata.
+        Plot a UMAP of self.adata, if present. 
         parameters:
             * features - if None, won't color. can be a string or list of strings,
                         passed to scanpy.pl.umap
-            * layer - which layer to use from the self.adata. If None, will use X
-            * texts - add text in the center of mass of categorical case
+            * layer (str) - which layer to use from the self.adata. If None, will use X
+            * texts (bool) - add text in the center of mass of categorical case
             * cmap - can be string (name of pellate), list of colors, 
                      or in categorical values case, a dict {"value":"color"}
-            * figsize, size, legend, legend_loc, title, legend_title - cosmetic parameters            
+            * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
+            * figsize, size, legend, legend_loc, title, legend_title - cosmetic parameters  
+            * save (bool) - svae the plot?
         '''
         if 'X_umap' not in self.main.adata.obsm:
             raise ValueError("UMAP embedding is missing. Run `sc.tl.umap()` after PCA.")
@@ -658,9 +665,25 @@ class PlotAgg:
     
     
     def cor(self, what, number_of_genes=10, normilize=True, layer=None,
-            cluster=False, ax=None,figsize=(8,8),save=False,color="black", 
-            color_genes="red",size=15,text=True,cmap="copper",legend=True,legend_title=None):
-        
+            cluster=False, ax=None,figsize=(8,8),save=False,
+           size=15,text=True,cmap="copper",legend=True,legend_title=None):
+        '''
+        Plots correlation of a gene with all genes, or a correlation matrix between list of genes.
+        Parameters:
+            * what - either a str or a list. if a single genes, will plot correlation to all other genes. 
+                                                in this case, will pull and save the data to Aggregation.adata.var.
+                                        if a list of genes, will plot a heatmap.
+            * number_of_genes (int) - only applicable if what is a single gene.  
+                                        how many gene names (text) to add to the plot.
+            * cluster (bool) - only applicable if what is a list of genes. cluster the heatmap?
+            * normilize (bool) - normilize data before performing correlation.
+            * layer (str)- which layer to use from the self.adata. If None, will use X
+            * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
+            * cmap - colormap for scatterplot / heatmap. in heatmap can be list of colors.
+            * size (int) - size of spots in scatterplot.
+            * save (bool) - svae the plot?
+            * text, legend, legend_title - cosmetic parameters
+        '''
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)   
         
@@ -685,10 +708,6 @@ class PlotAgg:
     
             # Retrieve the original correlations (with their sign) in the order of their absolute value
             top_cor = cor_series_clean.loc[top_abs_indices]
-            # top_cor = cor_series_clean.nlargest(number_of_genes)
-            # if top_cor.iloc[0] > 0.9:
-            #     df.loc[top_cor.index[0],"r"] = np.nan
-            
             top_genes = list(top_cor.index)
     
             ax = plot_scatter_signif(df, "expression_mean_log10", "r",genes=top_genes,
@@ -786,31 +805,25 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
 
     
 def plot_scatter_signif(df, x_col, y_col,
-                        genes=None, genes2=None,  # genes for group1 and group2
+                        genes=None, genes2=None,
                         text=True, figsize=(8,8), size=10, legend=False, title=None,
-                        ax=None, xlab=None, ylab=None, out_path=None,
+                        ax=None, xlab=None, ylab=None,
                         color="black", color_genes="red", color_genes2="blue",
                         x_line=None, y_line=None,cmap="viridis",repel=False):
     '''
     Plots a scatterplot based on a dataframe.
     
     Parameters:
-        df: pd.DataFrame
-        x_col, y_col: names of the columns in df to plot
-        genes: list of gene names to highlight as group 1
-        genes2: list of gene names to highlight as group 2 (optional)
-        text: bool, whether to annotate gene names on the plot
-        figsize: tuple, figure size
-        size: marker size
-        legend: bool, whether to include legend
-        title: str, plot title
-        ax: matplotlib Axes, if provided
-        xlab, ylab: labels for the x and y axes
-        out_path: str, path to save the figure (if None, the plot is not saved)
-        color: color for background points
-        color_genes: color for genes in group 1
-        color_genes2: color for genes in group 2
-        x_line, y_line: numbers to add vertical and horizontal reference lines
+        * df (pd.DataFrame)
+        * x_col, y_col (str) - names of the columns in df to plot
+        * genes, genes2 (list) - list of gene names to highlight as group 1
+        * text (bool) - whether to annotate gene names on the plot
+        * size - marker size
+        * x_line, y_line (float)- numbers to add vertical and horizontal reference lines
+        * ax (optional) - matplotlib Axes, if provided
+        * xlab, ylab, title, color, color_genes, color_genes2 (str) - cosmetic parameters
+        * figsize - tuple, figure size
+
     '''
     
     # Create an axis if not provided
@@ -890,14 +903,7 @@ def plot_scatter_signif(df, x_col, y_col,
     ax.set_xlabel(xlab, fontsize=14)
     ax.set_ylabel(ylab, fontsize=14)
     ax.set_title(title)
-    
-    # Save the figure if an output path is provided.
-    if out_path:
-        if not out_path.endswith(".png"):
-            out_path += ".png"
-        plt.savefig(out_path, format="png", dpi=300, bbox_inches="tight")
-    del df["group"]
-    
+            
     return ax
 
 
@@ -989,9 +995,10 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
     '''
     Plots histogram from numeric values or barplot for categorical values.
     Parameters:
-        * values: pd.Series
-        * show_zeroes - include count of zeroes in numerical case?
-        * cmap - used for categorical case. has higher priority than color.
+        * values (pd.Series) - values to plot
+        * bins (int) - number of bins in the histogram
+        * show_zeroes (bool) - include count of zeroes in numerical case?
+        * cmap - colorbar to use. Can be string, list of colors, or dictionary of {val:color}. overrides the color argument for barplot
         * xlim, figsize, ylab, xlab - cosmetic parameters
     '''
     
@@ -1020,6 +1027,9 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
         value_counts = values.value_counts()
         if isinstance(cmap, str):
             colors = get_colors(value_counts.index, cmap) if cmap else color
+        elif isinstance(cmap, list):
+            colors = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+            colors = [colors(i / (len(value_counts) - 1)) for i in range(len(value_counts))]
         else:
             if cmap:
                 colors = [cmap.get(val, DEFAULT_COLOR) for val in value_counts.index]
@@ -1030,49 +1040,6 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
     ax.set_title(title)
     ax.set_ylabel(ylab)
     ax.set_xlabel(xlab)
-    return ax
-
-
-def plot_pie(series, figsize=(4,4),title=None,ax=None,cmap="Set1",capitalize=True):
-    '''plots a piechart of pd.Series'''
-    from matplotlib.patches import Circle
-
-    if ax is None:
-        fig, ax = plt.subplots(figsize=figsize, layout='constrained')
-        
-    counts = series.value_counts()
-    categories = counts.index
-    if capitalize:
-        categories = categories.str.capitalize()
-    values = counts.values
-
-    if isinstance(cmap, dict):
-        if capitalize:
-            cmap = {k.capitalize(): v for k, v in cmap.items()}
-        colors = [cmap[category] for category in categories]
-    else:
-        colors = get_colors(values,cmap=cmap)
-
-    wedges, texts = ax.pie(values,
-        labels=values,          # Display counts as labels
-        labeldistance=1.05,      # Position labels outside the pie
-        startangle=90,          # Rotate pie chart for better orientation
-        colors=colors)
-    circle = Circle((0, 0), 0.5, color='white', zorder=2) 
-    ax.add_artist(circle)
-    handles = []
-    for w, category in zip(wedges, categories):
-        facecolor = w.get_facecolor()
-        handles.append(plt.Line2D([0], [0],marker='o',color=facecolor,
-                label=category, markersize=15,linestyle='None'))
-
-    legend = ax.legend(handles=handles,title=title,loc='center',
-        bbox_to_anchor=(0.5, 0.5),bbox_transform=ax.transAxes,frameon=False)
-    legend.set_zorder(3)
-
-    ax.axis('equal')  # Ensure pie chart is a circle
-    if title is not None:
-        ax.set_title(title)
     return ax
 
 
@@ -1231,8 +1198,8 @@ def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True,
                                 or three columns, of category(x), gene (y), value
         * x_y_val (list) - if the heatmap_data is three columns, specify. 
                                 category(x), gene (y), value
-        * normilize - whether to normilize each row to the maximal value of the row
-        * sort - sort the rows?
+        * normilize (bool) - whether to normilize each row to the maximal value of the row
+        * sort (bool) - sort the rows?
         * sort_method - if sort is True, how to sort? possible values are "sum","std","mean"
         * ax - matplotlib Axes, if provided
         * figsize, cmap, legend, xlab, ylab, title, legend_title - cosmetic parameters
