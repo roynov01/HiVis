@@ -1,4 +1,4 @@
-from .module1 import *
-from .module2 import *
+from .HiVis import *
+from .HiVis_utils import *
 
 __version__ = "0.1.0"
