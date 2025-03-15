@@ -15,7 +15,7 @@ to enable easy manual annotation, pixel classification, and single-cell segmenta
  [Cellpose](https://github.com/MouseLand/cellpose).
  It links bins and single-cell objects, facilitating seamless information exchange across levels.  
 
-![](HiVis.png)
+![](doc/HiVis.png)
 
 ## Getting started
 ### Installation
