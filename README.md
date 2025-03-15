@@ -20,7 +20,7 @@ to enable easy manual annotation, pixel classification, and single-cell segmenta
 ## Getting started
 ### Installation
 
-To avoid dependency conflicts, we recommend the the use of a 
+To avoid dependency conflicts, we recommend the use of a 
 dedicated 
 [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) 
 environment.  In a terminal run the command:
@@ -47,6 +47,13 @@ git clone git@github.com:roynov01/HiVis.git
 cd HiVis
 pip install .
 ```
+
+To use Qupath features, such as manual annotations and pixel classifiers, download and install 
+[QuPath](https://qupath.github.io/) (>= 0.5.1).
+
+To perform cell segmentation in QuPath, download [Stardist](https://github.com/qupath/qupath-extension-stardist) 
+and/or [Cellpose](https://github.com/BIOP/qupath-extension-cellpose) extensions for QuPath.
+
 
 ### Usage and Documentation
 Please refer to the demo notebooks:
