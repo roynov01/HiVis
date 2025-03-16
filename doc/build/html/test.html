@@ -1,0 +1,326 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aggregation &mdash; HiVis 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="HiVis documentation" href="modules.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            HiVis
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="modules.html">HiVis documentation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Aggregation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#Aggregation.Aggregation"><code class="docutils literal notranslate"><span class="pre">Aggregation</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.import_geometry"><code class="docutils literal notranslate"><span class="pre">Aggregation.import_geometry()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.merge"><code class="docutils literal notranslate"><span class="pre">Aggregation.merge()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.get"><code class="docutils literal notranslate"><span class="pre">Aggregation.get()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.subset"><code class="docutils literal notranslate"><span class="pre">Aggregation.subset()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.pseudobulk"><code class="docutils literal notranslate"><span class="pre">Aggregation.pseudobulk()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.smooth"><code class="docutils literal notranslate"><span class="pre">Aggregation.smooth()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.noise_mean_curve"><code class="docutils literal notranslate"><span class="pre">Aggregation.noise_mean_curve()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.cor"><code class="docutils literal notranslate"><span class="pre">Aggregation.cor()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.sync"><code class="docutils literal notranslate"><span class="pre">Aggregation.sync()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.export_h5"><code class="docutils literal notranslate"><span class="pre">Aggregation.export_h5()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.dge"><code class="docutils literal notranslate"><span class="pre">Aggregation.dge()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.shape"><code class="docutils literal notranslate"><span class="pre">Aggregation.shape</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.combine"><code class="docutils literal notranslate"><span class="pre">Aggregation.combine()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.update"><code class="docutils literal notranslate"><span class="pre">Aggregation.update()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.head"><code class="docutils literal notranslate"><span class="pre">Aggregation.head()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.columns"><code class="docutils literal notranslate"><span class="pre">Aggregation.columns</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.copy"><code class="docutils literal notranslate"><span class="pre">Aggregation.copy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.rename"><code class="docutils literal notranslate"><span class="pre">Aggregation.rename()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Aggregation.Aggregation.export_to_matlab"><code class="docutils literal notranslate"><span class="pre">Aggregation.export_to_matlab()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">HiVis</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Aggregation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/test.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-Aggregation">
+<span id="aggregation"></span><h1>Aggregation<a class="headerlink" href="#module-Aggregation" title="Link to this heading"></a></h1>
+<p>Aggregation of spots from HiVis</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="Aggregation.Aggregation">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">Aggregation.</span></span><span class="sig-name descname"><span class="pre">Aggregation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hiviz_instance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adata_agg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">geojson_agg_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.import_geometry">
+<span class="sig-name descname"><span class="pre">import_geometry</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">geojson_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">object_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cell'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.import_geometry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.import_geometry" title="Link to this definition"></a></dt>
+<dd><p>Adds “geometry” column to self.adata.obs, based on Geojson exported from Qupath.
+parameters:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>geojson_path (str) - path to geojson file</p></li>
+<li><p>object_type (str) - which “objectType” to merge from the geojson</p></li>
+</ul>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.merge">
+<span class="sig-name descname"><span class="pre">merge</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">adata</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">var</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">umap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pca</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hvg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.merge"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.merge" title="Link to this definition"></a></dt>
+<dd><p>Merge info from an anndata to self.adata, in case genes have been filtered.
+parameters:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>adata (as.AnnData) - anndata where to get the values from</p></li>
+<li><p>obs - single string or list of obs to merge</p></li>
+<li><p>var - single string or list of var to merge</p></li>
+<li><p>umap (bool) - add umap to OBSM, and UMAP coordinates to obs?</p></li>
+<li><p>pca (bool) - add PCA to OBSM?</p></li>
+<li><p>hvg (bool) - add highly variable genes to vars?</p></li>
+</ul>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.get">
+<span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">what</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cropped</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">geometry</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.get"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.get" title="Link to this definition"></a></dt>
+<dd><p>get a vector from data (a gene) or metadata (from obs or var). or subset the object.
+parameters:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>what - if string, will get data or metadata.                      else, will return a new Aggregation object that is spliced.                      the splicing is passed to the self.adata.</p></li>
+<li><p>cropped (bool) - get the data from the adata_cropped after crop() or plotting methods?</p></li>
+<li><p>geometry (bool) - include only objects which have geometry</p></li>
+</ul>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.subset">
+<span class="sig-name descname"><span class="pre">subset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">what</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(slice(None,</span> <span class="pre">None,</span> <span class="pre">None),</span> <span class="pre">slice(None,</span> <span class="pre">None,</span> <span class="pre">None))</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.subset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.subset" title="Link to this definition"></a></dt>
+<dd><p>Create a new Aggregation object based on adata subsetting.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.pseudobulk">
+<span class="sig-name descname"><span class="pre">pseudobulk</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">by</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.pseudobulk"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.pseudobulk" title="Link to this definition"></a></dt>
+<dd><p>Returns the gene expression for each group in a single obs.
+If “by” is None, will return the mean expression of every gene.
+Else, will return a dataframe, each column is a value in “by” (for example cluster), rows are genes.
+layer - which layer in adata to use.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.smooth">
+<span class="sig-name descname"><span class="pre">smooth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">what</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">radius</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'median'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_col_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.smooth"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.smooth" title="Link to this definition"></a></dt>
+<dd><p>Applies median smoothing to the specified column in adata.obs using spatial neighbors.
+parameters:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>what (str) - what to smooth. either a gene name or column name from self.adata.obs</p></li>
+<li><p>radius (float) - in microns</p></li>
+<li><p>method - [“mode”,”median”, “mean”, “gaussian”, “log”]</p></li>
+<li><p>new_col_name (str) - Optional custom name for the output column.</p></li>
+</ul>
+<p><a href="#id1"><span class="problematic" id="id2">**</span></a>kwargs - Additional parameters for specific methods (e.g., sigma for gaussian, offset for log).</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.noise_mean_curve">
+<span class="sig-name descname"><span class="pre">noise_mean_curve</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">signif_thresh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.95</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inplace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.noise_mean_curve"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.noise_mean_curve" title="Link to this definition"></a></dt>
+<dd><p>Generates a noise-mean curve of the data.
+Parameters:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>plot (bool) - plot the curve?</p></li>
+<li><p>layer (str) - which layer in the anndata to use</p></li>
+<li><p>signif_thresh (float) - for plotting, add text for genes in this residual precentile</p></li>
+<li><p>inplace (bool) - add the mean_expression, cv and residuals to VAR?</p></li>
+</ul>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.cor">
+<span class="sig-name descname"><span class="pre">cor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">what</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">self_corr_value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normilize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inplace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.cor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.cor" title="Link to this definition"></a></dt>
+<dd><p>Calculates gene(s) correlation.
+Parameters:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>what (str or list) - if str, computes Spearman correlation of a given gene with all genes.                                     if list, will compute correlation between all genes in the list</p></li>
+<li><p>self_corr_value - replace the correlation of the gene with itself by this value</p></li>
+<li><p>normilize (bool) - normilize expression before computing correlation?</p></li>
+<li><p>layer (str) - which layer in the anndata to use</p></li>
+<li><p>inplace (bool) - add the correlation to VAR?</p></li>
+</ul>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.sync">
+<span class="sig-name descname"><span class="pre">sync</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">what</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.sync"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.sync" title="Link to this definition"></a></dt>
+<dd><p>Transfers metadata assignment from the Aggregation to the spots.
+what - obs column name to pass to HiViz object</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.export_h5">
+<span class="sig-name descname"><span class="pre">export_h5</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.export_h5"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.export_h5" title="Link to this definition"></a></dt>
+<dd><p>Exports the adata. 
+* path (str) - path to save the h5 file. If None, will save to path_output</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.dge">
+<span class="sig-name descname"><span class="pre">dge</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">column</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">group1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">group2</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'wilcox'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">two_sided</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">umi_thresh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inplace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.dge"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.dge" title="Link to this definition"></a></dt>
+<dd><p>Runs differential gene expression analysis between two groups.
+Values will be saved in self.var: expression_mean, log2fc, pval
+parameters:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>column - which column in obs has the groups classification</p></li>
+<li><p>group1 - specific value in the “column”</p></li>
+<li><p>group2 - specific value in the “column”.                        if None,will run agains all other values, and will be called “rest”</p></li>
+<li><p>method - either “wilcox” or “t_test”</p></li>
+<li><p>two_sided - if one sided, will give the pval for each group,                           and the minimal of both groups (which will also be FDR adjusted)</p></li>
+<li><p>umi_thresh - use only spots with more UMIs than this number</p></li>
+<li><p>expression - function F {mean, mean, max} F(mean(group1),mean(group2))</p></li>
+<li><p>inplace - modify the adata.var with log2fc, pval and expression columns?</p></li>
+<li><p>layer (str) - which layer in the anndata to use</p></li>
+</ul>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.shape">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">shape</span></span><a class="headerlink" href="#Aggregation.Aggregation.shape" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.combine">
+<span class="sig-name descname"><span class="pre">combine</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.combine"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.combine" title="Link to this definition"></a></dt>
+<dd><p>Combines two Aggregation objects into a single adata</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.update">
+<span class="sig-name descname"><span class="pre">update</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.update"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.update" title="Link to this definition"></a></dt>
+<dd><p>Updates the methods in the instance. Should be used after modifying the source code in the class</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.head">
+<span class="sig-name descname"><span class="pre">head</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.head"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.head" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.columns">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">columns</span></span><a class="headerlink" href="#Aggregation.Aggregation.columns" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.copy">
+<span class="sig-name descname"><span class="pre">copy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.copy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.copy" title="Link to this definition"></a></dt>
+<dd><p>Creates a deep copy of the instance</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.rename">
+<span class="sig-name descname"><span class="pre">rename</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_out_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.rename"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.rename" title="Link to this definition"></a></dt>
+<dd><p>Renames the object and changes the path_output.
+If full is False, the name will be added to the current (previous) name</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="Aggregation.Aggregation.export_to_matlab">
+<span class="sig-name descname"><span class="pre">export_to_matlab</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Aggregation.html#Aggregation.export_to_matlab"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Aggregation.Aggregation.export_to_matlab" title="Link to this definition"></a></dt>
+<dd><p>exports gene names, data (sparse matrix) and metadata to a .mat file</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="modules.html" class="btn btn-neutral float-left" title="HiVis documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Roy Novoselsky.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

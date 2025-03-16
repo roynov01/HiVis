@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Nov  5 20:57:45 2024
-
-@author: royno
+Aggregation of spots from HiVis
 """
 
 from copy import deepcopy
@@ -35,6 +33,8 @@ class Aggregation:
         '''
         if not isinstance(adata_agg, ad._core.anndata.AnnData): 
             raise ValueError("Adata must be Anndata object")
+        if not "pxl_col_in_fullres" in adata_agg.obs.columns or not "pxl_row_in_fullres" in adata_agg.obs.columns:
+            raise ValueError("Anndata.obs must include [pxl_col_in_fullres, pxl_row_in_fullres ]")
         adata_agg = adata_agg[adata_agg.obs["pxl_col_in_fullres"].notna(),:].copy()
         if adata_agg.shape[0] == 0:
             raise ValueError("Filtered AnnData object is empty. No valid rows remain.")
@@ -143,8 +143,8 @@ class Aggregation:
         '''
         get a vector from data (a gene) or metadata (from obs or var). or subset the object.
         parameters:
-            * what - if string, will get data or metadata. 
-                     else, will return a new Aggregation object that is spliced.
+            * what - if string, will get data or metadata. \
+                     else, will return a new Aggregation object that is spliced. \
                      the splicing is passed to the self.adata.
             * cropped (bool) - get the data from the adata_cropped after crop() or plotting methods?
             * geometry (bool) - include only objects which have geometry
@@ -322,7 +322,7 @@ class Aggregation:
         '''
         Calculates gene(s) correlation.
         Parameters:
-            * what (str or list) - if str, computes Spearman correlation of a given gene with all genes.
+            * what (str or list) - if str, computes Spearman correlation of a given gene with all genes. \
                                     if list, will compute correlation between all genes in the list
             * self_corr_value - replace the correlation of the gene with itself by this value
             * normilize (bool) - normilize expression before computing correlation?
@@ -334,7 +334,7 @@ class Aggregation:
             return HiVis_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
         return HiVis_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
 
-    def sync_metadata_to_spots(self, what: str):
+    def sync(self, what: str):
         '''
         Transfers metadata assignment from the Aggregation to the spots.
         what - obs column name to pass to HiViz object
@@ -366,10 +366,10 @@ class Aggregation:
         parameters:
             * column - which column in obs has the groups classification
             * group1 - specific value in the "column"
-            * group2 - specific value in the "column". 
+            * group2 - specific value in the "column". \
                        if None,will run agains all other values, and will be called "rest"
             * method - either "wilcox" or "t_test"
-            * two_sided - if one sided, will give the pval for each group, 
+            * two_sided - if one sided, will give the pval for each group, \
                           and the minimal of both groups (which will also be FDR adjusted)
             * umi_thresh - use only spots with more UMIs than this number
             * expression - function F {mean, mean, max} F(mean(group1),mean(group2))
@@ -432,6 +432,10 @@ class Aggregation:
         return s
     
     
+    def combine(self, other):
+        '''Combines two Aggregation objects into a single adata'''
+        return self + other
+    
     def __add__(self, other):
         '''Combines two Aggregation objects into a single adata'''
         if not isinstance(other, (Aggregation,Aggregation.Aggregation)):
@@ -464,6 +468,9 @@ class Aggregation:
     def head(self, n=5):
         return self.adata.obs.head(n) 
     
+    @property
+    def columns(self):
+        return self.adata.obs.columns.copy()
     
     def copy(self):
         '''Creates a deep copy of the instance'''
@@ -471,6 +478,18 @@ class Aggregation:
         new.viz = self.viz
         gc.collect()
         return new
+    
+    def rename(self, new_name: str, new_out_path=True, full=False):
+        '''
+        Renames the object and changes the path_output.
+        If full is False, the name will be added to the current (previous) name
+        '''
+        if full:
+            self.name = new_name
+        else:
+            self.name = f"{self.viz.name}_{new_name}"
+        if new_out_path:
+            self.path_output = self.viz.path_output + f"/{new_name}"
     
     def export_to_matlab(self, path=None):
         '''exports gene names, data (sparse matrix) and metadata to a .mat file'''

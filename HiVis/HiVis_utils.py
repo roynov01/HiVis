@@ -21,7 +21,7 @@ from statsmodels.stats.multitest import multipletests
 import statsmodels.api as sm
 from squidpy.read import visium
 
-import HiVis_plot
+from . import HiVis_plot
 
 MAX_RAM = 50 # maximum GB RAM to use for a variable
 

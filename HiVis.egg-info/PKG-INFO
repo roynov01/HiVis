@@ -16,6 +16,7 @@ Requires-Dist: scipy
 Requires-Dist: matplotlib
 Requires-Dist: pandas
 Requires-Dist: scanpy
+Requires-Dist: squidpy
 Requires-Dist: anndata
 Requires-Dist: adjustText
 Requires-Dist: pyarrow

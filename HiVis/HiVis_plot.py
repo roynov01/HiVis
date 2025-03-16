@@ -16,7 +16,6 @@ import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 import seaborn as sns
 from adjustText import adjust_text
-import plotly.express as px
 from subprocess import Popen, PIPE
 import shapely.wkt
 import shapely.affinity
@@ -24,7 +23,7 @@ import geopandas as gpd
 import tempfile
 import time
 
-import HiVis_utils
+from . import HiVis_utils
 
 POINTS_PER_INCH = 72
 MAX_SQUARES_TO_DRAW_EXACT = 500 # how many squares to draw in perfect positions in spatial plot
@@ -933,59 +932,7 @@ def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=N
     return ax
 
 
-def plot_scatter_html(df,x,y,save_path=None,text="gene",color="black",size=1,
-                      xlab=None,ylab=None,title=None,legend_title=None):
-    '''
-    Creates plotly express interactive scatterplot.
-    parameters:
-        * df, x, y - data, x axis column name, y axis column name
-        * color - color spots by a column in the df
-        * size - change size of dots by a column in the df
-        * open_fig - open the file with default machine software?
-        * save_path - path of html file, where to save the plot.
-        * xlab, ylab, title, legend_title - cosmetic parameters
-    '''
-    def open_html(html_file,chrome_path=chrome_path):
-        process = Popen(['cmd.exe', '/c', chrome_path, html_file], stdout=PIPE, stderr=PIPE)
-    
-    plot_kwargs = {"x": x,"y": y,"hover_data": [text],"labels": {}}
 
-    # Handle color (categorical vs fixed color)
-    if color in df.columns:
-        plot_kwargs["color"] = color
-        plot_kwargs["labels"][color] = legend_title if legend_title else color
-        plot_kwargs["hover_data"].append(color)
-    elif isinstance(color, str):  # If it's a fixed color
-        plot_kwargs["color_discrete_sequence"] = [color]
-    else:
-        plot_kwargs["color_discrete_sequence"] = ["black"] 
-
-    if size in df.columns:
-        plot_kwargs["size"] = size
-        plot_kwargs["labels"][size] = legend_title if legend_title else size
-        plot_kwargs["hover_data"].append(size)
-    else:
-        plot_kwargs["size_max"] = 10  # Default size for points
-        
-    fig = px.scatter(df, **plot_kwargs)    
-    fig.update_traces(marker_size=10,hoverinfo='text+x+y',mode='markers+text')
-
-    fig.update_layout(template="simple_white",
-        title=title,xaxis_title=xlab,yaxis_title=ylab,
-        title_font=dict(size=30, family="Arial", color="Black"),
-        xaxis_title_font=dict(size=24, family="Arial", color="Black"),
-        yaxis_title_font=dict(size=24, family="Arial", color="Black"))
-    
-
-    if save_path is None:
-        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp_file:
-            tmp_path = tmp_file.name
-        fig.write_html(tmp_path)
-        open_html(tmp_path)
-        time.sleep(2)  # Allow some time for the browser to load the file
-        os.remove(tmp_path)  # Delete the temporary file
-    else:
-        fig.write_html(save_path) 
  
 
 def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, figsize=(8,8), 

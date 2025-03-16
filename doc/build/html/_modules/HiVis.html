@@ -1,0 +1,1038 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HiVis &mdash; HiVis 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            HiVis
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../modules.html">HiVis documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../test.html">Aggregation</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">HiVis</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">Module code</a></li>
+      <li class="breadcrumb-item active">HiVis</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for HiVis</h1><div class="highlight"><pre>
+<span></span><span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">HD Integrated Visium Interactive Suite (HiVis)</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="c1"># General libraries</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">dill</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">gc</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">tqdm</span><span class="w"> </span><span class="kn">import</span> <span class="n">tqdm</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">copy</span><span class="w"> </span><span class="kn">import</span> <span class="n">deepcopy</span>
+<span class="c1"># Data libraries</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">geopandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">gpd</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">shapely</span><span class="w"> </span><span class="kn">import</span> <span class="n">wkt</span><span class="p">,</span> <span class="n">affinity</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">anndata</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ad</span>
+<span class="c1"># Plotting libraries</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matplotlib.patches</span><span class="w"> </span><span class="kn">import</span> <span class="n">Patch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">PIL</span><span class="w"> </span><span class="kn">import</span> <span class="n">Image</span>
+
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">HiVis_utils</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">Aggregation</span><span class="w"> </span><span class="kn">import</span> <span class="n">Aggregation</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">HiVis_plot</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">Aggregation_utils</span>
+
+<span class="n">Image</span><span class="o">.</span><span class="n">MAX_IMAGE_PIXELS</span> <span class="o">=</span> <span class="mi">1063425001</span> <span class="c1"># Enable large images loading</span>
+
+
+<div class="viewcode-block" id="load">
+<a class="viewcode-back" href="../modules.html#HiVis.load">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">directory</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    loads an instance from a pickle format</span>
+<span class="sd">    parameters:</span>
+<span class="sd">        * filename - full path of pkl file, or just the filename if directory is specified</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">filename</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.pkl&quot;</span><span class="p">):</span>
+        <span class="n">filename</span> <span class="o">=</span> <span class="n">filename</span> <span class="o">+</span> <span class="s2">&quot;.pkl&quot;</span>
+    <span class="k">if</span> <span class="n">directory</span><span class="p">:</span>
+        <span class="n">filename</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">directory</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">validate_exists</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">instance</span> <span class="o">=</span> <span class="n">dill</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">instance</span></div>
+
+
+<div class="viewcode-block" id="new">
+<a class="viewcode-back" href="../modules.html#HiVis.new">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">new</span><span class="p">(</span><span class="n">path_image_fullres</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span> <span class="n">path_input_data</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span> <span class="n">path_output</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span>
+             <span class="n">name</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span> <span class="n">crop_images</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">properties</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">on_tissue_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">min_reads_in_spot</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+             <span class="n">min_reads_gene</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">fluorescence</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot_qc</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    - Loads images, data and metada.</span>
+<span class="sd">    - Initializes the connection from the data and metadata to the images coordinates</span>
+<span class="sd">    - Adds basic QC to the metadata (nUMI, mitochondrial %)</span>
+<span class="sd">    parameters:</span>
+<span class="sd">        * path_input_fullres_image (str) - path of the fullres image</span>
+<span class="sd">        * path_input_data (str) - folder with outs of the Visium. typically square_002um \</span>
+<span class="sd">                            (with h5 files and with folders filtered_feature_bc_matrix, spatial)</span>
+<span class="sd">        * path_output (str) - path where to save plots and files</span>
+<span class="sd">        * name (str) - name of the instance</span>
+<span class="sd">        * crop_images (bool) - crop the regions outside of the spots cover area</span>
+<span class="sd">        * properties (dict) - can be any metadata, such as organism, organ, sample_id</span>
+<span class="sd">        * on_tissue_only (bool) - remove spots that are not classified as &quot;on tissue&quot;?</span>
+<span class="sd">        * min_reads_in_spot (int) - filter out spots with less than X UMIs</span>
+<span class="sd">        * min_reads_gene (int) - filter out gene that is present in less than X spots</span>
+<span class="sd">        * fluorescence - either False for H&amp;E, or a dict of channel names and colors. color can be None.</span>
+<span class="sd">        * plot_qc (bool) - plot QC when object is being created</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="c1"># Validate paths of metadata and images</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path_output</span><span class="p">):</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">path_output</span><span class="p">)</span>
+    <span class="n">path_image_highres</span> <span class="o">=</span> <span class="n">path_input_data</span> <span class="o">+</span> <span class="s2">&quot;/spatial/tissue_hires_image.png&quot;</span>
+    <span class="n">path_image_lowres</span> <span class="o">=</span> <span class="n">path_input_data</span> <span class="o">+</span> <span class="s2">&quot;/spatial/tissue_lowres_image.png&quot;</span>
+    <span class="n">json_path</span> <span class="o">=</span> <span class="n">path_input_data</span> <span class="o">+</span> <span class="s2">&quot;/spatial/scalefactors_json.json&quot;</span>
+    <span class="n">metadata_path</span> <span class="o">=</span> <span class="n">path_input_data</span> <span class="o">+</span> <span class="s2">&quot;/spatial/tissue_positions.parquet&quot;</span>
+    <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">validate_exists</span><span class="p">([</span><span class="n">path_image_fullres</span><span class="p">,</span><span class="n">path_image_highres</span><span class="p">,</span><span class="n">path_image_lowres</span><span class="p">,</span><span class="n">json_path</span><span class="p">,</span><span class="n">metadata_path</span><span class="p">])</span>
+    
+    <span class="c1"># Load images</span>
+    <span class="n">image_fullres</span><span class="p">,</span> <span class="n">image_highres</span><span class="p">,</span> <span class="n">image_lowres</span> <span class="o">=</span> <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">load_images</span><span class="p">(</span><span class="n">path_image_fullres</span><span class="p">,</span> <span class="n">path_image_highres</span><span class="p">,</span> <span class="n">path_image_lowres</span><span class="p">)</span>
+    
+    <span class="c1"># Load scalefactor_json</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">json_path</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+        <span class="n">scalefactor_json</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
+    
+   <span class="c1"># Load data + metadata</span>
+    <span class="n">adata</span> <span class="o">=</span> <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">_import_data</span><span class="p">(</span><span class="n">metadata_path</span><span class="p">,</span> <span class="n">path_input_data</span><span class="p">,</span> <span class="n">path_image_fullres</span><span class="p">,</span> <span class="n">on_tissue_only</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">crop_images</span><span class="p">:</span>
+        <span class="c1"># Crop images</span>
+        <span class="n">adata</span><span class="p">,</span> <span class="n">image_fullres</span><span class="p">,</span> <span class="n">image_highres</span><span class="p">,</span> <span class="n">image_lowres</span> <span class="o">=</span> <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">_crop_images_permenent</span><span class="p">(</span>
+            <span class="n">adata</span><span class="p">,</span> <span class="n">image_fullres</span><span class="p">,</span> <span class="n">image_highres</span><span class="p">,</span> <span class="n">image_lowres</span><span class="p">,</span> <span class="n">scalefactor_json</span><span class="p">)</span>
+        
+        <span class="c1"># Save cropped images</span>
+        <span class="n">path_image_fullres_cropped</span> <span class="o">=</span> <span class="n">path_image_fullres</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;.&quot;</span> <span class="o">+</span> <span class="n">path_image_fullres</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="s2">&quot;_cropped.tif&quot;</span><span class="p">)</span>
+        <span class="n">path_image_highres_cropped</span> <span class="o">=</span> <span class="n">path_image_highres</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;.&quot;</span> <span class="o">+</span> <span class="n">path_image_highres</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="s2">&quot;_cropped.tif&quot;</span><span class="p">)</span>
+        <span class="n">path_image_lowres_cropped</span> <span class="o">=</span> <span class="n">path_image_lowres</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;.&quot;</span> <span class="o">+</span> <span class="n">path_image_lowres</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="s2">&quot;_cropped.tif&quot;</span><span class="p">)</span>
+        <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">_export_images</span><span class="p">(</span><span class="n">path_image_fullres_cropped</span><span class="p">,</span> <span class="n">path_image_highres_cropped</span><span class="p">,</span> 
+                                      <span class="n">path_image_lowres_cropped</span><span class="p">,</span><span class="n">image_fullres</span><span class="p">,</span>
+                                      <span class="n">image_highres</span><span class="p">,</span> <span class="n">image_lowres</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">fluorescence</span><span class="p">:</span>
+        <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">_measure_fluorescence</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">image_fullres</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">fluorescence</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span> <span class="n">scalefactor_json</span><span class="p">[</span><span class="s2">&quot;spot_diameter_fullres&quot;</span><span class="p">])</span>
+
+    <span class="c1"># Add QC (nUMI, mito %) and unit transformation</span>
+    <span class="n">mito_name_prefix</span> <span class="o">=</span> <span class="s2">&quot;MT-&quot;</span> <span class="k">if</span> <span class="n">properties</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;organism&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;human&quot;</span> <span class="k">else</span> <span class="s2">&quot;mt-&quot;</span>
+    <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">_edit_adata</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">scalefactor_json</span><span class="p">,</span> <span class="n">mito_name_prefix</span><span class="p">)</span>
+
+    <span class="c1"># Filter low quality spots and lowly expressed genes</span>
+    <span class="n">adata</span> <span class="o">=</span> <span class="n">adata</span><span class="p">[</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;nUMI&quot;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">min_reads_in_spot</span><span class="p">,</span> <span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="s2">&quot;nUMI_gene&quot;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">min_reads_gene</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">HiVis</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">image_fullres</span><span class="p">,</span> <span class="n">image_highres</span><span class="p">,</span> <span class="n">image_lowres</span><span class="p">,</span> <span class="n">scalefactor_json</span><span class="p">,</span> 
+                    <span class="n">name</span><span class="p">,</span> <span class="n">path_output</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">agg</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fluorescence</span><span class="o">=</span><span class="n">fluorescence</span><span class="p">,</span> <span class="n">plot_qc</span><span class="o">=</span><span class="n">plot_qc</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="HiVis">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">HiVis</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">adata</span><span class="p">,</span> <span class="n">image_fullres</span><span class="p">,</span> <span class="n">image_highres</span><span class="p">,</span> <span class="n">image_lowres</span><span class="p">,</span> <span class="n">scalefactor_json</span><span class="p">,</span> 
+                 <span class="n">name</span><span class="p">,</span> <span class="n">path_output</span><span class="p">,</span> <span class="n">properties</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">agg</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fluorescence</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot_qc</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">agg</span> <span class="o">=</span> <span class="n">agg</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_output</span> <span class="o">=</span> <span class="n">name</span><span class="p">,</span> <span class="n">path_output</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">properties</span> <span class="o">=</span> <span class="n">properties</span> <span class="k">if</span> <span class="n">properties</span> <span class="k">else</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">organism</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;organism&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">image_fullres</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span> <span class="c1"># paths of images, not the images themselves</span>
+            <span class="n">image_fullres</span><span class="p">,</span> <span class="n">image_highres</span><span class="p">,</span> <span class="n">image_lowres</span> <span class="o">=</span> <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">load_images</span><span class="p">(</span><span class="n">image_fullres</span><span class="p">,</span> <span class="n">image_highres</span><span class="p">,</span> <span class="n">image_lowres</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">image_fullres</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_highres</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_lowres</span> <span class="o">=</span> <span class="n">image_fullres</span><span class="p">,</span> <span class="n">image_highres</span><span class="p">,</span> <span class="n">image_lowres</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span> <span class="o">=</span> <span class="n">fluorescence</span>
+        
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scalefactor_json</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">scalefactor_json</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+                <span class="n">scalefactor_json</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>        
+        <span class="bp">self</span><span class="o">.</span><span class="n">json</span> <span class="o">=</span> <span class="n">scalefactor_json</span>
+            
+        <span class="bp">self</span><span class="o">.</span><span class="n">adata</span> <span class="o">=</span> <span class="n">adata</span>
+        <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_col_in_lowres&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_col_in_fullres&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">scalefactor_json</span><span class="p">[</span><span class="s2">&quot;tissue_lowres_scalef&quot;</span><span class="p">]</span>
+        <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_row_in_lowres&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_row_in_fullres&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">scalefactor_json</span><span class="p">[</span><span class="s2">&quot;tissue_lowres_scalef&quot;</span><span class="p">]</span>
+        <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_col_in_highres&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_col_in_fullres&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">scalefactor_json</span><span class="p">[</span><span class="s2">&quot;tissue_hires_scalef&quot;</span><span class="p">]</span>
+        <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_row_in_highres&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_row_in_fullres&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">scalefactor_json</span><span class="p">[</span><span class="s2">&quot;tissue_hires_scalef&quot;</span><span class="p">]</span>
+        <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;um_x&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_col_in_fullres&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">scalefactor_json</span><span class="p">[</span><span class="s2">&quot;microns_per_pixel&quot;</span><span class="p">]</span>
+        <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;um_y&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_row_in_fullres&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">scalefactor_json</span><span class="p">[</span><span class="s2">&quot;microns_per_pixel&quot;</span><span class="p">]</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot</span> <span class="o">=</span> <span class="n">HiVis_plot</span><span class="o">.</span><span class="n">PlotVisium</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">fluorescence</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">image_fullres_orig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_fullres</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">recolor</span><span class="p">(</span><span class="n">fluorescence</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">_init_img</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">plot_qc</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">qc</span><span class="p">(</span><span class="n">save</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    
+<div class="viewcode-block" id="HiVis.recolor">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.recolor">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">recolor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fluorescence</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">normalization_method</span><span class="o">=</span><span class="s2">&quot;percentile&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Recolors a flurescence image</span>
+<span class="sd">        parameters:</span>
+<span class="sd">            * fluorescence is either list of colors or dict {channel: color...}. color can be None.</span>
+<span class="sd">            * normalization_method - {&quot;percentile&quot;, &quot;histogram&quot;,&quot;clahe&quot;,&quot;sqrt&quot; or None for minmax}</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;recolor() works for fluorescence visium only&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">fluorescence</span><span class="p">:</span>
+            <span class="n">fluorescence</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">normalization_method</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Choose colors for flurescence: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span><span class="si">}</span><span class="se">\n</span><span class="s1">Normalization methods:</span><span class="se">\n</span><span class="s1">&quot;percentile&quot;, &quot;histogram&quot;,&quot;clahe&quot;,&quot;sqrt&quot; or None for minmax&#39;</span><span class="p">)</span>
+                <span class="k">return</span>
+        <span class="n">channels</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>    
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fluorescence</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fluorescence</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">channels</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Flurescence should include all channels: </span><span class="si">{</span><span class="n">channels</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span> <span class="o">=</span> <span class="p">{</span><span class="n">channels</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span><span class="n">fluorescence</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">channels</span><span class="p">))}</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fluorescence</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">list</span><span class="p">(</span><span class="n">fluorescence</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">!=</span> <span class="n">channels</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Flurescence should include all channels: </span><span class="si">{</span><span class="n">channels</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span> <span class="o">=</span> <span class="n">fluorescence</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">image_fullres</span> <span class="o">=</span> <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">fluorescence_to_RGB</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">image_fullres_orig</span><span class="p">,</span> 
+                                                                <span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span> 
+                                                                <span class="n">normalization_method</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">_init_img</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="HiVis.qc">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.qc">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">qc</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">save</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">)):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;plots basic QC (nUMI, mitochondrial %)&#39;&#39;&#39;</span>
+        <span class="n">fig</span><span class="p">,</span> <span class="p">((</span><span class="n">ax0</span><span class="p">,</span> <span class="n">ax1</span><span class="p">),</span> <span class="p">(</span><span class="n">ax2</span><span class="p">,</span> <span class="n">ax3</span><span class="p">))</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">ncols</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span><span class="n">nrows</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+        <span class="n">ax0</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">spatial</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax0</span><span class="p">)</span>
+        <span class="n">ax1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="s2">&quot;mito_percent_log10&quot;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Mitochondrial content per spot&quot;</span><span class="p">,</span> <span class="n">xlab</span><span class="o">=</span><span class="s2">&quot;log10(Mito %)&quot;</span><span class="p">,</span><span class="n">ax</span><span class="o">=</span><span class="n">ax1</span><span class="p">)</span>
+        <span class="n">ax2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="s2">&quot;nUMI_log10&quot;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Number of UMIs per spot&quot;</span><span class="p">,</span> <span class="n">xlab</span><span class="o">=</span><span class="s2">&quot;log10(UMIs)&quot;</span><span class="p">,</span><span class="n">ax</span><span class="o">=</span><span class="n">ax2</span><span class="p">)</span>
+        <span class="n">ax3</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="s2">&quot;nUMI_gene_log10&quot;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Number of UMIs per gene&quot;</span><span class="p">,</span> <span class="n">xlab</span><span class="o">=</span><span class="s2">&quot;log10(UMIs)&quot;</span><span class="p">,</span><span class="n">ax</span><span class="o">=</span><span class="n">ax3</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">save</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">figname</span><span class="o">=</span><span class="s2">&quot;QC&quot;</span><span class="p">,</span> <span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="HiVis.add_mask">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.add_mask">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_mask</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mask_path</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;Paired&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        assigns each spot a value based on mask (image).</span>
+<span class="sd">        parameters:</span>
+<span class="sd">            * mask_path (str) - path to mask image</span>
+<span class="sd">            * name (str) - name of the mask (that will be called in the metadata)</span>
+<span class="sd">            * plot (bool) - plot the mask?</span>
+<span class="sd">            * cmap (str) - colormap for plotting</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">validate_exists</span><span class="p">(</span><span class="n">mask_path</span><span class="p">)</span>
+        
+        <span class="k">def</span><span class="w"> </span><span class="nf">_import_mask</span><span class="p">(</span><span class="n">mask_path</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&#39;&#39;&#39;imports the mask&#39;&#39;&#39;</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Importing mask]&quot;</span><span class="p">)</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">mask_path</span><span class="p">)</span>
+            <span class="n">mask_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">mask_array</span>
+        
+        <span class="k">def</span><span class="w"> </span><span class="nf">_plot_mask</span><span class="p">(</span><span class="n">mask_array</span><span class="p">,</span> <span class="n">cmap</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&#39;&#39;&#39;plots the mask&#39;&#39;&#39;</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">mask_array</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">)</span>
+            <span class="n">num_colors</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">mask_array</span><span class="p">[</span><span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">mask_array</span><span class="p">)]))</span>
+            <span class="n">cmap</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">cm</span><span class="o">.</span><span class="n">get_cmap</span><span class="p">(</span><span class="n">cmap</span><span class="p">,</span> <span class="n">num_colors</span><span class="p">)</span> 
+            <span class="n">legend_elements</span> <span class="o">=</span> <span class="p">[</span><span class="n">Patch</span><span class="p">(</span><span class="n">facecolor</span><span class="o">=</span><span class="n">cmap</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_colors</span><span class="p">)]</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">handles</span><span class="o">=</span><span class="n">legend_elements</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="s1">&#39;lower right&#39;</span><span class="p">,</span> <span class="n">bbox_to_anchor</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">))</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_assign_spots</span><span class="p">(</span><span class="n">mask_array</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&#39;&#39;&#39;assigns each spot a value from the mask&#39;&#39;&#39;</span>
+            <span class="k">def</span><span class="w"> </span><span class="nf">_get_mask_value</span><span class="p">(</span><span class="n">mask_array</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+                <span class="k">if</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="n">mask_array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="ow">and</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">y</span> <span class="o">&lt;</span> <span class="n">mask_array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+                    <span class="k">return</span> <span class="n">mask_array</span><span class="p">[</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="kc">None</span>
+            <span class="k">def</span><span class="w"> </span><span class="nf">_get_spot_identity</span><span class="p">(</span><span class="n">row</span><span class="p">):</span>
+                <span class="n">x</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;pxl_col_in_fullres&#39;</span><span class="p">])</span>
+                <span class="n">y</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;pxl_row_in_fullres&#39;</span><span class="p">])</span>
+                <span class="k">return</span> <span class="n">_get_mask_value</span><span class="p">(</span><span class="n">mask_array</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+            
+            <span class="n">tqdm</span><span class="o">.</span><span class="n">pandas</span><span class="p">(</span><span class="n">desc</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Assigning spots identity [</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+            
+            <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">progress_apply</span><span class="p">(</span>
+                <span class="n">_get_spot_identity</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">mask_array</span> <span class="o">=</span> <span class="n">_import_mask</span><span class="p">(</span><span class="n">mask_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">plot</span><span class="p">:</span>
+            <span class="n">_plot_mask</span><span class="p">(</span><span class="n">mask_array</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">)</span>
+        <span class="n">_assign_spots</span><span class="p">(</span><span class="n">mask_array</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">_init_img</span><span class="p">()</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">To rename the values in the metadata, call the [update_meta] method with [</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">] and dictionary with current_name:new_name&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">mask_array</span></div>
+
+    
+
+<div class="viewcode-block" id="HiVis.add_annotations">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.add_annotations">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_annotations</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span> <span class="n">measurements</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Adds annotations made in Qupath (geojson)</span>
+<span class="sd">        parameters:</span>
+<span class="sd">            * path (str) - path to geojson file</span>
+<span class="sd">            * name (str) - name of the annotation (that will be called in the obs)</span>
+<span class="sd">            * measurements (bool) - include measurements columns? </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">validate_exists</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">annotations</span> <span class="o">=</span> <span class="n">gpd</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;classification&quot;</span> <span class="ow">in</span> <span class="n">annotations</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+            <span class="n">annotations</span><span class="p">[</span><span class="s2">&quot;classification&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">annotations</span><span class="p">[</span><span class="s2">&quot;classification&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">)</span>
+            <span class="n">annotations</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">annotations</span><span class="p">[</span><span class="s2">&quot;classification&quot;</span><span class="p">]]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">annotations</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">annotations</span><span class="o">.</span><span class="n">index</span>
+        <span class="n">annotations</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">annotations</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]</span>
+        <span class="k">del</span> <span class="n">annotations</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]</span>
+        <span class="k">del</span> <span class="n">annotations</span><span class="p">[</span><span class="s2">&quot;objectType&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s2">&quot;isLocked&quot;</span> <span class="ow">in</span> <span class="n">annotations</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+            <span class="k">del</span> <span class="n">annotations</span><span class="p">[</span><span class="s2">&quot;isLocked&quot;</span><span class="p">]</span>
+        
+        <span class="k">if</span> <span class="s2">&quot;measurements&quot;</span> <span class="ow">in</span> <span class="n">annotations</span><span class="o">.</span><span class="n">columns</span> <span class="ow">and</span> <span class="n">measurements</span><span class="p">:</span>
+            <span class="n">measurements_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">json_normalize</span><span class="p">(</span><span class="n">annotations</span><span class="p">[</span><span class="s2">&quot;measurements&quot;</span><span class="p">])</span>
+            <span class="n">annotations</span> <span class="o">=</span> <span class="n">gpd</span><span class="o">.</span><span class="n">GeoDataFrame</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">annotations</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;measurements&quot;</span><span class="p">]),</span> <span class="n">measurements_df</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+            <span class="n">perimeter</span> <span class="o">=</span> <span class="n">annotations</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">length</span>
+            <span class="n">area</span> <span class="o">=</span> <span class="n">annotations</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">area</span>
+            <span class="n">annotations</span><span class="p">[</span><span class="s2">&quot;circularity&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">area</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">perimeter</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+            <span class="n">annotations</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">perimeter</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;circularity&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+            <span class="n">cols</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">measurements_df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span> <span class="o">+</span> <span class="p">[</span><span class="s2">&quot;circularity&quot;</span><span class="p">,</span><span class="n">name</span><span class="p">,</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_id&quot;</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">measurements</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No measurements found&quot;</span><span class="p">)</span>
+            <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span><span class="p">,</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_id&quot;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">cols</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">col</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">col</span><span class="p">]</span>
+        <span class="n">obs</span> <span class="o">=</span> <span class="n">gpd</span><span class="o">.</span><span class="n">GeoDataFrame</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">,</span> 
+              <span class="n">geometry</span><span class="o">=</span><span class="n">gpd</span><span class="o">.</span><span class="n">points_from_xy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_col_in_fullres&quot;</span><span class="p">],</span>
+                                          <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_row_in_fullres&quot;</span><span class="p">]))</span>        
+        
+        <span class="k">with</span> <span class="n">warnings</span><span class="o">.</span><span class="n">catch_warnings</span><span class="p">():</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">simplefilter</span><span class="p">(</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="ne">UserWarning</span><span class="p">)</span>
+            <span class="n">merged_obs</span> <span class="o">=</span> <span class="n">gpd</span><span class="o">.</span><span class="n">sjoin</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span><span class="n">annotations</span><span class="p">,</span><span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">,</span><span class="n">predicate</span><span class="o">=</span><span class="s2">&quot;within&quot;</span><span class="p">)</span>
+        <span class="n">merged_obs</span> <span class="o">=</span> <span class="n">merged_obs</span><span class="p">[</span><span class="o">~</span><span class="n">merged_obs</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">duplicated</span><span class="p">(</span><span class="n">keep</span><span class="o">=</span><span class="s2">&quot;first&quot;</span><span class="p">)]</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">merged_obs</span><span class="p">[</span><span class="n">cols</span><span class="p">]),</span><span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">_init_img</span><span class="p">()</span></div>
+
+    
+        
+<div class="viewcode-block" id="HiVis.dge">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.dge">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">dge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">group1</span><span class="p">,</span> <span class="n">group2</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;wilcox&quot;</span><span class="p">,</span> <span class="n">two_sided</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">umi_thresh</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Runs differential gene expression analysis between two groups.</span>
+<span class="sd">        parameters:</span>
+<span class="sd">            * column (str) - which column in obs has the groups classification</span>
+<span class="sd">            * group1 - specific value in the &quot;column&quot;</span>
+<span class="sd">            * group2 - specific value in the &quot;column&quot;. \</span>
+<span class="sd">                       if None,will run agains all other values, and will be called &quot;rest&quot;</span>
+<span class="sd">            * method - either &quot;wilcox&quot; or &quot;t_test&quot;</span>
+<span class="sd">            * two_sided (bool) - if one sided, will give the pval for each group, \</span>
+<span class="sd">                          and the minimal of both groups (which will also be FDR adjusted)</span>
+<span class="sd">            * umi_thresh (int) - use only spots with more UMIs than this number</span>
+<span class="sd">            * inplace (bool) - modify the adata.var with log2fc, pval and expression columns?</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">alternative</span> <span class="o">=</span> <span class="s2">&quot;two-sided&quot;</span> <span class="k">if</span> <span class="n">two_sided</span> <span class="k">else</span> <span class="s2">&quot;greater&quot;</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">dge</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">group1</span><span class="p">,</span> <span class="n">group2</span><span class="p">,</span> <span class="n">umi_thresh</span><span class="p">,</span>
+                     <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span> <span class="n">alternative</span><span class="o">=</span><span class="n">alternative</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="n">inplace</span><span class="p">)</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="p">[[</span><span class="sa">f</span><span class="s2">&quot;pval_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span><span class="sa">f</span><span class="s2">&quot;log2fc_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span><span class="n">group1</span><span class="p">,</span><span class="n">group2</span><span class="p">]]</span>
+        <span class="n">df</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="sa">f</span><span class="s2">&quot;log2fc_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">:</span><span class="s2">&quot;log2fc&quot;</span><span class="p">},</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">two_sided</span><span class="p">:</span>
+            <span class="n">df</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;pval_</span><span class="si">{</span><span class="n">group1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">df</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;pval_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span>
+            <span class="n">df</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;pval_</span><span class="si">{</span><span class="n">group2</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;pval_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span>
+            <span class="n">df</span><span class="p">[</span><span class="s2">&quot;pval&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[[</span><span class="sa">f</span><span class="s2">&quot;pval_</span><span class="si">{</span><span class="n">group1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span><span class="sa">f</span><span class="s2">&quot;pval_</span><span class="si">{</span><span class="n">group2</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">df</span><span class="p">[</span><span class="s2">&quot;pval&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;pval_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span>
+        <span class="k">del</span> <span class="n">df</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;pval_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span>
+        <span class="n">df</span><span class="p">[</span><span class="s2">&quot;qval&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">p_adjust</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s2">&quot;pval&quot;</span><span class="p">])</span>
+        <span class="n">df</span><span class="p">[</span><span class="s2">&quot;expression_mean&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[[</span><span class="n">group1</span><span class="p">,</span> <span class="n">group2</span><span class="p">]]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">df</span><span class="p">[</span><span class="s2">&quot;expression_min&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[[</span><span class="n">group1</span><span class="p">,</span> <span class="n">group2</span><span class="p">]]</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">df</span><span class="p">[</span><span class="s2">&quot;expression_max&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[[</span><span class="n">group1</span><span class="p">,</span> <span class="n">group2</span><span class="p">]]</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">df</span><span class="p">[</span><span class="s2">&quot;gene&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">index</span>
+        <span class="k">if</span> <span class="n">inplace</span><span class="p">:</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">var</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;qval&quot;</span><span class="p">:</span><span class="sa">f</span><span class="s2">&quot;qval_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;pval&quot;</span><span class="p">:</span><span class="sa">f</span><span class="s2">&quot;pval_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;log2fc&quot;</span><span class="p">:</span><span class="sa">f</span><span class="s2">&quot;log2fc_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;expression_mean&quot;</span><span class="p">:</span><span class="sa">f</span><span class="s2">&quot;expression_mean_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;expression_min&quot;</span><span class="p">:</span><span class="sa">f</span><span class="s2">&quot;expression_min_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;expression_max&quot;</span><span class="p">:</span><span class="sa">f</span><span class="s2">&quot;expression_max_</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="p">},</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">del</span> <span class="n">var</span><span class="p">[</span><span class="s2">&quot;gene&quot;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">var</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">df</span></div>
+
+    
+    
+<div class="viewcode-block" id="HiVis.add_agg">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.add_agg">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_agg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">adata_agg</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Creates and adds Aggregation to the HiVis instance. Can be accessed by self.agg[name].</span>
+<span class="sd">        For example single-cells, tissue structures.</span>
+<span class="sd">        parameters:</span>
+<span class="sd">            * adata_agg (ad.AnnData) - anndata containing aggregations</span>
+<span class="sd">            * name (str) - name of the agg</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">adata_agg</span><span class="p">,</span> <span class="n">ad</span><span class="o">.</span><span class="n">AnnData</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;adata_agg must be anndata&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> allready in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">agg</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">agg_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">agg</span> <span class="o">=</span> <span class="n">Aggregation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">adata_agg</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">agg_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">agg</span></div>
+
+        
+    
+<div class="viewcode-block" id="HiVis.agg_stardist">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.agg_stardist">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">agg_stardist</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_df</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;SC&quot;</span><span class="p">,</span> <span class="n">obs2add</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">obs2agg</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Adds Aggregation object to self.agg[name], based on CSV output of Stardist pipeline.</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">            * input_df (pd.DataFrame) - output of Stardist pipeline </span>
+<span class="sd">            * name (str) - name to store the Aggregation in. Can be acessed via HiVis.agg[name]</span>
+<span class="sd">            * obs2agg - what obs to aggregate from the HiVis. \</span>
+<span class="sd">                        Can be a list of column names. numeric columns will be summed, categorical will be the mode. \</span>
+<span class="sd">                        Can be a dict specifying the aggregation function. \</span>
+<span class="sd">                        examples: {&quot;value_along_axis&quot;:np.median} or {&quot;value_along_axis&quot;:[np.median,np.mean]}</span>
+<span class="sd">            * obs2add (list) - which columns from input_df should be copied to the Aggregation.adata.obs</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        
+        <span class="n">spots_only</span><span class="p">,</span> <span class="n">cells_only</span> <span class="o">=</span> <span class="n">Aggregation_utils</span><span class="o">.</span><span class="n">split_stardist</span><span class="p">(</span><span class="n">input_df</span><span class="p">)</span>
+
+        <span class="n">aggregation_func</span> <span class="o">=</span> <span class="n">Aggregation_utils</span><span class="o">.</span><span class="n">_aggregate_data_stardist</span>
+
+        <span class="n">adata_agg</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">Aggregation_utils</span><span class="o">.</span><span class="n">new_adata</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="p">,</span> <span class="s2">&quot;Cell_ID&quot;</span><span class="p">,</span> <span class="n">aggregation_func</span><span class="p">,</span>
+                                       <span class="n">obs2agg</span><span class="o">=</span><span class="n">obs2agg</span><span class="p">,</span><span class="n">in_cell_col</span><span class="o">=</span><span class="s2">&quot;in_cell&quot;</span><span class="p">,</span><span class="n">nuc_col</span><span class="o">=</span><span class="s2">&quot;in_nucleus&quot;</span><span class="p">)</span>
+        
+        <span class="n">obs2add</span> <span class="o">=</span> <span class="p">[</span><span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">cells_only</span><span class="o">.</span><span class="n">columns</span> <span class="k">if</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">obs2add</span><span class="p">]</span>
+        <span class="n">Aggregation_utils</span><span class="o">.</span><span class="n">merge_cells</span><span class="p">(</span><span class="n">cells_only</span><span class="p">,</span> <span class="n">adata_agg</span><span class="p">,</span> <span class="n">obs2add</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">add_agg</span><span class="p">(</span><span class="n">adata_agg</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">)</span></div>
+
+    
+    
+<div class="viewcode-block" id="HiVis.add_meta">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.add_meta">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_meta</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">type_</span><span class="o">=</span><span class="s2">&quot;obs&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Adds a vector to metadata (obs or var)</span>
+<span class="sd">        parameters:</span>
+<span class="sd">            * name (str) - name of metadata</span>
+<span class="sd">            * values (array like) - values to add</span>
+<span class="sd">            * type_ - either &quot;obs&quot; or &quot;var&quot;</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">type_</span> <span class="o">==</span> <span class="s2">&quot;obs&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">] allready present in adata.obs&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span>
+        <span class="k">elif</span> <span class="n">type_</span> <span class="o">==</span> <span class="s2">&quot;var&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">] allready present in adata.var&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">_init_img</span><span class="p">()</span></div>
+
+    
+<div class="viewcode-block" id="HiVis.update_meta">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.update_meta">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">update_meta</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span><span class="nb">dict</span><span class="p">,</span> <span class="n">type_</span><span class="o">=</span><span class="s2">&quot;obs&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Updates values in metadata (obs or var)</span>
+<span class="sd">        parameters:</span>
+<span class="sd">            * name (str) - name of metadata</span>
+<span class="sd">            * values (dict) -{old_value:new_value}</span>
+<span class="sd">            * type_ - either &quot;obs&quot; or &quot;var&quot;</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">type_</span> <span class="o">==</span> <span class="s2">&quot;obs&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No metadata called [</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">] in obs&quot;</span><span class="p">)</span>
+            <span class="n">original_dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">values</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="k">if</span> <span class="n">pd</span><span class="o">.</span><span class="n">notna</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">else</span> <span class="n">x</span><span class="p">)</span>
+            
+            <span class="c1"># Convert back to original dtype if it was categorical</span>
+            <span class="k">if</span> <span class="n">pd</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">is_categorical_dtype</span><span class="p">(</span><span class="n">original_dtype</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;category&#39;</span><span class="p">)</span> 
+        <span class="k">elif</span> <span class="n">type_</span> <span class="o">==</span> <span class="s2">&quot;var&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No metadata called [</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">] in var&quot;</span><span class="p">)</span>
+            <span class="n">original_dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">values</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="k">if</span> <span class="n">pd</span><span class="o">.</span><span class="n">notna</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">else</span> <span class="n">x</span><span class="p">)</span>
+            
+            <span class="c1"># Convert back to original dtype if it was categorical</span>
+            <span class="k">if</span> <span class="n">pd</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">is_categorical_dtype</span><span class="p">(</span><span class="n">original_dtype</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;category&#39;</span><span class="p">)</span>    
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;type_ must be either &#39;obs&#39; or &#39;var&#39;&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">_init_img</span><span class="p">()</span></div>
+
+        
+    
+<div class="viewcode-block" id="HiVis.pseudobulk">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.pseudobulk">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">pseudobulk</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">by</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Returns the gene expression for each group in a single obs.</span>
+<span class="sd">        If &quot;by&quot; is None, will return the mean expression of every gene.</span>
+<span class="sd">        Else, will return a dataframe, each column is a value in &quot;by&quot; (for example cluster), rows are genes.</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">by</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">pb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">A1</span>
+            <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">pb</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var_names</span><span class="p">)</span>
+        
+        <span class="n">unique_groups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">by</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span>
+        <span class="n">n_groups</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">unique_groups</span><span class="p">)</span>
+        <span class="n">n_genes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">n_vars</span>  
+        <span class="n">result</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_groups</span><span class="p">,</span> <span class="n">n_genes</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">unique_groups</span><span class="p">):</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">by</span><span class="p">]</span> <span class="o">==</span> <span class="n">group</span><span class="p">)</span><span class="o">.</span><span class="n">values</span>
+            <span class="n">group_sum</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  
+            <span class="n">group_mean</span> <span class="o">=</span> <span class="n">group_sum</span> <span class="o">/</span> <span class="n">mask</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> 
+            <span class="n">result</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">group_mean</span><span class="o">.</span><span class="n">A1</span>     
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var_names</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">unique_groups</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="HiVis.noise_mean_curve">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.noise_mean_curve">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">noise_mean_curve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">signif_thresh</span><span class="o">=</span><span class="mf">0.95</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Generates a noise-mean curve of the data.</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">            * plot (bool) - plot the curve?</span>
+<span class="sd">            * layer - which layer in the anndata to use</span>
+<span class="sd">            * signif_thresh (float) - for plotting, add text for genes in this residual precentile</span>
+<span class="sd">            * inplace (bool) - add the mean_expression, cv and residuals to VAR?</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">noise_mean_curve</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="n">plot</span><span class="p">,</span><span class="n">layer</span><span class="o">=</span><span class="n">layer</span><span class="p">,</span>
+                                               <span class="n">signif_thresh</span><span class="o">=</span><span class="n">signif_thresh</span><span class="p">,</span><span class="n">inplace</span><span class="o">=</span><span class="n">inplace</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="HiVis.cor">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.cor">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">what</span><span class="p">,</span> <span class="n">self_corr_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">normilize</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">layer</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Calculates gene(s) correlation.</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">            * what (str or list) - if str, computes Spearman correlation of a given gene with all genes. \</span>
+<span class="sd">                                    if list, will compute correlation between all genes in the list</span>
+<span class="sd">            * self_corr_value - replace the correlation of the gene with itself by this value</span>
+<span class="sd">            * normilize (bool) - normilize expression before computing correlation?</span>
+<span class="sd">            * layer (str) - which layer in the anndata to use</span>
+<span class="sd">            * inplace (bool) - add the correlation to VAR?</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">what</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">what</span><span class="p">]</span>
+            <span class="k">return</span> <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">cor_gene</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">what</span><span class="p">,</span> <span class="n">self_corr_value</span><span class="p">,</span> <span class="n">normilize</span><span class="p">,</span> <span class="n">layer</span><span class="p">,</span> <span class="n">inplace</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">cor_genes</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="p">,</span> <span class="n">what</span><span class="p">,</span> <span class="n">self_corr_value</span><span class="p">,</span> <span class="n">normilize</span><span class="p">,</span> <span class="n">layer</span><span class="p">)</span></div>
+
+        
+                
+<div class="viewcode-block" id="HiVis.export_h5">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.export_h5">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">export_h5</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Exports the adata as h5ad.</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">            * path (str) - path to save the h5 file. If None, will save to path_output</span>
+<span class="sd">            * force (bool) - save file even if it allready exists</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_output</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_HiVis.h5ad&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="ow">or</span> <span class="n">force</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Writing h5]&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span></div>
+
+    
+<div class="viewcode-block" id="HiVis.export_images">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.export_images">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">export_images</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Exports full,high and low resolution images</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">            * path (str) - path to save the image files. If None, will save to path_output</span>
+<span class="sd">            * force (bool)- save files even if they allready exists</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_output</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">path_image_fullres</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_fullres.tif&quot;</span>
+        <span class="n">image_fullres</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_fullres_orig</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_fullres</span>
+        <span class="n">path_image_highres</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_highres.tif&quot;</span>
+        <span class="n">path_image_lowres</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_lowres.tif&quot;</span>
+        <span class="n">images</span> <span class="o">=</span> <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">_export_images</span><span class="p">(</span><span class="n">path_image_fullres</span><span class="p">,</span> <span class="n">path_image_highres</span><span class="p">,</span> 
+                                      <span class="n">path_image_lowres</span><span class="p">,</span> <span class="n">image_fullres</span><span class="p">,</span> 
+                                      <span class="bp">self</span><span class="o">.</span><span class="n">image_highres</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_lowres</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="n">force</span><span class="p">)</span>
+        
+        <span class="n">path_json</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_scalefactors_json.json&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path_json</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+            <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">json</span><span class="p">,</span> <span class="n">file</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+        
+        <span class="n">images</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">json</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">images</span></div>
+
+
+    
+<div class="viewcode-block" id="HiVis.get">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.get">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">what</span><span class="p">,</span> <span class="n">cropped</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        get a vector from data (a gene) or metadata (from obs or var). or subset the object.</span>
+<span class="sd">        parameters:</span>
+<span class="sd">            * what - if string, will get data or metadata. else, will return a new HiVis object that is spliced. \</span>
+<span class="sd">                     the splicing is passed to the self.adata</span>
+<span class="sd">            * cropped - get the data from the adata_cropped after crop() or plotting methods?</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">adata</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata_cropped</span> <span class="k">if</span> <span class="n">cropped</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">what</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>  <span class="c1"># Easy access to data or metadata arrays</span>
+            <span class="k">if</span> <span class="n">what</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>  <span class="c1"># Metadata</span>
+                <span class="n">column_data</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">what</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">column_data</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;category&#39;</span><span class="p">:</span>  <span class="c1"># Handle categorical dtype</span>
+                    <span class="k">return</span> <span class="n">column_data</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">values</span>
+                <span class="k">return</span> <span class="n">column_data</span><span class="o">.</span><span class="n">values</span>
+            <span class="k">if</span> <span class="n">what</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">index</span><span class="p">:</span>  <span class="c1"># A gene</span>
+                <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">adata</span><span class="p">[:,</span> <span class="n">what</span><span class="p">]</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">todense</span><span class="p">()</span><span class="o">.</span><span class="n">ravel</span><span class="p">())</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">what</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>  <span class="c1"># Gene metadata</span>
+                <span class="n">column_data</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">what</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">column_data</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;category&#39;</span><span class="p">:</span>  <span class="c1"># Handle categorical dtype</span>
+                    <span class="k">return</span> <span class="n">column_data</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">values</span>
+                <span class="k">return</span> <span class="n">column_data</span><span class="o">.</span><span class="n">values</span>
+            <span class="n">obs_cols_lower</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">what</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="n">obs_cols_lower</span><span class="p">:</span>
+                <span class="n">col_name</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="n">obs_cols_lower</span><span class="o">.</span><span class="n">get_loc</span><span class="p">(</span><span class="n">what</span><span class="o">.</span><span class="n">lower</span><span class="p">())]</span>
+                <span class="n">column_data</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">col_name</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">column_data</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;category&#39;</span><span class="p">:</span>  <span class="c1"># Handle categorical dtype</span>
+                    <span class="k">return</span> <span class="n">column_data</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">values</span>
+                <span class="k">return</span> <span class="n">column_data</span><span class="o">.</span><span class="n">values</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">organism</span> <span class="o">==</span> <span class="s2">&quot;mouse&quot;</span> <span class="ow">and</span> <span class="p">(</span><span class="n">what</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">capitalize</span><span class="p">()</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">index</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">adata</span><span class="p">[:,</span> <span class="n">what</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">capitalize</span><span class="p">()]</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">todense</span><span class="p">())</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">organism</span> <span class="o">==</span> <span class="s2">&quot;human&quot;</span> <span class="ow">and</span> <span class="p">(</span><span class="n">what</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">index</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">adata</span><span class="p">[:,</span> <span class="n">what</span><span class="o">.</span><span class="n">upper</span><span class="p">()]</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">todense</span><span class="p">())</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+            <span class="n">var_cols_lower</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">what</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="n">var_cols_lower</span><span class="p">:</span>
+                <span class="n">col_name</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="n">var_cols_lower</span><span class="o">.</span><span class="n">get_loc</span><span class="p">(</span><span class="n">what</span><span class="o">.</span><span class="n">lower</span><span class="p">())]</span>
+                <span class="n">column_data</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">col_name</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">column_data</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;category&#39;</span><span class="p">:</span>  <span class="c1"># Handle categorical dtype</span>
+                    <span class="k">return</span> <span class="n">column_data</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">values</span>
+                <span class="k">return</span> <span class="n">column_data</span><span class="o">.</span><span class="n">values</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Create a new HiVis object based on adata subsetting</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">subset</span><span class="p">(</span><span class="n">what</span><span class="p">,</span> <span class="n">remove_empty_pixels</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+            
+<div class="viewcode-block" id="HiVis.subset">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.subset">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">subset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">what</span><span class="o">=</span><span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span> <span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)),</span> <span class="n">remove_empty_pixels</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">crop_agg</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Create a new HiVis objects based on adata subsetting.</span>
+<span class="sd">        parameters:</span>
+<span class="sd">            - what (tuple) - tuple of two elements. slicing instruction for adata. examples:</span>
+<span class="sd">                - (slice(None), slice(None)): Select all spots and all genes.</span>
+<span class="sd">                - ([0, 1, 2], slice(None)): Select the first three spots and all genes.</span>
+<span class="sd">                - (slice(None), [&#39;GeneA&#39;, &#39;GeneB&#39;]): Select all spots and specific genes.</span>
+<span class="sd">                - (adata.obs[&#39;obs1&#39;] == &#39;value&#39;, slice(None)): Select spots where </span>
+<span class="sd">                  the &#39;obs1&#39; column in adata.obs is &#39;value&#39;, and all genes.</span>
+<span class="sd">            - remove_empty_pixels (bool) - if True, the images will only contain pixels under visium spots</span>
+<span class="sd">            - crop_agg (bool) - crop agg objects? If False, plotting of aggregations might break.</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">adata</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="p">[</span><span class="n">what</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">image_fullres_crop</span><span class="p">,</span> <span class="n">image_highres_crop</span><span class="p">,</span> <span class="n">image_lowres_crop</span><span class="p">,</span> <span class="n">xlim_pixels_fullres</span><span class="p">,</span> <span class="n">ylim_pixels_fullres</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__crop_images</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">remove_empty_pixels</span><span class="p">)</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;_subset&quot;</span> <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;_subset&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">adata_shifted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__shift_adata</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">xlim_pixels_fullres</span><span class="p">,</span> <span class="n">ylim_pixels_fullres</span><span class="p">)</span>
+        <span class="n">new_obj</span> <span class="o">=</span> <span class="n">HiVis</span><span class="p">(</span><span class="n">adata_shifted</span><span class="p">,</span> <span class="n">image_fullres_crop</span><span class="p">,</span> <span class="n">image_highres_crop</span><span class="p">,</span> 
+                           <span class="n">image_lowres_crop</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">json</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_output</span><span class="p">,</span><span class="n">agg</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                           <span class="n">properties</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span><span class="n">fluorescence</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>    
+        <span class="c1"># update the link in all aggregations to the new HiVis instance</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">:</span> 
+            <span class="k">for</span> <span class="n">agg</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">crop_agg</span><span class="p">:</span>
+                    <span class="n">adata_agg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">[</span><span class="n">agg</span><span class="p">]</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                    <span class="n">idx_col</span> <span class="o">=</span> <span class="n">adata_agg</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">name</span>
+                    <span class="n">adata_agg_shifted</span> <span class="o">=</span> <span class="n">adata_agg</span><span class="p">[</span><span class="n">adata_agg</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">adata_shifted</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">idx_col</span><span class="p">]),</span><span class="n">adata_shifted</span><span class="o">.</span><span class="n">var_names</span><span class="p">]</span>
+                    <span class="n">adata_agg_shifted</span><span class="o">.</span><span class="n">var</span> <span class="o">=</span> <span class="n">adata_agg_shifted</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">loc</span><span class="p">[:,</span><span class="o">~</span><span class="n">adata_agg_shifted</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">startswith</span><span class="p">((</span><span class="s2">&quot;cor_&quot;</span><span class="p">,</span><span class="s2">&quot;exp_&quot;</span><span class="p">))]</span>
+                    <span class="n">adata_agg_shifted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__shift_adata</span><span class="p">(</span><span class="n">adata_agg_shifted</span><span class="p">,</span> <span class="n">xlim_pixels_fullres</span><span class="p">,</span> <span class="n">ylim_pixels_fullres</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">adata_agg_shifted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">[</span><span class="n">agg</span><span class="p">]</span><span class="o">.</span><span class="n">adata</span>
+                <span class="n">new_obj</span><span class="o">.</span><span class="n">add_agg</span><span class="p">(</span><span class="n">adata_agg_shifted</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span><span class="n">agg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_obj</span></div>
+
+   
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__crop_images</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">adata</span><span class="p">,</span> <span class="n">remove_empty_pixels</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Helper function for get().</span>
+<span class="sd">        Crops the images based on the spatial coordinates in a subsetted `adata` </span>
+<span class="sd">        and adjusts the adata accordingly (shifts x, y)</span>
+<span class="sd">        remove_empty_pixels - whether to remove pixels that dont have spots on them.</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="c1"># Crop images</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">_crop_img</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">img</span><span class="p">,</span> <span class="n">col</span><span class="p">,</span> <span class="n">row</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&#39;&#39;&#39;crops one image by the x,y values in adata.obs, as specified by col, row&#39;&#39;&#39;</span>
+            <span class="n">pxl_col</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
+            <span class="n">pxl_row</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">row</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
+            <span class="n">xlim_pixels</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">pxl_col</span><span class="o">.</span><span class="n">min</span><span class="p">())),</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">pxl_col</span><span class="o">.</span><span class="n">max</span><span class="p">()))]</span>
+            <span class="n">ylim_pixels</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">pxl_row</span><span class="o">.</span><span class="n">min</span><span class="p">())),</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">pxl_row</span><span class="o">.</span><span class="n">max</span><span class="p">()))]</span>
+            <span class="c1"># Ensure the limits are within the image boundaries</span>
+            <span class="n">xlim_pixels</span> <span class="o">=</span> <span class="p">[</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">xlim_pixels</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">min</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">xlim_pixels</span><span class="p">[</span><span class="mi">1</span><span class="p">])]</span>
+            <span class="n">ylim_pixels</span> <span class="o">=</span> <span class="p">[</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">ylim_pixels</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">min</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ylim_pixels</span><span class="p">[</span><span class="mi">1</span><span class="p">])]</span>
+            <span class="k">if</span> <span class="n">xlim_pixels</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">xlim_pixels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">or</span> <span class="n">ylim_pixels</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">ylim_pixels</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid crop dimensions.&quot;</span><span class="p">)</span>
+            <span class="n">img_crop</span> <span class="o">=</span> <span class="n">img</span><span class="p">[</span><span class="n">ylim_pixels</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">ylim_pixels</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">xlim_pixels</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">xlim_pixels</span><span class="p">[</span><span class="mi">1</span><span class="p">],:]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            
+            <span class="k">if</span> <span class="n">remove_empty_pixels</span><span class="p">:</span>
+                <span class="c1"># remove pixels in images that don&#39;t have spots</span>
+                <span class="n">pxl_cols_shifted</span> <span class="o">=</span> <span class="n">pxl_col</span> <span class="o">-</span> <span class="n">xlim_pixels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">pxl_rows_shifted</span> <span class="o">=</span> <span class="n">pxl_row</span> <span class="o">-</span> <span class="n">ylim_pixels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">img_crop</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">img_crop</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">cx</span><span class="p">,</span> <span class="n">cy</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">pxl_cols_shifted</span><span class="p">,</span> <span class="n">pxl_rows_shifted</span><span class="p">):</span>
+                    <span class="c1"># Ensure we only mark valid coordinates within the cropped image</span>
+                    <span class="n">cx</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">cx</span><span class="p">)</span>  
+                    <span class="n">cy</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">cy</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">cx</span> <span class="o">&lt;</span> <span class="n">img_crop</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">and</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">cy</span> <span class="o">&lt;</span> <span class="n">img_crop</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+                        <span class="n">mask</span><span class="p">[</span><span class="n">cy</span><span class="p">,</span> <span class="n">cx</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="c1"># Set non-adata remove pixels that are not covered by spots</span>
+                <span class="n">background_value</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span> <span class="k">else</span> <span class="mi">255</span> <span class="c1"># black for fluorescence, white for RGB</span>
+                <span class="n">img_crop</span><span class="p">[</span><span class="o">~</span><span class="n">mask</span><span class="p">]</span> <span class="o">=</span> <span class="n">background_value</span>
+            <span class="k">return</span> <span class="n">img_crop</span><span class="p">,</span> <span class="n">xlim_pixels</span><span class="p">,</span> <span class="n">ylim_pixels</span>
+        
+        <span class="n">image_fullres</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_fullres_orig</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_fullres</span>
+        <span class="n">image_fullres_crop</span><span class="p">,</span> <span class="n">xlim_pixels_fullres</span><span class="p">,</span> <span class="n">ylim_pixels_fullres</span> <span class="o">=</span> <span class="n">_crop_img</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">image_fullres</span><span class="p">,</span> <span class="s2">&quot;pxl_col_in_fullres&quot;</span><span class="p">,</span> <span class="s2">&quot;pxl_row_in_fullres&quot;</span><span class="p">)</span>
+        <span class="n">image_highres_crop</span> <span class="p">,</span> <span class="n">_</span> <span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_crop_img</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_highres</span><span class="p">,</span> <span class="s2">&quot;pxl_col_in_highres&quot;</span><span class="p">,</span> <span class="s2">&quot;pxl_row_in_highres&quot;</span><span class="p">)</span>
+        <span class="n">image_lowres_crop</span> <span class="p">,</span> <span class="n">_</span> <span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_crop_img</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_lowres</span><span class="p">,</span> <span class="s2">&quot;pxl_col_in_lowres&quot;</span><span class="p">,</span> <span class="s2">&quot;pxl_row_in_lowres&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">image_fullres_crop</span><span class="p">,</span> <span class="n">image_highres_crop</span><span class="p">,</span> <span class="n">image_lowres_crop</span><span class="p">,</span><span class="n">xlim_pixels_fullres</span><span class="p">,</span> <span class="n">ylim_pixels_fullres</span>
+    
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">__shift_adata</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">adata</span><span class="p">,</span> <span class="n">xlim_pixels_fullres</span><span class="p">,</span> <span class="n">ylim_pixels_fullres</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Shifts the coordinates in an adata, based on xlim, ylim (in pixel space). \</span>
+<span class="sd">        Also shifts the geometry WKT in micron space.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">adata_shifted</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">drop_columns</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;pxl_col_in_lowres&quot;</span><span class="p">,</span><span class="s2">&quot;pxl_row_in_lowres&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;pxl_col_in_highres&quot;</span><span class="p">,</span><span class="s2">&quot;pxl_row_in_highres&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;um_x&quot;</span><span class="p">,</span><span class="s2">&quot;um_y&quot;</span><span class="p">]</span>
+        <span class="n">adata_shifted</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">drop_columns</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">)</span>
+    
+        <span class="c1"># Shift the coordinates</span>
+        <span class="n">adata_shifted</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_col_in_fullres&quot;</span><span class="p">]</span> <span class="o">-=</span> <span class="n">xlim_pixels_fullres</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">adata_shifted</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;pxl_row_in_fullres&quot;</span><span class="p">]</span> <span class="o">-=</span> <span class="n">ylim_pixels_fullres</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    
+        <span class="c1"># Shift the geometry in micron space</span>
+        <span class="k">if</span> <span class="s2">&quot;geometry&quot;</span> <span class="ow">in</span> <span class="n">adata_shifted</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+            <span class="n">x_offset_microns</span> <span class="o">=</span> <span class="n">xlim_pixels_fullres</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">json</span><span class="p">[</span><span class="s2">&quot;microns_per_pixel&quot;</span><span class="p">]</span>
+            <span class="n">y_offset_microns</span> <span class="o">=</span> <span class="n">ylim_pixels_fullres</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">json</span><span class="p">[</span><span class="s2">&quot;microns_per_pixel&quot;</span><span class="p">]</span>
+    
+            <span class="k">def</span><span class="w"> </span><span class="nf">_shift_wkt_geometry</span><span class="p">(</span><span class="n">geom_wkt</span><span class="p">):</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">geom_wkt</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">geom_wkt</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+                    <span class="n">geom</span> <span class="o">=</span> <span class="n">wkt</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">geom_wkt</span><span class="p">)</span>
+                    <span class="n">geom</span> <span class="o">=</span> <span class="n">affinity</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span><span class="n">geom</span><span class="p">,</span> <span class="n">xoff</span><span class="o">=-</span><span class="n">x_offset_microns</span><span class="p">,</span> <span class="n">yoff</span><span class="o">=-</span><span class="n">y_offset_microns</span><span class="p">)</span>
+                    <span class="k">return</span> <span class="n">geom</span><span class="o">.</span><span class="n">wkt</span>  <span class="c1"># Store back as WKT</span>
+                <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    
+            <span class="n">adata_shifted</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;geometry&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">adata_shifted</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;geometry&quot;</span><span class="p">]</span>
+                <span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">_shift_wkt_geometry</span><span class="p">)</span>
+            <span class="p">)</span>
+    
+        <span class="k">return</span> <span class="n">adata_shifted</span>
+        
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">what</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;Get a vector from data (a gene) or metadata (from obs or var). or subset the object.&#39;&#39;&#39;</span>
+        <span class="n">item</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">what</span><span class="p">,</span> <span class="n">cropped</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">item</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">what</span><span class="si">}</span><span class="s2">] isn&#39;t in data or metadatas&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">item</span>
+    
+<div class="viewcode-block" id="HiVis.remove_pixels">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.remove_pixels">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">remove_pixels</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">marging</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Removes pixels in images, based on adata.obs[column].isin(values).</span>
+<span class="sd">        parameters:</span>
+<span class="sd">            * marging (int) - how many pixels to extend the removed pixels.</span>
+<span class="sd">        returns new HiVis object.</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="c1"># Identify which pixels to remove based on the given condition</span>
+        <span class="n">obs_values</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">column</span><span class="p">]</span>
+        <span class="n">remove_mask</span> <span class="o">=</span> <span class="n">obs_values</span><span class="o">.</span><span class="n">isin</span><span class="p">([</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">pd</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">v</span><span class="p">)])</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">):</span> <span class="c1"># Handle NaNs</span>
+            <span class="n">remove_mask</span> <span class="o">|=</span> <span class="n">obs_values</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span>
+    
+        <span class="c1"># Determine the background color: Black (0) if fluorescence images, white (255) otherwise</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span><span class="p">:</span>
+            <span class="n">img_fullres_new</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_fullres_orig</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_fullres_orig</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="n">background_value</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">img_fullres_new</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_fullres</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_fullres</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="n">background_value</span> <span class="o">=</span> <span class="mi">255</span>
+        <span class="n">img_highres_new</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_highres</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_highres</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">img_lowres_new</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_lowres</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_lowres</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+    
+        <span class="c1"># Extract spot diameter and compute corresponding sizes for each resolution</span>
+        <span class="n">spot_diameter_fullres</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">json</span><span class="p">[</span><span class="s1">&#39;spot_diameter_fullres&#39;</span><span class="p">]</span>
+        <span class="c1"># For indexing, we need integer sizes</span>
+        
+        <span class="kn">from</span><span class="w"> </span><span class="nn">math</span><span class="w"> </span><span class="kn">import</span> <span class="n">ceil</span>
+        <span class="n">spot_size_fullres</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">ceil</span><span class="p">(</span><span class="n">spot_diameter_fullres</span><span class="p">))</span>
+        <span class="n">spot_size_hires</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">ceil</span><span class="p">(</span><span class="n">spot_diameter_fullres</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">json</span><span class="p">[</span><span class="s1">&#39;tissue_hires_scalef&#39;</span><span class="p">]))</span>
+        <span class="n">spot_size_lowres</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">ceil</span><span class="p">(</span><span class="n">spot_diameter_fullres</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">json</span><span class="p">[</span><span class="s1">&#39;tissue_lowres_scalef&#39;</span><span class="p">]))</span>
+        <span class="c1"># Ensure sizes are at least 1</span>
+        <span class="n">spot_size_fullres</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">spot_size_fullres</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">spot_size_hires</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">spot_size_hires</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">spot_size_lowres</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">spot_size_lowres</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        
+    
+        <span class="c1"># The image info tuples as before</span>
+        <span class="n">img_info</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">(</span><span class="n">img_fullres_new</span><span class="p">,</span> <span class="s2">&quot;pxl_col_in_fullres&quot;</span><span class="p">,</span> <span class="s2">&quot;pxl_row_in_fullres&quot;</span><span class="p">,</span> <span class="n">spot_size_fullres</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">img_highres_new</span><span class="p">,</span> <span class="s2">&quot;pxl_col_in_highres&quot;</span><span class="p">,</span> <span class="s2">&quot;pxl_row_in_highres&quot;</span><span class="p">,</span> <span class="n">spot_size_hires</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">img_lowres_new</span><span class="p">,</span> <span class="s2">&quot;pxl_col_in_lowres&quot;</span><span class="p">,</span> <span class="s2">&quot;pxl_row_in_lowres&quot;</span><span class="p">,</span> <span class="n">spot_size_lowres</span><span class="p">)</span>
+        <span class="p">]</span>
+    
+        <span class="n">images</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">img_new</span><span class="p">,</span> <span class="n">col_name</span><span class="p">,</span> <span class="n">row_name</span><span class="p">,</span> <span class="n">spot_size</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">img_info</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">img_new</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">pxl_cols</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">col_name</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+                <span class="n">pxl_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">row_name</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+                <span class="n">half_spot</span> <span class="o">=</span> <span class="n">spot_size</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">marging</span> <span class="c1"># +1 is marging</span>
+    
+                <span class="c1"># Instead of removing one pixel, remove a square region</span>
+                <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">to_remove</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">remove_mask</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">to_remove</span><span class="p">:</span>
+                        <span class="n">r</span> <span class="o">=</span> <span class="n">pxl_rows</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+                        <span class="n">c</span> <span class="o">=</span> <span class="n">pxl_cols</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+    
+                        <span class="c1"># Compute the boundaries of the square, clamped within image bounds</span>
+                        <span class="n">top</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">r</span> <span class="o">-</span> <span class="n">half_spot</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                        <span class="n">bottom</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">r</span> <span class="o">+</span> <span class="n">half_spot</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">img_new</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># +1 to include the boundary</span>
+                        <span class="n">left</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">c</span> <span class="o">-</span> <span class="n">half_spot</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                        <span class="n">right</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">c</span> <span class="o">+</span> <span class="n">half_spot</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">img_new</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    
+                        <span class="c1"># Set the entire block to background_value</span>
+                        <span class="n">img_new</span><span class="p">[</span><span class="n">top</span><span class="p">:</span><span class="n">bottom</span><span class="p">,</span> <span class="n">left</span><span class="p">:</span><span class="n">right</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">background_value</span>
+            <span class="n">images</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">img_new</span><span class="p">)</span>
+        
+        <span class="c1"># Create a new object with the modified images</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;_edited&quot;</span> <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;_edited&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
+        <span class="n">new_obj</span> <span class="o">=</span> <span class="n">HiVis</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span><span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">images</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                           <span class="n">images</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span><span class="bp">self</span><span class="o">.</span><span class="n">json</span><span class="p">,</span><span class="n">name</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">path_output</span><span class="p">,</span>
+                           <span class="n">properties</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+                           <span class="n">fluorescence</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fluorescence</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>        
+        <span class="k">return</span> <span class="n">new_obj</span></div>
+
+
+        
+    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;# </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> #</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;organism&quot;</span><span class="p">):</span> <span class="n">s</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">Organism: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">organism</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;organ&quot;</span><span class="p">):</span> <span class="n">s</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">Organ: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">organ</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;sample_id&quot;</span><span class="p">):</span> <span class="n">s</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">ID: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">sample_id</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">Size: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">obs: &#39;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">columns</span><span class="p">))</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;</span><span class="se">\n\n</span><span class="s1">var: &#39;</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">columns</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">:</span>
+            <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;</span><span class="se">\n\n</span><span class="s1">Aggregations:</span><span class="se">\n</span><span class="s1">&#39;</span>
+            <span class="k">for</span> <span class="n">agg</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">:</span>
+                <span class="n">s</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">agg</span><span class="si">}</span><span class="s2">]</span><span class="se">\t</span><span class="s2">shape: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">[</span><span class="n">agg</span><span class="p">]</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">[</span><span class="n">agg</span><span class="p">]</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="n">s</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># s = f&quot;HiVis[{self.name}]&quot;</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="fm">__str__</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">s</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="fm">__delitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;deletes metadata&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">:</span>
+                <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&#39; not found in adata.obs&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">_init_img</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Key must be a string, not </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    
+<div class="viewcode-block" id="HiVis.head">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.head">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">head</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="n">n</span><span class="p">)</span></div>
+
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">shape</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">columns</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    
+<div class="viewcode-block" id="HiVis.rename">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.rename">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">rename</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">new_out_path</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">full</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Renames the object and changes the path_output.</span>
+<span class="sd">        If full is False, the name will be added to the current (previous) name</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">full</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">new_name</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;_subset&quot;</span><span class="p">,</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">new_name</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="n">new_out_path</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">path_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_output</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;/</span><span class="si">{</span><span class="n">new_name</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+        
+    
+<div class="viewcode-block" id="HiVis.update">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.update">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agg</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;Updates the methods in the instance. Should be used after modifying the source code in the class&#39;&#39;&#39;</span>
+        <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">update_instance_methods</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">HiVis_utils</span><span class="o">.</span><span class="n">update_instance_methods</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">_init_img</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">agg</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">agg</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">[</span><span class="n">agg</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">_</span> <span class="o">=</span> <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="HiVis.copy">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.copy">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;Creates a deep copy of the instance&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="HiVis.save">
+<a class="viewcode-back" href="../modules.html#HiVis.HiVis.save">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Saves the instance in pickle format.</span>
+<span class="sd">        If no path specified, will save in the path_output as the name of the instance</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SAVING [</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">path</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">path_output</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">.pkl&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.pkl&quot;</span><span class="p">):</span>
+                <span class="n">path</span> <span class="o">+=</span> <span class="s2">&quot;.pkl&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">dill</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>            
+        <span class="k">return</span> <span class="n">path</span></div>
+</div>
+
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Roy Novoselsky.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,19 +1,15 @@
 # -*- coding: utf-8 -*-
 """
 HD Integrated Visium Interactive Suite (HiVis)
-
-Created on Sun Sep 15 13:28:30 2024
-
-@author: royno
 """
 # General libraries
 import os
 import dill
 import gc
 import warnings
+
 from tqdm import tqdm
 from copy import deepcopy
-
 # Data libraries
 import json
 import numpy as np
@@ -21,17 +17,16 @@ import pandas as pd
 import geopandas as gpd
 from shapely import wkt, affinity
 import anndata as ad
-
 # Plotting libraries
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from PIL import Image
 
+
 from . import HiVis_utils
 from .Aggregation import Aggregation
 from . import HiVis_plot
 from . import Aggregation_utils
-
 
 Image.MAX_IMAGE_PIXELS = 1063425001 # Enable large images loading
 
@@ -60,7 +55,7 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
     - Adds basic QC to the metadata (nUMI, mitochondrial %)
     parameters:
         * path_input_fullres_image (str) - path of the fullres image
-        * path_input_data (str) - folder with outs of the Visium. typically square_002um
+        * path_input_data (str) - folder with outs of the Visium. typically square_002um \
                             (with h5 files and with folders filtered_feature_bc_matrix, spatial)
         * path_output (str) - path where to save plots and files
         * name (str) - name of the instance
@@ -305,10 +300,10 @@ class HiVis:
         parameters:
             * column (str) - which column in obs has the groups classification
             * group1 - specific value in the "column"
-            * group2 - specific value in the "column". 
+            * group2 - specific value in the "column". \
                        if None,will run agains all other values, and will be called "rest"
             * method - either "wilcox" or "t_test"
-            * two_sided (bool) - if one sided, will give the pval for each group, 
+            * two_sided (bool) - if one sided, will give the pval for each group, \
                           and the minimal of both groups (which will also be FDR adjusted)
             * umi_thresh (int) - use only spots with more UMIs than this number
             * inplace (bool) - modify the adata.var with log2fc, pval and expression columns?
@@ -364,6 +359,32 @@ class HiVis:
         agg = Aggregation(self, adata_agg, name=agg_name)
         self.agg[name] = agg
         
+    
+    def agg_stardist(self, input_df, name="SC", obs2add=None, obs2agg=None):
+        '''
+        Adds Aggregation object to self.agg[name], based on CSV output of Stardist pipeline.
+        Parameters:
+            * input_df (pd.DataFrame) - output of Stardist pipeline 
+            * name (str) - name to store the Aggregation in. Can be acessed via HiVis.agg[name]
+            * obs2agg - what obs to aggregate from the HiVis. \
+                        Can be a list of column names. numeric columns will be summed, categorical will be the mode. \
+                        Can be a dict specifying the aggregation function. \
+                        examples: {"value_along_axis":np.median} or {"value_along_axis":[np.median,np.mean]}
+            * obs2add (list) - which columns from input_df should be copied to the Aggregation.adata.obs
+        '''
+        
+        spots_only, cells_only = Aggregation_utils.split_stardist(input_df)
+
+        aggregation_func = Aggregation_utils._aggregate_data_stardist
+
+        adata_agg, _ = Aggregation_utils.new_adata(self.adata, "Cell_ID", aggregation_func,
+                                       obs2agg=obs2agg,in_cell_col="in_cell",nuc_col="in_nucleus")
+        
+        obs2add = [col for col in cells_only.columns if col in obs2add]
+        Aggregation_utils.merge_cells(cells_only, adata_agg, obs2add)
+        
+        self.add_agg(adata_agg, name=name)
+    
     
     def add_meta(self, name:str, values, type_="obs"):
         '''
@@ -451,7 +472,7 @@ class HiVis:
         '''
         Calculates gene(s) correlation.
         Parameters:
-            * what (str or list) - if str, computes Spearman correlation of a given gene with all genes.
+            * what (str or list) - if str, computes Spearman correlation of a given gene with all genes. \
                                     if list, will compute correlation between all genes in the list
             * self_corr_value - replace the correlation of the gene with itself by this value
             * normilize (bool) - normilize expression before computing correlation?
@@ -511,8 +532,7 @@ class HiVis:
         '''
         get a vector from data (a gene) or metadata (from obs or var). or subset the object.
         parameters:
-            * what - if string, will get data or metadata. 
-                     else, will return a new HiVis object that is spliced.
+            * what - if string, will get data or metadata. else, will return a new HiVis object that is spliced. \
                      the splicing is passed to the self.adata
             * cropped - get the data from the adata_cropped after crop() or plotting methods?
         '''
@@ -556,14 +576,14 @@ class HiVis:
         '''
         Create a new HiVis objects based on adata subsetting.
         parameters:
-            * what - tuple of two elements. slicing instruction for adata. examples:
+            - what (tuple) - tuple of two elements. slicing instruction for adata. examples:
                 - (slice(None), slice(None)): Select all spots and all genes.
                 - ([0, 1, 2], slice(None)): Select the first three spots and all genes.
                 - (slice(None), ['GeneA', 'GeneB']): Select all spots and specific genes.
                 - (adata.obs['obs1'] == 'value', slice(None)): Select spots where 
                   the 'obs1' column in adata.obs is 'value', and all genes.
-            * remove_empty_pixels - if True, the images will only contain pixels under visium spots
-            * crop_agg (bool) - crop agg objects? If False, plotting of aggregations might break.
+            - remove_empty_pixels (bool) - if True, the images will only contain pixels under visium spots
+            - crop_agg (bool) - crop agg objects? If False, plotting of aggregations might break.
         '''
         adata = self.adata[what].copy()
         image_fullres_crop, image_highres_crop, image_lowres_crop, xlim_pixels_fullres, ylim_pixels_fullres = self.__crop_images(adata, remove_empty_pixels)
@@ -634,7 +654,7 @@ class HiVis:
     
     def __shift_adata(self, adata, xlim_pixels_fullres, ylim_pixels_fullres):
         """
-        Shifts the coordinates in an adata, based on xlim, ylim (in pixel space).
+        Shifts the coordinates in an adata, based on xlim, ylim (in pixel space). \
         Also shifts the geometry WKT in micron space.
         """
         adata_shifted = adata.copy()
@@ -795,7 +815,7 @@ class HiVis:
     def columns(self):
         return self.adata.obs.columns.copy()
     
-    def rename(self, new_name: str, full=False):
+    def rename(self, new_name: str, new_out_path=False, full=False):
         '''
         Renames the object and changes the path_output.
         If full is False, the name will be added to the current (previous) name
@@ -805,7 +825,8 @@ class HiVis:
         else:
             self.name = self.name.replace("_subset","")
             self.name = f"{self.name}_{new_name}"
-        self.path_output = self.path_output + f"/{new_name}"
+        if new_out_path:
+            self.path_output = self.path_output + f"/{new_name}"
         
     
     def update(self, agg=False):

@@ -2,8 +2,8 @@ LICENSE
 README.md
 pyproject.toml
 setup.py
-HiVis/Aggreegation_utils.py
 HiVis/Aggregation.py
+HiVis/Aggregation_utils.py
 HiVis/HiVis.py
 HiVis/HiVis_plot.py
 HiVis/HiVis_utils.py

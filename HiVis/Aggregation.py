@@ -18,8 +18,8 @@ from scipy.spatial import cKDTree
 from tqdm import tqdm
 import geopandas as gpd
 
-import HiVis_plot
-import HiVis_utils
+from . import HiVis_plot
+from . import HiVis_utils
 
 class Aggregation:
     def __init__(self, hiviz_instance, adata_agg, name, geojson_agg_path=None):
@@ -143,8 +143,8 @@ class Aggregation:
         '''
         get a vector from data (a gene) or metadata (from obs or var). or subset the object.
         parameters:
-            * what - if string, will get data or metadata. 
-                     else, will return a new Aggregation object that is spliced.
+            * what - if string, will get data or metadata. \
+                     else, will return a new Aggregation object that is spliced. \
                      the splicing is passed to the self.adata.
             * cropped (bool) - get the data from the adata_cropped after crop() or plotting methods?
             * geometry (bool) - include only objects which have geometry
@@ -322,7 +322,7 @@ class Aggregation:
         '''
         Calculates gene(s) correlation.
         Parameters:
-            * what (str or list) - if str, computes Spearman correlation of a given gene with all genes.
+            * what (str or list) - if str, computes Spearman correlation of a given gene with all genes. \
                                     if list, will compute correlation between all genes in the list
             * self_corr_value - replace the correlation of the gene with itself by this value
             * normilize (bool) - normilize expression before computing correlation?
@@ -366,10 +366,10 @@ class Aggregation:
         parameters:
             * column - which column in obs has the groups classification
             * group1 - specific value in the "column"
-            * group2 - specific value in the "column". 
+            * group2 - specific value in the "column". \
                        if None,will run agains all other values, and will be called "rest"
             * method - either "wilcox" or "t_test"
-            * two_sided - if one sided, will give the pval for each group, 
+            * two_sided - if one sided, will give the pval for each group, \
                           and the minimal of both groups (which will also be FDR adjusted)
             * umi_thresh - use only spots with more UMIs than this number
             * expression - function F {mean, mean, max} F(mean(group1),mean(group2))
