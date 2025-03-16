@@ -54,6 +54,7 @@ $RECYCLE.BIN/
 # Editor / IDE files
 .vscode/
 .idea/
+.spyproject/
 *.sublime-project
 *.sublime-workspace
 
@@ -63,3 +64,8 @@ doc/doctrees/
 doc/.buildinfo
 doc/_static/
 doc/_templates/
+
+# Data
+tutorials/outs/
+tutorials/qupath/
+tutorials/output/
