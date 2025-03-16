@@ -1,0 +1,65 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environment
+venv/
+env/
+.virtualenvs/
+
+# Distribution / packaging
+*.egg-info/
+*.egg
+build/
+dist/
+pip-wheel-metadata/
+*.whl
+
+# Setuptools-specific
+.eggs/
+MANIFEST
+*.manifest
+*.spec
+
+# Logs and databases
+*.log
+*.sqlite
+
+# Testing
+.coverage
+.tox/
+.nox/
+.pytest_cache/
+.hypothesis/
+htmlcov/
+
+# Jupyter Notebook checkpoints
+tutorials/.ipynb_checkpoints/
+
+# macOS files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Editor / IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Sphinx documentation
+doc/_build/
+doc/doctrees/
+doc/.buildinfo
+doc/_static/
+doc/_templates/
