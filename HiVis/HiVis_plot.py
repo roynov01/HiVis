@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Oct 30 10:29:05 2024
 
-@author: royno
 """
 
 import os
@@ -80,17 +78,17 @@ class PlotVisium:
             image = self.main.image_fullres
             scalef = 1  # No scaling needed for full-resolution
             pxl_col, pxl_row = 'pxl_col_in_fullres', 'pxl_row_in_fullres'
-            print("Full-res image selected")
+            # print("Full-res image selected")
         elif lim_size <= HIGHRES_THRESH: # Use high-resolution image
             image = self.main.image_highres
             scalef = self.main.json['tissue_hires_scalef']  
             pxl_col, pxl_row = 'pxl_col_in_highres', 'pxl_row_in_highres'
-            print("High-res image selected")
+            # print("High-res image selected")
         else: # Use low-resolution image
             image = self.main.image_lowres
             scalef = self.main.json['tissue_lowres_scalef']  
             pxl_col, pxl_row = 'pxl_col_in_lowres', 'pxl_row_in_lowres'
-            print("Low-res image selected")
+            # print("Low-res image selected")
     
         adjusted_microns_per_pixel = microns_per_pixel / scalef
         # refresh the adata_cropped

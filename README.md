@@ -26,7 +26,7 @@ dedicated
 environment.  In a terminal run the command:
 
 ```bash
-conda create -n HiVis python=3.11
+conda create -n HiVis python=3.12
 conda activate HiVis
 ```
 

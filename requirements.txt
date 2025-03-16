@@ -3,6 +3,7 @@ scipy
 matplotlib
 pandas
 scanpy
+squidpy
 anndata
 adjustText
 pyarrow

@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Nov  5 20:55:04 2024
-
-@author: royno
 """
 import pandas as pd
 import numpy as np
@@ -22,6 +19,7 @@ from scipy.spatial.distance import squareform
 from scipy.cluster.hierarchy import linkage, dendrogram
 from statsmodels.stats.multitest import multipletests
 import statsmodels.api as sm
+from squidpy.read import visium
 
 import HiVis_plot
 
@@ -494,13 +492,13 @@ def _edit_adata(adata, scalefactor_json, mito_name_prefix):
     # Quality control - number of UMIs and mitochondrial %
     adata.obs["nUMI"] = np.array(adata.X.sum(axis=1).flatten())[0]
     adata.var["nUMI_gene"] = np.array(adata.X.sum(axis=0).flatten())[0]
+    mito_genes = adata.var_names[adata.var_names.str.startswith(mito_name_prefix)].values
+    adata.obs["mito_sum"] = adata[:,adata.var.index.isin(mito_genes)].X.sum(axis=1).A1
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         adata.obs["nUMI_log10"] = np.log10(adata.obs["nUMI"])
         adata.var["nUMI_gene_log10"] = np.log10(adata.var["nUMI_gene"])
-    mito_genes = adata.var_names[adata.var_names.str.startswith(mito_name_prefix)].values
-    adata.obs["mito_sum"] = adata[:,adata.var.index.isin(mito_genes)].X.sum(axis=1).A1
-    adata.obs["mito_percent_log10"] = np.log10((adata.obs["mito_sum"] / adata.obs["nUMI"]) * 100)
+        adata.obs["mito_percent_log10"] = np.log10((adata.obs["mito_sum"] / adata.obs["nUMI"]) * 100)
     return adata
 
 
@@ -630,7 +628,8 @@ def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_o
     print("[Loading data]")
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Variable names are not unique. To make them unique")
-        adata = sc.read_visium(path_input_data, source_image_path=path_image_fullres)
+        # adata = sc.read_visium(path_input_data, source_image_path=path_image_fullres)
+        adata = visium(path_input_data, source_image_path=path_image_fullres)
     adata.var_names_make_unique()
     # del adata.uns["spatial"]
     
@@ -1001,6 +1000,7 @@ def estimate_dense_memory(matrix):
     total_bytes = n_rows * n_cols * element_size
     total_gb = total_bytes / (1024 ** 3)
     return total_gb
+
 
 
 

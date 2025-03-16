@@ -8,7 +8,7 @@ Author-email: roy.novoselsky@weizmann.ac.il
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
-Requires-Python: >=3.10
+Requires-Python: >=3.12
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: numpy
@@ -64,7 +64,7 @@ dedicated
 environment.  In a terminal run the command:
 
 ```bash
-conda create -n HiVis python=3.11
+conda create -n HiVis python=3.12
 conda activate HiVis
 ```
 

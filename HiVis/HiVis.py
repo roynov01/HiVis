@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 HD Integrated Visium Interactive Suite (HiVis)
-
-Created on Sun Sep 15 13:28:30 2024
-
-@author: royno
 """
 # General libraries
 import os
@@ -30,6 +26,7 @@ from PIL import Image
 import HiVis_utils
 from Aggregation import Aggregation
 import HiVis_plot
+import Aggregation_utils
 
 Image.MAX_IMAGE_PIXELS = 1063425001 # Enable large images loading
 
@@ -362,6 +359,32 @@ class HiVis:
         agg = Aggregation(self, adata_agg, name=agg_name)
         self.agg[name] = agg
         
+    
+    def agg_stardist(self, input_df, name="SC", obs2add=None, obs2agg=None):
+        '''
+        Adds Aggregation object to self.agg[name], based on CSV output of Stardist pipeline.
+        Parameters:
+            * input_df (pd.DataFrame) - output of Stardist pipeline 
+            * name (str) - name to store the Aggregation in. Can be acessed via HiVis.agg[name]
+            * obs2agg - what obs to aggregate from the HiVis? 
+                        Can be a list of column names. numeric columns will be summed, categorical will be the mode.
+                        Can be a dict specifying the aggregation function. 
+                            examples: {"value_along_axis":np.median} or {"value_along_axis":[np.median,np.mean]}
+            * obs2add (list) - which columns from input_df should be copied to the Aggregation.adata.obs
+        '''
+        
+        spots_only, cells_only = Aggregation_utils.split_stardist(input_df)
+
+        aggregation_func = Aggregation_utils._aggregate_data_stardist
+
+        adata_agg, _ = Aggregation_utils.new_adata(self.adata, "Cell_ID", aggregation_func,
+                                       obs2agg=obs2agg,in_cell_col="in_cell",nuc_col="in_nucleus")
+        
+        obs2add = [col for col in cells_only.columns if col in obs2add]
+        Aggregation_utils.merge_cells(cells_only, adata_agg, obs2add)
+        
+        self.add_agg(adata_agg, name=name)
+    
     
     def add_meta(self, name:str, values, type_="obs"):
         '''
@@ -793,7 +816,7 @@ class HiVis:
     def columns(self):
         return self.adata.obs.columns.copy()
     
-    def rename(self, new_name: str, full=False):
+    def rename(self, new_name: str, new_out_path=False, full=False):
         '''
         Renames the object and changes the path_output.
         If full is False, the name will be added to the current (previous) name
@@ -803,7 +826,8 @@ class HiVis:
         else:
             self.name = self.name.replace("_subset","")
             self.name = f"{self.name}_{new_name}"
-        self.path_output = self.path_output + f"/{new_name}"
+        if new_out_path:
+            self.path_output = self.path_output + f"/{new_name}"
         
     
     def update(self, agg=False):
