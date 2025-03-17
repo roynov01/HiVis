@@ -11,7 +11,7 @@ from tqdm import tqdm
 import anndata as ad
 from scipy.sparse import lil_matrix
 
-from . import HiVis_utils
+# from . import HiVis_utils
 
 
 
@@ -122,44 +122,76 @@ def _aggregate_meta(adata, aggregate_by, custom_agg):
     return updated_obs, group_order
 
 
-def _aggregate_data_stardist(adata, group_col="Cell_ID", in_cell_col="in_cell",nuc_col="in_nucleus"):
-    '''
-    Helper function that can be used for as "aggregation_func" in new_adata().
-    Aggregates expression data based on processed dataframe from 
-    Ofras pipeline that uses Stardist + extension. (version used in small intestine).    
-    '''
-    adata_filtered = adata[(adata.obs[in_cell_col] == 1)]
-    
-    # Split into nucleus/cytoplasm subsets
-    print("[Splitting data to nuc/cyto]")
-    adata_nuc = adata_filtered[adata_filtered.obs[nuc_col] == 1].copy()
-    adata_cyto = adata_filtered[adata_filtered.obs[nuc_col] == 0].copy()
-    ind_dict_nuc = adata_nuc.obs.groupby(by=[group_col]).indices
-    ind_dict_cyto = adata_cyto.obs.groupby(by=[group_col]).indices
 
-    # Find cell ids that have both nucleus and cytoplasm
-    cells_ids = np.intersect1d(list(ind_dict_nuc.keys()), list(ind_dict_cyto.keys()))
-    num_genes = adata_filtered.shape[1]
+def _aggregate_data_stardist(adata, group_col="Cell_ID", in_cell_col="in_cell", nuc_only=False, nuc_col="in_nucleus"):
+    '''
+    Aggregates expression data for all spots inside each cell,
+    disregarding whether a spot is in the nucleus or cytoplasm.
+    '''
+    # Filter to include only spots that are inside a cell (or a nuc)
+    if nuc_only:
+        adata_filtered = adata[adata.obs[nuc_col] == 1].copy()
+    else:
+        adata_filtered = adata[adata.obs[in_cell_col] == 1].copy()
+    
+    # Group the spots by cell id
+    ind_dict = adata_filtered.obs.groupby(by=[group_col]).indices
+    cells_ids = list(ind_dict.keys())
     num_cells = len(cells_ids)
+    num_genes = adata_filtered.shape[1]
     
-    # Preallocate sparse matrices
-    nucleus_data = lil_matrix((num_cells, num_genes), dtype=np.float32)
-    cyto_data = lil_matrix((num_cells, num_genes), dtype=np.float32)
+    # Preallocate a sparse matrix for the aggregated cell data
+    cell_data = lil_matrix((num_cells, num_genes), dtype=np.float32)
     
-    # Aggregate the spots in nucleus and in cytoplasm for each cell
-    for i, cell in enumerate(tqdm(cells_ids, desc='Aggregating spots expression')): 
-        nucleus_data[i, :] = adata_nuc[ind_dict_nuc[cell],:].X.sum(axis=0) 
-        cyto_data[i, :] = adata_cyto[ind_dict_cyto[cell],:].X.sum(axis=0) 
+    # Sum all spots for each cell
+    for i, cell in enumerate(tqdm(cells_ids, desc='Aggregating spots expression')):
+        cell_data[i, :] = adata_filtered[ind_dict[cell], :].X.sum(axis=0)
     
-    # Convert to sparse
-    print("[Converting to sparse matrices]")
-    nucleus_data = nucleus_data.tocsr()
-    cyto_data = cyto_data.tocsr()
+    cell_data = cell_data.tocsr()
     
-    cell_data = nucleus_data + cyto_data
-    layers = {"nuc":nucleus_data}
-
+    layers = {}
+    
     return cell_data, cells_ids, layers, None
+
+
+# def _aggregate_data_stardist(adata, group_col="Cell_ID", in_cell_col="in_cell",nuc_col="in_nucleus"):
+#     '''
+#     Helper function that can be used for as "aggregation_func" in new_adata().
+#     Aggregates expression data based on processed dataframe from 
+#     Ofras pipeline that uses Stardist + extension. (version used in small intestine).    
+#     '''
+#     adata_filtered = adata[(adata.obs[in_cell_col] == 1)]
+    
+#     # Split into nucleus/cytoplasm subsets
+#     print("[Splitting data to nuc/cyto]")
+#     adata_nuc = adata_filtered[adata_filtered.obs[nuc_col] == 1].copy()
+#     adata_cyto = adata_filtered[adata_filtered.obs[nuc_col] == 0].copy()
+#     ind_dict_nuc = adata_nuc.obs.groupby(by=[group_col]).indices
+#     ind_dict_cyto = adata_cyto.obs.groupby(by=[group_col]).indices
+
+#     # Find cell ids that have both nucleus and cytoplasm
+#     cells_ids = np.intersect1d(list(ind_dict_nuc.keys()), list(ind_dict_cyto.keys()))
+#     num_genes = adata_filtered.shape[1]
+#     num_cells = len(cells_ids)
+    
+#     # Preallocate sparse matrices
+#     nucleus_data = lil_matrix((num_cells, num_genes), dtype=np.float32)
+#     cyto_data = lil_matrix((num_cells, num_genes), dtype=np.float32)
+    
+#     # Aggregate the spots in nucleus and in cytoplasm for each cell
+#     for i, cell in enumerate(tqdm(cells_ids, desc='Aggregating spots expression')): 
+#         nucleus_data[i, :] = adata_nuc[ind_dict_nuc[cell],:].X.sum(axis=0) 
+#         cyto_data[i, :] = adata_cyto[ind_dict_cyto[cell],:].X.sum(axis=0) 
+    
+#     # Convert to sparse
+#     print("[Converting to sparse matrices]")
+#     nucleus_data = nucleus_data.tocsr()
+#     cyto_data = cyto_data.tocsr()
+    
+#     cell_data = nucleus_data + cyto_data
+#     layers = {"nuc":nucleus_data}
+
+#     return cell_data, cells_ids, layers, None
 
 
 def merge_cells(cells_only,  adata, additional_obs)    :

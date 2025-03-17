@@ -16,10 +16,10 @@ setup(
         "matplotlib>=3.10.1",
         "pandas>=2.2.3",
         "seaborn>=0.13.2",
-        "scanpy==1.11.1", # read_visium will be deprecated, if updating scanpy, change to suidpy.read_visium
-        "squidpy",
+        "scanpy==1.11.0", # read_visium will be deprecated, if updating scanpy, change to suidpy.read_visium
+        # "squidpy", # version 1.6.4 has very long import with warnings
         "anndata>=0.11.3",
-        "adjustText",
+        "adjustText", # version 1.3.0 is broken
         "pyarrow>=19.0.1",
         "pillow>=11.1.0",
         "tqdm>=4.67.1",

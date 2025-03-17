@@ -1,7 +1,11 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+HiVis/__pycache__/*.pyc
+HiVis/__pycache__
+HiVis/__pycache__/
 *.py[cod]
 *$py.class
+
 
 # C extensions
 *.so

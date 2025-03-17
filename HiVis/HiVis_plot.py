@@ -482,7 +482,7 @@ class PlotAgg:
         return ax
 
     def hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,ax=None,
-             save=False, figsize=(8,8), cmap=None, color="blue",cropped=True):
+             save=False, figsize=(8,8), cmap=None, color="blue",cropped=False):
         '''
         plots histogram of data or metadata. if categorical, will plot barplot.
         parameters:
@@ -497,7 +497,7 @@ class PlotAgg:
             * save (bool) - save the image?
         '''
         title = what if title is None else title
-        if cropped:
+        if not cropped:
             self._crop() # resets adata_cropped to full image
         to_plot = pd.Series(self.main.get(what, cropped=True))
         if to_plot is None:
@@ -622,23 +622,37 @@ class PlotAgg:
             if not isinstance(features, str):
                 raise ValueError("ax can be passed for a single feature only")
         else:
-            if isinstance(features, str):
-                features = [features]
-                fig, ax = plt.subplots(figsize=figsize)
+            
+            fig, ax = plt.subplots(figsize=figsize)
+        if isinstance(features, str):
+            features = [features]
         if not legend:
             legend_loc="none"
+            
+        if f'{features[0]}_colors' in self.main.adata.uns:
+            del self.main.adata.uns[f'{features[0]}_colors']
         
         color_values = self.main[features[0] if isinstance(features, list) else features] 
         if isinstance(cmap, (str, list, dict)):
-            colors = get_colors(color_values, cmap)
-        unique_values = np.unique(color_values.astype(str))
+            if pd.api.types.is_categorical_dtype(color_values):
+                # Use the defined categorical ordering
+                categories = color_values.cat.categories.astype(str)
+                colors = get_colors(categories, cmap)
+                unique_values = categories
+            else:
+                # For non-categorical data, filter out NaNs
+                filtered_color_values = color_values[~pd.isna(color_values)]
+                colors = get_colors(filtered_color_values, cmap)
+                unique_values = np.unique(filtered_color_values.astype(str))
+        else:
+            raise ValueError("cmap must be a string, list, or dict")
+
         if len(unique_values) == len(colors):
             self.main.adata.uns[f'{features[0]}_colors'] = colors  # Set colors for the feature categories
         else:
             raise ValueError("Mismatch between number of unique values and generated colors.")    
         ax = sc.pl.umap(self.main.adata, color=features,use_raw=False,size=size,ax=ax,
                         title=title,show=False,legend_loc=legend_loc,layer=layer)
-        del self.main.adata.uns[f'{features[0]}_colors']
 
         if texts and isinstance(features, str):
             values = self.main.adata.obs[features]
@@ -661,8 +675,8 @@ class PlotAgg:
         return ax
     
     
-    def cor(self, what, number_of_genes=10, normilize=True, layer=None,
-            cluster=False, ax=None,figsize=(8,8),save=False,
+    def cor(self, what, number_of_genes=10, normilize=True, self_corr_value=np.nan,
+            layer=None, cluster=False, ax=None,figsize=(8,8),save=False,
            size=15,text=True,cmap="copper",legend=True,legend_title=None):
         '''
         Plots correlation of a gene with all genes, or a correlation matrix between list of genes.
@@ -683,6 +697,8 @@ class PlotAgg:
         '''
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)   
+        if isinstance(cmap, list):
+            cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap)
         
         if isinstance(what,str):
             if f"cor_{what}" in self.main.adata.var:
@@ -692,7 +708,7 @@ class PlotAgg:
                                    "gene":self.main.adata.var_names})
             else:
                 df = self.main.cor(what,normilize=normilize,layer=layer,
-                                        inplace=True)
+                                        inplace=True,self_corr_value=self_corr_value)
                 df.rename(columns={f"exp_{what}":"expression_mean"},inplace=True)
                 df.rename(columns={f"cor_qval_{what}":"qval"},inplace=True)
                 
@@ -718,6 +734,8 @@ class PlotAgg:
                 df = HiVis_utils.cluster_df(df,correlation=True)
             df[np.isclose(df, 1)] = np.nan
             ax = plot_heatmap(df,sort=False,ax=ax,cmap=cmap,legend=legend,legend_title=legend_title)
+            if len(what) > 8: # lots of genes
+                ax.tick_params(axis='x', rotation=45)
         
         self.current_ax = ax
         if save:
@@ -969,15 +987,16 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
     # Set ylim a little above the maximum count
         ax.set_ylim([0, max_count * 1.1])
     else: # Categorical case
-        value_counts = values.value_counts()
+        unique_vals = pd.Series(values.unique()).sort_values()
+        value_counts = values.value_counts().reindex(unique_vals)
         if isinstance(cmap, str):
-            colors = get_colors(value_counts.index, cmap) if cmap else color
+            colors = get_colors(unique_vals.index, cmap) if cmap else color
         elif isinstance(cmap, list):
             colors = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-            colors = [colors(i / (len(value_counts) - 1)) for i in range(len(value_counts))]
+            colors = [colors(i / (len(unique_vals) - 1)) for i in range(len(unique_vals))]
         else:
             if cmap:
-                colors = [cmap.get(val, DEFAULT_COLOR) for val in value_counts.index]
+                colors = [cmap.get(val, DEFAULT_COLOR) for val in unique_vals.index]
             else:
                 colors = color
         value_counts.plot(kind='bar',color=colors, ax=ax)
@@ -997,6 +1016,9 @@ def get_colors(values, cmap):
     if isinstance(cmap, str):
         cmap_obj = colormaps.get_cmap(cmap)
     elif isinstance(cmap, list):
+        cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+    else: # dict
+        cmap = [cmap.get(val, DEFAULT_COLOR) for val in unique_values]
         cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
     cmap_len = cmap_obj.N
     num_unique = len(unique_values)

@@ -311,6 +311,8 @@ class HiVis:
         alternative = "two-sided" if two_sided else "greater"
         df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,
                      method=method, alternative=alternative, inplace=inplace)
+        if group2 is None:
+            group2 = "rest"
         df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
         df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
         if not two_sided:
@@ -352,7 +354,9 @@ class HiVis:
             raise TypeError("adata_agg must be anndata")
         if self.agg:
             if name in self.agg:
-                raise KeyError(f"{name} allready in {self.name}")
+                print(f"{name} allready in {self.name}. Renamed previous Agg to 'temp'.")
+                self.agg["temp"] = self.agg[name]
+                del self.agg[name]
         else:
             self.agg = {}
         agg_name = f"{self.name}_{name}"
@@ -372,9 +376,10 @@ class HiVis:
                         examples: {"value_along_axis":np.median} or {"value_along_axis":[np.median,np.mean]}
             * obs2add (list) - which columns from input_df should be copied to the Aggregation.adata.obs
         '''
-        
         spots_only, cells_only = Aggregation_utils.split_stardist(input_df)
-
+        
+        self.adata.obs = self.adata.obs.join(spots_only,how="left")
+        
         aggregation_func = Aggregation_utils._aggregate_data_stardist
 
         adata_agg, _ = Aggregation_utils.new_adata(self.adata, "Cell_ID", aggregation_func,
@@ -450,7 +455,11 @@ class HiVis:
         n_genes = self.adata.n_vars  
         result = np.zeros((n_groups, n_genes))
         for i, group in enumerate(unique_groups):
+            if pd.notna(group):
+                continue
             mask = (self.adata.obs[by] == group).values
+            if mask.sum() == 0: 
+                continue
             group_sum = self.adata.X[mask].sum(axis=0)  
             group_mean = group_sum / mask.sum() 
             result[i, :] = group_mean.A1     

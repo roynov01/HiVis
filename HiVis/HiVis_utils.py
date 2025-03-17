@@ -19,7 +19,7 @@ from scipy.spatial.distance import squareform
 from scipy.cluster.hierarchy import linkage, dendrogram
 from statsmodels.stats.multitest import multipletests
 import statsmodels.api as sm
-from squidpy.read import visium
+# import squidpy
 
 from . import HiVis_plot
 
@@ -262,7 +262,7 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,layer=None,
 
     df[group2] = group2_exp.mean(axis=0).A1
 
-    print(f"Number of entries in group1: {group1_exp.shape}, in group2: {group2_exp.shape}")
+    print(f"""Number of entries in "{group1}": {group1_exp.shape[0]}, in "{group2}": {group2_exp.shape[0]}""")
 
     # Calculate mean expression in each group and log2(group1 / group2)
     df[f"expression_mean_{column}"] = df[[group1, group2]].mean(axis=1)
@@ -628,8 +628,8 @@ def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_o
     print("[Loading data]")
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Variable names are not unique. To make them unique")
-        # adata = sc.read_visium(path_input_data, source_image_path=path_image_fullres)
-        adata = visium(path_input_data, source_image_path=path_image_fullres)
+        adata = sc.read_visium(path_input_data, source_image_path=path_image_fullres)
+        # adata = squidpy.read.visium(path_input_data, source_image_path=path_image_fullres)
     adata.var_names_make_unique()
     # del adata.uns["spatial"]
     

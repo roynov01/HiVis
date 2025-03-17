@@ -129,14 +129,14 @@ class Aggregation:
             existing_columns = [col for col in obs if col in self.adata.obs.columns]
             if existing_columns:
                 self.adata.obs.drop(columns=existing_columns, inplace=True)
-            self.adata.obs = self.adata.obs.join(adata.obs[obs])
+            self.adata.obs = self.adata.obs.join(adata.obs[obs], how="left")
         if var:
             if isinstance(var, str):
                 var = [var]
             existing_columns = [col for col in var if col in self.adata.var.columns]
             if existing_columns:
                 self.adata.var.drop(columns=existing_columns, inplace=True)
-            self.adata.var = self.adata.var.join(adata.var[var])
+            self.adata.var = self.adata.var.join(adata.var[var], how="left")
             
                 
     def get(self, what, cropped=False, geometry=False):
@@ -196,7 +196,7 @@ class Aggregation:
         adata.var = adata.var.loc[:,~adata.var.columns.str.startswith(("cor_","exp_"))]
         for layer in self.adata.layers.keys():
             adata.layers[layer] = self.adata.layers[layer][what].copy()
-        return Aggregation(self.viz, adata)
+        return Aggregation(self.viz, adata, name=self.name)
     
     def __getitem__(self, what):
         '''get a vector from data (a gene) or metadata (from obs or var). or subset the object.'''
@@ -228,7 +228,7 @@ class Aggregation:
                                columns=self.adata.var_names)
         
         group_key = self.adata.obs[by]
-        return expr_df.groupby(group_key).mean().T
+        return expr_df.groupby(group_key, observed=True).mean().T
     
     
     def smooth(self, what, radius, method="median", new_col_name=None, **kwargs):
@@ -346,6 +346,11 @@ class Aggregation:
             raise KeyError(f"'{agg_id_col}' does not exist in HiViz.adata.obs.")
         mapping = self.adata.obs[what]
         self.viz.adata.obs[what] = self.viz.adata.obs[agg_id_col].map(mapping)
+        print("Columns in agg.adata.obs:", self.adata.obs.columns)
+        print("Index name in agg.adata.obs:", self.adata.obs.index.name)
+        print("Columns in HiViz.adata.obs:", self.viz.adata.obs.columns)
+        print("Unique values in HiViz index column:", self.viz.adata.obs[self.adata.obs.index.name].unique())
+        print("Mapping index (agg keys):", self.adata.obs.index.unique())
         
     def export_h5(self, path=None):
         '''
@@ -379,6 +384,8 @@ class Aggregation:
         alternative = "two-sided" if two_sided else "greater"
         df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
                      method=method, alternative=alternative, inplace=inplace)
+        if group2 is None:
+            group2 = "rest"
         df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
         df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
         if not two_sided:
