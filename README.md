@@ -57,8 +57,8 @@ and/or [Cellpose](https://github.com/BIOP/qupath-extension-cellpose) extensions 
 
 ### Usage and Documentation
 Please refer to the demo notebooks:
-* [Full HiVis analysis]()
-* [Fluorescence demo]()
+* [Full HiVis analysis](tutorials/HiVis_tutorial.ipynb)
+* [Fluorescence demo](tutorials/HiVis_fluorescence_tutorial.ipynb)
 
 For QuPath, please refer to the tutorials:
 * [Pixel classification]()
