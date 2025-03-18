@@ -160,9 +160,6 @@ class HiVis:
             raise ValueError("recolor() works for fluorescence visium only")
         if not fluorescence:
             fluorescence = self.fluorescence
-            if not normalization_method:
-                print(f'Choose colors for flurescence: {self.fluorescence}\nNormalization methods:\n"percentile", "histogram","clahe","sqrt" or None for minmax')
-                return
         channels = list(self.fluorescence.keys())    
         if isinstance(fluorescence, list):
             if len(fluorescence) != len(channels):
@@ -599,7 +596,7 @@ class HiVis:
         name = self.name + "_subset" if not self.name.endswith("_subset") else ""
         adata_shifted = self.__shift_adata(adata, xlim_pixels_fullres, ylim_pixels_fullres)
         new_obj = HiVis(adata_shifted, image_fullres_crop, image_highres_crop, 
-                           image_lowres_crop, self.json, name, self.path_output,agg=None,
+                           image_lowres_crop, self.json, name, self.path_output,agg=None,plot_qc=False,
                            properties=self.properties.copy(),fluorescence=self.fluorescence.copy() if self.fluorescence else None)    
         # update the link in all aggregations to the new HiVis instance
         if self.agg: 
@@ -849,9 +846,16 @@ class HiVis:
         else:
             _ = gc.collect()
 
-    def copy(self):
-        '''Creates a deep copy of the instance'''
-        return deepcopy(self)
+    def copy(self, new_name=None, new_out_path=False, full=False):
+        '''
+        Creates a deep copy of the instance.
+        if new_name is specified, renames the object and changes the path_output.
+        If full is False, the name will be added to the current (previous) name
+        '''
+        new = deepcopy(self)
+        if new_name:
+            new.rename(new_name, new_out_path=new_out_path, full=full)
+        return new
     
     def save(self, path=None):
         '''

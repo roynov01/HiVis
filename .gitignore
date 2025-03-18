@@ -43,6 +43,9 @@ htmlcov/
 
 # Jupyter Notebook checkpoints
 tutorials/.ipynb_checkpoints/
+HiVis/.ipynb_checkpoints/
+/HiVis/__pycache__
+/HiVis/__pycache__/
 
 # macOS files
 .DS_Store
@@ -73,3 +76,5 @@ doc/_templates/
 tutorials/outs/
 tutorials/qupath/
 tutorials/output/
+tutorials/outs_lung/
+

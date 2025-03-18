@@ -111,10 +111,6 @@ plt.tight_layout()
 si_subset.agg["SC"].sync("leiden")
 np.unique(si_subset["leiden"])
 #%%
-clust1_dge = si_subset.agg.dge("leiden", group1="1") # we can also specify group2
-clust1_dge2 = si_subset.agg.dge("leiden", group1="1", group2="5") 
-
-sc_pb = si_subset.agg["SC"].pseudobulk("leiden")
-
-
-
+clust1_dge = si_subset.agg["SC"].dge("leiden", group1="1") # we can also specify group2
+clust1_dge = si_subset.agg["SC"].dge("leiden", group1="1", group2="0") 
+clust1_dge.loc[(clust1_dge["qval"] == 0) & ((clust1_dge["log2fc"] > 4.5) | (clust1_dge["log2fc"] < -2))]

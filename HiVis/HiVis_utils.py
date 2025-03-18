@@ -627,6 +627,7 @@ def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_o
     # load data
     print("[Loading data]")
     with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=FutureWarning)
         warnings.filterwarnings("ignore", message="Variable names are not unique. To make them unique")
         adata = sc.read_visium(path_input_data, source_image_path=path_image_fullres)
         # adata = squidpy.read.visium(path_input_data, source_image_path=path_image_fullres)

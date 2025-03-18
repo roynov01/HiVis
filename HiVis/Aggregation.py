@@ -479,11 +479,19 @@ class Aggregation:
     def columns(self):
         return self.adata.obs.columns.copy()
     
-    def copy(self):
-        '''Creates a deep copy of the instance'''
+    def copy(self, new_name=None, new_out_path=False, full=False):
+        '''
+        Creates a deep copy of the instance
+        if new_name is specified, renames the object and changes the path_output.
+        If full is False, the name will be added to the current (previous) name
+        '''
         new = deepcopy(self)
         new.viz = self.viz
         gc.collect()
+        new = deepcopy(self)
+        if new_name:
+            new.rename(new_name, new_out_path=new_out_path, full=full)
+        return new
         return new
     
     def rename(self, new_name: str, new_out_path=True, full=False):

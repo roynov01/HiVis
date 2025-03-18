@@ -1,8 +1,8 @@
 
 
 # Todo
-* Finish single-line add_aggregation - split obs2add and obs2agg into two parameters
-* Finish Groovy scripts - one for Stardist, one for Cellpose
+* 
+* Finish Groovy scripts - one for Stardist, one for Cellpose. create python cellpose_add_agg
 * Write Qupath tutorial
 	* pixel classifier + script
 	* Annotations + geojson
@@ -10,9 +10,11 @@
 * Test adding of Aggs
 * Update links in:
 	* readme
-	* notebook
+	* notebooks
 * Finish readTheDocs (sphinx)
 * Write tests	
+* remove garbage files from github
+* upload to pypi
 
 
 ## future additions
