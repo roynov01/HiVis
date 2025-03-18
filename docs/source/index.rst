@@ -2,12 +2,11 @@ HD Integrated Visium Interactive Suite (HiVis)
 **********************************************
 
 HiVis is a tool that allows simple analysis of VisiumHD data.
+For the readme, visit the `HiVis repository <https://github.com/roynov01/HiVis>`_:
 
+For a full tutorials are available as `Jupyter notebooks <https://github.com/roynov01/HiVis/tree/main/tutorials>`_.
 
-Getting started
-===============
-
-Start by installing dependencies
+Start by installing the package via pip
 
 .. code-block:: bash
 
@@ -15,27 +14,14 @@ Start by installing dependencies
    $ conda activate HiVis
    $ pip install HiVis
 
-Examples
-========
-Several examples are available as `Jupyter notebooks <https://github.com/fish-
-quant/big-fish-examples/tree/master/notebooks>`_:
 
-#. Work on 2um bins of mouse small intestine. Basics, plotting, analysis.
-#. Aggregate spots to single-cells. Aggregation, plotting of cells, scanpy interaction, analysis.
-
-API reference
-*************
+Index
+=====
 
 .. toctree::
-	:maxdepth: 2
-	:caption: Contents:
+	:maxdepth: 1
 
-	modules
-	test
+	items
 
-Indices and tables
-==================
 
 * :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

@@ -22,6 +22,8 @@ from . import HiVis_plot
 from . import HiVis_utils
 
 class Aggregation:
+    '''Aggregation class that is linked to a HiViz object'''
+    
     def __init__(self, hiviz_instance, adata_agg, name, geojson_agg_path=None):
         '''
         Creates a new instance that is linked to a HiViz object.
@@ -31,6 +33,7 @@ class Aggregation:
             * name (str) - name of object
             * geojson_path (str) - path of geojson, exported annotations
         '''
+        
         if not isinstance(adata_agg, ad._core.anndata.AnnData): 
             raise ValueError("Adata must be Anndata object")
         if not "pxl_col_in_fullres" in adata_agg.obs.columns or not "pxl_row_in_fullres" in adata_agg.obs.columns:
@@ -68,6 +71,7 @@ class Aggregation:
             * geojson_path (str) - path to geojson file
             * object_type (str) - which "objectType" to merge from the geojson
         '''
+        
         if isinstance(geojson_path,str):
             gdf = gpd.read_file(geojson_path)
         elif isinstance(geojson_path,gpd.GeoDataFrame):
@@ -102,6 +106,7 @@ class Aggregation:
             * pca (bool) - add PCA to OBSM?
             * hvg (bool) - add highly variable genes to vars?
         '''
+        
         if not obs:
             obs = []
         elif isinstance(obs, str):
@@ -148,7 +153,9 @@ class Aggregation:
                      the splicing is passed to the self.adata.
             * cropped (bool) - get the data from the adata_cropped after crop() or plotting methods?
             * geometry (bool) - include only objects which have geometry
+        Returns: either np.array of data or, if subsetting, a new Aggregation instance
         '''
+        
         adata = self.adata_cropped if cropped else self.adata
         if geometry and self.plot.geometry is not None:
             adata = adata[adata.obs.index.isin(self.plot.geometry.index)]
@@ -190,6 +197,7 @@ class Aggregation:
     def subset(self, what=(slice(None), slice(None))):
         '''
         Create a new Aggregation object based on adata subsetting.
+        Returns new Aggregation instance
         '''
         what = tuple(idx.to_numpy() if hasattr(idx, "to_numpy") else idx for idx in what)
         adata = self.adata[what].copy()
@@ -208,9 +216,11 @@ class Aggregation:
     def pseudobulk(self, by=None,layer=None):
         '''
         Returns the gene expression for each group in a single obs.
-        If "by" is None, will return the mean expression of every gene.
-        Else, will return a dataframe, each column is a value in "by" (for example cluster), rows are genes.
-        layer - which layer in adata to use.
+        Parameters:
+            * by (str) - return a dataframe, each column is a value in "by" (for example cluster), rows are genes. \
+            If None, will return the mean expression of every gene. 
+            layer (str) - which layer in adata to use.
+        Returns the gene expression for each group (pd.DataFrame)
         '''
         if layer is None:
             x = self.adata.X
@@ -313,6 +323,7 @@ class Aggregation:
             * layer (str) - which layer in the anndata to use
             * signif_thresh (float) - for plotting, add text for genes in this residual precentile
             * inplace (bool) - add the mean_expression, cv and residuals to VAR?
+        Returns dataframe with expression, CV and residuals of each gene (pd.DataFrame)
         '''
         return HiVis_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
                                                signif_thresh=signif_thresh,inplace=inplace, **kwargs)
@@ -328,6 +339,7 @@ class Aggregation:
             * normilize (bool) - normilize expression before computing correlation?
             * layer (str) - which layer in the anndata to use
             * inplace (bool) - add the correlation to VAR?
+        Returns dataframe of spearman correlation between genes (pd.DataFrame)
         '''
         if isinstance(what, str):
             x = self[what]
@@ -337,7 +349,8 @@ class Aggregation:
     def sync(self, what: str):
         '''
         Transfers metadata assignment from the Aggregation to the spots.
-        what - obs column name to pass to HiViz object
+        Parameters:
+            * what (str) - obs column name to pass to HiViz object
         '''
         if what not in self.adata.obs:
             raise KeyError(f"'{what}' does not exist in agg.adata.obs.")
@@ -346,16 +359,14 @@ class Aggregation:
             raise KeyError(f"'{agg_id_col}' does not exist in HiViz.adata.obs.")
         mapping = self.adata.obs[what]
         self.viz.adata.obs[what] = self.viz.adata.obs[agg_id_col].map(mapping)
-        print("Columns in agg.adata.obs:", self.adata.obs.columns)
-        print("Index name in agg.adata.obs:", self.adata.obs.index.name)
-        print("Columns in HiViz.adata.obs:", self.viz.adata.obs.columns)
-        print("Unique values in HiViz index column:", self.viz.adata.obs[self.adata.obs.index.name].unique())
-        print("Mapping index (agg keys):", self.adata.obs.index.unique())
+
         
     def export_h5(self, path=None):
         '''
         Exports the adata. 
-        * path (str) - path to save the h5 file. If None, will save to path_output
+        Parameters:
+            * path (str) - path to save the h5 file. If None, will save to path_output
+        Returns path where the file was saved (str)
         '''
         print(f"SAVING [{self.name}]")
         if not path:
@@ -380,6 +391,7 @@ class Aggregation:
             * expression - function F {mean, mean, max} F(mean(group1),mean(group2))
             * inplace - modify the adata.var with log2fc, pval and expression columns?
             * layer (str) - which layer in the anndata to use
+        Returns the DGE results (pd.DataFrame)
         '''
         alternative = "two-sided" if two_sided else "greater"
         df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
@@ -416,6 +428,7 @@ class Aggregation:
    
     @property
     def shape(self):
+        '''Returns Aggregation.adata.shape'''
         return self.adata.shape
     
     def __str__(self):
@@ -440,12 +453,14 @@ class Aggregation:
     
     
     def combine(self, other):
-        '''Combines two Aggregation objects into a single adata'''
+        '''
+        Combines two Aggregation objects into a single adata.
+        '''
         return self + other
     
     def __add__(self, other):
         '''Combines two Aggregation objects into a single adata'''
-        if not isinstance(other, (Aggregation,Aggregation.Aggregation)):
+        if not isinstance(other, (Aggregation)):
             raise ValueError("Addition supported only for Aggregation class")
         self.adata.obs["source_"] = self.name
         other.adata.obs["source_"] = other.name if other.name != self.name else f"{self.name}_1"
@@ -455,7 +470,7 @@ class Aggregation:
         return adata
     
     def __delitem__(self, key):
-        '''deletes metadata'''
+        '''Deletes metadata'''
         if isinstance(key, str):
             if key in self.adata.obs:
                 del self.adata.obs[key]
@@ -467,23 +482,29 @@ class Aggregation:
             raise TypeError(f"Key must be a string, not {type(key).__name__}")
     
     def update(self):
-        '''Updates the methods in the instance. Should be used after modifying the source code in the class'''
+        '''
+        Updates the methods in the instance. 
+        Should be used after modifying the source code in the class
+        '''
         HiVis_utils.update_instance_methods(self)
         HiVis_utils.update_instance_methods(self.plot)
         _ = gc.collect()
     
     def head(self, n=5):
+        '''Returns Aggregation.adata.obs.head(n), where n is number of rows'''
         return self.adata.obs.head(n) 
     
     @property
     def columns(self):
+        '''Returns Aggregation.adata.obs.columns'''
         return self.adata.obs.columns.copy()
     
     def copy(self, new_name=None, new_out_path=False, full=False):
         '''
         Creates a deep copy of the instance
         if new_name is specified, renames the object and changes the path_output.
-        If full is False, the name will be added to the current (previous) name
+        If full is False, the name will be added to the current (previous) name.
+        Returns new Aggregation instance
         '''
         new = deepcopy(self)
         new.viz = self.viz
@@ -507,7 +528,9 @@ class Aggregation:
             self.path_output = self.viz.path_output + f"/{new_name}"
     
     def export_to_matlab(self, path=None):
-        '''exports gene names, data (sparse matrix) and metadata to a .mat file'''
+        '''
+        Exports gene names, data (sparse matrix) and metadata to a .mat file
+        '''
         var_names = self.adata.var_names.to_numpy()  
         if 'X_umap' in self.adata.obsm:
             self.adata.obs['UMAP_1'] = self.adata.obsm['X_umap'][:, 0]  
