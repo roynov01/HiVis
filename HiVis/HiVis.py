@@ -489,12 +489,12 @@ class HiVis:
             return pd.Series(pb, index=self.adata.var_names)
         
         unique_groups = self.adata.obs[by].unique()
+        unique_groups = unique_groups[pd.notna(unique_groups)]
+
         n_groups = len(unique_groups)
         n_genes = self.adata.n_vars  
         result = np.zeros((n_groups, n_genes))
         for i, group in enumerate(unique_groups):
-            if pd.notna(group):
-                continue
             mask = (self.adata.obs[by] == group).values
             if mask.sum() == 0: 
                 continue
