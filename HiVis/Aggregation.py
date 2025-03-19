@@ -247,7 +247,7 @@ class Aggregation:
         parameters:
             * what (str) - what to smooth. either a gene name or column name from self.adata.obs
             * radius (float) - in microns
-            * method - ["mode","median", "mean", "gaussian", "log"]
+            * method - ["mode", "median", "mean", "gaussian", "log"]
             * new_col_name (str) - Optional custom name for the output column.
             **kwargs - Additional parameters for specific methods (e.g., sigma for gaussian, offset for log).
         '''
@@ -320,8 +320,8 @@ class Aggregation:
         Generates a noise-mean curve of the data.
         Parameters:
             * plot (bool) - plot the curve?
-            * layer (str) - which layer in the anndata to use
-            * signif_thresh (float) - for plotting, add text for genes in this residual precentile
+            * layer (str) - which layer in the AnnData to use
+            * signif_thresh (float) - for plotting, add text for genes in this residual percentile
             * inplace (bool) - add the mean_expression, cv and residuals to VAR?
         Returns dataframe with expression, CV and residuals of each gene (pd.DataFrame)
         '''
@@ -336,8 +336,8 @@ class Aggregation:
             * what (str or list) - if str, computes Spearman correlation of a given gene with all genes. \
                                     if list, will compute correlation between all genes in the list
             * self_corr_value - replace the correlation of the gene with itself by this value
-            * normilize (bool) - normilize expression before computing correlation?
-            * layer (str) - which layer in the anndata to use
+            * normalize (bool) - normilize expression before computing correlation?
+            * layer (str) - which layer in the AnnData to use
             * inplace (bool) - add the correlation to VAR?
         Returns dataframe of spearman correlation between genes (pd.DataFrame)
         '''
@@ -383,14 +383,14 @@ class Aggregation:
             * column - which column in obs has the groups classification
             * group1 - specific value in the "column"
             * group2 - specific value in the "column". \
-                       if None,will run agains all other values, and will be called "rest"
+                       if None, will run against all other values, and will be called "rest"
             * method - either "wilcox" or "t_test"
             * two_sided - if one sided, will give the pval for each group, \
                           and the minimal of both groups (which will also be FDR adjusted)
             * umi_thresh - use only spots with more UMIs than this number
             * expression - function F {mean, mean, max} F(mean(group1),mean(group2))
             * inplace - modify the adata.var with log2fc, pval and expression columns?
-            * layer (str) - which layer in the anndata to use
+            * layer (str) - which layer in the AnnData to use
         Returns the DGE results (pd.DataFrame)
         '''
         alternative = "two-sided" if two_sided else "greater"

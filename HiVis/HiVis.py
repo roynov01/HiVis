@@ -33,7 +33,7 @@ Image.MAX_IMAGE_PIXELS = 1063425001 # Enable large images loading
 
 def load(filename, directory=''):
     '''
-    loads an instance from a pickle format, that have been saved vua HiVis.save()
+    loads an instance from a pickle format, that have been saved via HiVis.save()
     Parameters:
         * filename (str)- full path of pkl file, or just the filename if directory is specified
     Returns HiVis instance
@@ -51,12 +51,12 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
              name:str, crop_images=True, properties: dict = None, on_tissue_only=True,min_reads_in_spot=1,
              min_reads_gene=10, fluorescence=False, plot_qc=True):
     '''
-    - Loads images, data and metada.
+    - Loads images, data and metadata.
     - Initializes the connection from the data and metadata to the images coordinates
     - Adds basic QC to the metadata (nUMI, mitochondrial %)
     Parameters:
-        * path_input_fullres_image (str) - path of the fullres image
-        * path_input_data (str) - folder with outs of the Visium. typically square_002um \
+        * path_input_fullres_image (str) - path of the full resolution microscopy image
+        * path_input_data (str) - folder with outs of the Visium. Typically square_002um \
                             (with h5 files and with folders filtered_feature_bc_matrix, spatial)
         * path_output (str) - path where to save plots and files
         * name (str) - name of the instance
@@ -309,7 +309,7 @@ class HiVis:
             * column (str) - which column in obs has the groups classification
             * group1 - specific value in the "column"
             * group2 - specific value in the "column". \
-                       if None,will run agains all other values, and will be called "rest"
+                       if None, will run against all other values, and will be called "rest"
             * method - either "wilcox" or "t_test"
             * two_sided (bool) - if one sided, will give the pval for each group, \
                           and the minimal of both groups (which will also be FDR adjusted)
@@ -357,7 +357,7 @@ class HiVis:
         For example single-cells, tissue structures.
         Parameters:
             * adata_agg (ad.AnnData) - anndata containing aggregations
-            * name (str) - name of the agg
+            * name (str) - name of the aggregation object
         '''
         if not isinstance(adata_agg, ad.AnnData):
             raise TypeError("adata_agg must be anndata")
@@ -378,10 +378,10 @@ class HiVis:
         Adds Aggregation object to self.agg[name], based on CSV output of Stardist pipeline.
         Parameters:
             * input_df (pd.DataFrame) - output of Stardist pipeline 
-            * name (str) - name to store the Aggregation in. Can be acessed via HiVis.agg[name]
+            * name (str) - name to store the Aggregation in. Can be accessed via HiVis.agg[name]
             * obs2agg - what obs to aggregate from the HiVis. \
                         Can be a list of column names. numeric columns will be summed, categorical will be the mode. \
-                        Can be a dict specifying the aggregation function. \
+                        Can be a dictionary specifying the aggregation function. \
                         examples: {"value_along_axis":np.median} or {"value_along_axis":[np.median,np.mean]}
             * obs2add (list) - which columns from input_df should be copied to the Aggregation.adata.obs
         '''
@@ -488,8 +488,8 @@ class HiVis:
         Generates a noise-mean curve of the data.
         Parameters:
             * plot (bool) - plot the curve?
-            * layer - which layer in the anndata to use
-            * signif_thresh (float) - for plotting, add text for genes in this residual precentile
+            * layer - which layer in the AnnData to use
+            * signif_thresh (float) - for plotting, add text for genes in this residual percentile
             * inplace (bool) - add the mean_expression, cv and residuals to VAR?
         Returns dataframe with expression, CV and residuals of each gene (pd.DataFrame)
         '''
@@ -503,8 +503,8 @@ class HiVis:
             * what (str or list) - if str, computes Spearman correlation of a given gene with all genes. \
                                     if list, will compute correlation between all genes in the list
             * self_corr_value - replace the correlation of the gene with itself by this value
-            * normilize (bool) - normilize expression before computing correlation?
-            * layer (str) - which layer in the anndata to use
+            * normalize (bool) - normilize expression before computing correlation?
+            * layer (str) - which layer in the AnnData to use
             * inplace (bool) - add the correlation to VAR?
         Returns dataframe of spearman correlation between genes (pd.DataFrame)
         '''
@@ -519,7 +519,7 @@ class HiVis:
         Exports the adata as h5ad.
         Parameters:
             * path (str) - path to save the h5 file. If None, will save to path_output
-            * force (bool) - save file even if it allready exists
+            * force (bool) - save file even if it already exists
         Returns path where the file was saved (str)
         '''
         if path is None:
@@ -532,10 +532,10 @@ class HiVis:
     
     def export_images(self, path=None, force=False):
         '''
-        Exports full,high and low resolution images
+        Exports full, high and low resolution images
         Parameters:
             * path (str) - path to save the image files. If None, will save to path_output
-            * force (bool)- save files even if they allready exists
+            * force (bool)- save files even if they already exists
         Returns list of [3 images (np.array) and the spatial json]
         '''
         if path is None:
@@ -614,7 +614,7 @@ class HiVis:
                 - (slice(None), ['GeneA', 'GeneB']): Select all spots and specific genes.
                 - (adata.obs['obs1'] == 'value', slice(None)): Select spots where 
                   the 'obs1' column in adata.obs is 'value', and all genes.
-            - remove_empty_pixels (bool) - if True, the images will only contain pixels under visium spots
+            - remove_empty_pixels (bool) - if True, the images will only contain pixels under bins
             - crop_agg (bool) - crop agg objects? If False, plotting of aggregations might break.
         Returns new HiVis instance
         '''
