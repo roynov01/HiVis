@@ -950,9 +950,6 @@ def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=N
     return ax
 
 
-
- 
-
 def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, figsize=(8,8), 
               cmap=None, color="blue", ylab="Count",xlab=None,ax=None):
     '''
@@ -988,6 +985,7 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
         ax.set_ylim([0, max_count * 1.1])
     else: # Categorical case
         unique_vals = pd.Series(values.unique()).sort_values()
+        unique_vals = unique_vals.dropna()
         value_counts = values.value_counts().reindex(unique_vals)
         if isinstance(cmap, str):
             colors = get_colors(unique_vals.index, cmap) if cmap else color
@@ -996,7 +994,7 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
             colors = [colors(i / (len(unique_vals) - 1)) for i in range(len(unique_vals))]
         else:
             if cmap:
-                colors = [cmap.get(val, DEFAULT_COLOR) for val in unique_vals.index]
+                colors = [cmap.get(val, DEFAULT_COLOR) for val in value_counts.index]
             else:
                 colors = color
         value_counts.plot(kind='bar',color=colors, ax=ax)
