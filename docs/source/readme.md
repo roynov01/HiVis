@@ -1,6 +1,6 @@
 # HD Integrated Visium Interactive Suite (HiVis)
 Project home page is available in [github](https://github.com/roynov01/HiVis)
-![](https://github.com/roynov01/HiVis/blob/main/docs/HiVis.png)
+![](../HiVis.png)
 
 ## Installation
 
