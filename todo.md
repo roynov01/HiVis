@@ -15,6 +15,7 @@
 * Write tests	
 * remove garbage files from github
 * upload to pypi
+* add citations to RTD and README
 
 
 ## future additions

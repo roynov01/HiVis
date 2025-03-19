@@ -15,7 +15,7 @@ to enable easy manual annotation, pixel classification, and single-cell segmenta
  [Cellpose](https://github.com/MouseLand/cellpose).
  It links bins and single-cell objects, facilitating seamless information exchange across levels.  
 
-![](doc/HiVis.png)
+![](docs/HiVis.png)
 
 ## Getting started
 ### Installation
@@ -51,7 +51,7 @@ pip install .
 To use Qupath features, such as manual annotations and pixel classifiers, download and install 
 [QuPath](https://qupath.github.io/) (>= 0.5.1).
 
-To perform cell segmentation in QuPath, download [Stardist](https://github.com/qupath/qupath-extension-stardist) 
+To perform cell segmentation in QuPath, download and install [Stardist](https://github.com/qupath/qupath-extension-stardist) 
 and/or [Cellpose](https://github.com/BIOP/qupath-extension-cellpose) extensions for QuPath.
 
 

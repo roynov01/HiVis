@@ -22,12 +22,16 @@ from . import HiVis_plot
 from . import HiVis_utils
 
 class Aggregation:
-    '''Aggregation class that is linked to a HiViz object'''
+    '''
+    Aggregation class that . Enables plotting via Aggregation.plot.
+    each instance is linked to a HiViz object. 
+    '''
     
     def __init__(self, hiviz_instance, adata_agg, name, geojson_agg_path=None):
         '''
         Creates a new instance that is linked to a HiViz object.
-        parameters:
+        
+        Parameters:
             * hiviz_instance (HiViz) - HiViz object
             * adata_agg (ad.AnnData) - anndata of aggregations
             * name (str) - name of object
@@ -67,7 +71,8 @@ class Aggregation:
     def import_geometry(self, geojson_path, object_type="cell"):
         '''
         Adds "geometry" column to self.adata.obs, based on Geojson exported from Qupath.
-        parameters:
+        
+        Parameters:
             * geojson_path (str) - path to geojson file
             * object_type (str) - which "objectType" to merge from the geojson
         '''
@@ -98,13 +103,14 @@ class Aggregation:
     def merge(self, adata, obs=None, var=None, umap=True, pca=True, hvg=True):
         '''
         Merge info from an anndata to self.adata, in case genes have been filtered.
-        parameters:
-            * adata (as.AnnData) - anndata where to get the values from
+        
+        Parameters:
+            * adata (ad.AnnData) - anndata where to get the values from
             * obs - single string or list of obs to merge
             * var - single string or list of var to merge
-            * umap (bool) - add umap to OBSM, and UMAP coordinates to obs?
-            * pca (bool) - add PCA to OBSM?
-            * hvg (bool) - add highly variable genes to vars?
+            * umap (bool) - add umap to OBSM, and UMAP coordinates to obs
+            * pca (bool) - add PCA to OBSM
+            * hvg (bool) - add highly variable genes to vars
         '''
         
         if not obs:
@@ -147,13 +153,15 @@ class Aggregation:
     def get(self, what, cropped=False, geometry=False):
         '''
         get a vector from data (a gene) or metadata (from obs or var). or subset the object.
-        parameters:
+        
+        Parameters:
             * what - if string, will get data or metadata. \
                      else, will return a new Aggregation object that is spliced. \
                      the splicing is passed to the self.adata.
-            * cropped (bool) - get the data from the adata_cropped after crop() or plotting methods?
+            * cropped (bool) - get the data from the adata_cropped after plotting spatial
             * geometry (bool) - include only objects which have geometry
-        Returns: either np.array of data or, if subsetting, a new Aggregation instance
+            
+        **Returns**: either np.array of data or, if subsetting, a new Aggregation instance
         '''
         
         adata = self.adata_cropped if cropped else self.adata
@@ -197,7 +205,7 @@ class Aggregation:
     def subset(self, what=(slice(None), slice(None))):
         '''
         Create a new Aggregation object based on adata subsetting.
-        Returns new Aggregation instance
+        **Returns** new Aggregation instance
         '''
         what = tuple(idx.to_numpy() if hasattr(idx, "to_numpy") else idx for idx in what)
         adata = self.adata[what].copy()
@@ -215,12 +223,14 @@ class Aggregation:
      
     def pseudobulk(self, by=None,layer=None):
         '''
-        Returns the gene expression for each group in a single obs.
+        Sums the gene expression for each group in a single obs.
+        
         Parameters:
             * by (str) - return a dataframe, each column is a value in "by" (for example cluster), rows are genes. \
             If None, will return the mean expression of every gene. 
-            layer (str) - which layer in adata to use.
-        Returns the gene expression for each group (pd.DataFrame)
+            * layer (str) - which layer in adata to use.
+            
+        **Returns** the gene expression for each group (pd.DataFrame)
         '''
         if layer is None:
             x = self.adata.X
@@ -244,12 +254,13 @@ class Aggregation:
     def smooth(self, what, radius, method="median", new_col_name=None, **kwargs):
         '''
         Applies median smoothing to the specified column in adata.obs using spatial neighbors.
-        parameters:
+        
+        Parameters:
             * what (str) - what to smooth. either a gene name or column name from self.adata.obs
             * radius (float) - in microns
             * method - ["mode", "median", "mean", "gaussian", "log"]
             * new_col_name (str) - Optional custom name for the output column.
-            **kwargs - Additional parameters for specific methods (e.g., sigma for gaussian, offset for log).
+            * \**kwargs - Additional Parameters for specific methods (e.g., sigma for gaussian, offset for log).
         '''
         coords = self.adata.obs[['um_x', 'um_y']].values
 
@@ -318,12 +329,15 @@ class Aggregation:
     def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, inplace=False, **kwargs):
         '''
         Generates a noise-mean curve of the data.
+        
         Parameters:
-            * plot (bool) - plot the curve?
+            * plot (bool) - plot the curve
             * layer (str) - which layer in the AnnData to use
             * signif_thresh (float) - for plotting, add text for genes in this residual percentile
-            * inplace (bool) - add the mean_expression, cv and residuals to VAR?
-        Returns dataframe with expression, CV and residuals of each gene (pd.DataFrame)
+            * inplace (bool) - add the mean_expression, cv and residuals to VAR
+            
+        **Returns** dataframe with expression, CV and residuals of each gene (pd.DataFrame). \
+            If plot=true, will also return ax.
         '''
         return HiVis_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
                                                signif_thresh=signif_thresh,inplace=inplace, **kwargs)
@@ -332,14 +346,16 @@ class Aggregation:
     def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
         '''
         Calculates gene(s) correlation.
+        
         Parameters:
             * what (str or list) - if str, computes Spearman correlation of a given gene with all genes. \
                                     if list, will compute correlation between all genes in the list
             * self_corr_value - replace the correlation of the gene with itself by this value
-            * normalize (bool) - normilize expression before computing correlation?
+            * normalize (bool) - normilize expression before computing correlation
             * layer (str) - which layer in the AnnData to use
-            * inplace (bool) - add the correlation to VAR?
-        Returns dataframe of spearman correlation between genes (pd.DataFrame)
+            * inplace (bool) - add the correlation to VAR
+            
+        **Returns** dataframe of spearman correlation between genes (pd.DataFrame)
         '''
         if isinstance(what, str):
             x = self[what]
@@ -349,6 +365,7 @@ class Aggregation:
     def sync(self, what: str):
         '''
         Transfers metadata assignment from the Aggregation to the spots.
+        
         Parameters:
             * what (str) - obs column name to pass to HiViz object
         '''
@@ -364,9 +381,11 @@ class Aggregation:
     def export_h5(self, path=None):
         '''
         Exports the adata. 
+        
         Parameters:
             * path (str) - path to save the h5 file. If None, will save to path_output
-        Returns path where the file was saved (str)
+            
+        **Returns** path where the file was saved (str)
         '''
         print(f"SAVING [{self.name}]")
         if not path:
@@ -379,7 +398,8 @@ class Aggregation:
         '''
         Runs differential gene expression analysis between two groups.
         Values will be saved in self.var: expression_mean, log2fc, pval
-        parameters:
+        
+        Parameters:
             * column - which column in obs has the groups classification
             * group1 - specific value in the "column"
             * group2 - specific value in the "column". \
@@ -389,9 +409,10 @@ class Aggregation:
                           and the minimal of both groups (which will also be FDR adjusted)
             * umi_thresh - use only spots with more UMIs than this number
             * expression - function F {mean, mean, max} F(mean(group1),mean(group2))
-            * inplace - modify the adata.var with log2fc, pval and expression columns?
+            * inplace - modify the adata.var with log2fc, pval and expression columns
             * layer (str) - which layer in the AnnData to use
-        Returns the DGE results (pd.DataFrame)
+            
+        **Returns** the DGE results (pd.DataFrame)
         '''
         alternative = "two-sided" if two_sided else "greater"
         df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
@@ -428,7 +449,7 @@ class Aggregation:
    
     @property
     def shape(self):
-        '''Returns Aggregation.adata.shape'''
+        '''**Returns** Aggregation.adata.shape'''
         return self.adata.shape
     
     def __str__(self):
@@ -491,12 +512,12 @@ class Aggregation:
         _ = gc.collect()
     
     def head(self, n=5):
-        '''Returns Aggregation.adata.obs.head(n), where n is number of rows'''
+        '''**Returns** Aggregation.adata.obs.head(n), where n is number of rows'''
         return self.adata.obs.head(n) 
     
     @property
     def columns(self):
-        '''Returns Aggregation.adata.obs.columns'''
+        '''**Returns** Aggregation.adata.obs.columns'''
         return self.adata.obs.columns.copy()
     
     def copy(self, new_name=None, new_out_path=False, full=False):
@@ -504,7 +525,8 @@ class Aggregation:
         Creates a deep copy of the instance
         if new_name is specified, renames the object and changes the path_output.
         If full is False, the name will be added to the current (previous) name.
-        Returns new Aggregation instance
+        
+        **Returns** new Aggregation instance
         '''
         new = deepcopy(self)
         new.viz = self.viz
