@@ -57,8 +57,8 @@ and/or [Cellpose](https://github.com/BIOP/qupath-extension-cellpose) extensions 
 
 ### Usage and Documentation
 Please refer to the demo notebooks:
-* [Full HiVis analysis](tutorials/HiVis_tutorial.ipynb)
-* [Fluorescence demo](tutorials/HiVis_fluorescence_tutorial.ipynb)
+* [Full HiVis analysis](https://github.com/roynov01/HiVis/blob/main/tutorials/HiVis_tutorial.ipynb)
+* [Fluorescence demo](https://github.com/roynov01/HiVis/blob/main/tutorials/HiVis_fluorescence_tutorial.ipynb)
 
 For QuPath, please refer to the tutorials:
 * [Pixel classification]()
@@ -66,7 +66,7 @@ For QuPath, please refer to the tutorials:
 * [Cell segmentation]()
 
 
-Function docstrings are available on [ReadTheDocs]().
+Function docstrings are available on [ReadTheDocs](https://hivis.readthedocs.io/en/latest/).
 
 ## Contact
 Bug report/feature request via the [GitHub issue tracker](https://github.com/roynov01/HiVis/issues).

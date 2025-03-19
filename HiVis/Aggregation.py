@@ -23,8 +23,8 @@ from . import HiVis_utils
 
 class Aggregation:
     '''
-    Aggregation class that . Enables plotting via Aggregation.plot.
-    each instance is linked to a HiViz object. 
+    Stores data of HiVis that have been aggregated (for example to single-cells). \
+    Enables plotting via Aggregation.plot. Each instance is linked to a HiViz object. 
     '''
     
     def __init__(self, hiviz_instance, adata_agg, name, geojson_agg_path=None):
