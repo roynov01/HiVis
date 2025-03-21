@@ -16,7 +16,7 @@ conda activate HiVis
 
 We recommend two options to then install HiVis in your virtual environment.
 
-Use the package manager [pip](https://pip.pypa.io/en/stable/) to install HiVis. 
+Use the package manager [pip](https://pypi.org/project/HiVis/) to install HiVis. 
 In a terminal run the command:
 
 ```bash

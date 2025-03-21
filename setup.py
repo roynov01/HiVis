@@ -17,7 +17,6 @@ setup(
         "pandas>=2.2.3",
         "seaborn>=0.13.2",
         "scanpy==1.11.0", # read_visium will be deprecated, if updating scanpy, change to suidpy.read_visium
-        # "squidpy", # version 1.6.4 has very long import with warnings
         "anndata>=0.11.3",
         "adjustText", # version 1.3.0 is broken
         "pyarrow>=19.0.1",
@@ -30,9 +29,21 @@ setup(
         "statsmodels>=0.14.4"
     ],
     classifiers=[
+        "Intended Audience :: Science/Research",
+        "Topic :: Scientific/Engineering :: Bio-Informatics",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
         "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
+        "Operating System :: OS Independent"
     ],
-    python_requires=">=3.12",
+    python_requires=">=3.10",
 )
+
+
+
+    "Intended Audience :: Science/Research",
+	"Topic :: Scientific/Engineering :: Bio-Informatics",
+	"Programming Language :: Python :: 3",
+	"Programming Language :: Python :: 3.10",
+	"License :: OSI Approved :: MIT License",
+	"Operating System :: OS Independent",

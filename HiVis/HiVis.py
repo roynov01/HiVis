@@ -583,6 +583,10 @@ class HiVis:
         with open(path_json, 'w') as file:
             json.dump(self.json, file, indent=4)
         
+        cols = ['in_tissue', 'array_row', 'array_col', 'pxl_row_in_fullres','pxl_col_in_fullres']
+        path_obs = f"{path}/{self.name}_tissue_positions.csv"
+        self.adata.obs[cols].to_csv(path_obs, index=True, index_label="barcode")
+        
         images.append(self.json)
         
         return images
