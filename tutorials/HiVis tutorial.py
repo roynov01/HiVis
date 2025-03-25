@@ -21,11 +21,11 @@ import matplotlib.pyplot as plt
 
 from HiVis import HiVis, HiVis_utils
 
-import importlib
 
+
+import importlib
 importlib.reload(HiVis_utils.HiVis_plot)
 importlib.reload(HiVis.Aggregation_utils)
-
 importlib.reload(HiVis_utils)
 importlib.reload(HiVis)
 
@@ -49,10 +49,10 @@ si = HiVis.new(path_image_fullres,
                properties=properties)
 
 
-classifier_path = r"qupath\pixel_classifier.tif"
+classifier_path = r"qupath\pixel_classifier_immune_muscle.tif"
 classifier_name = "muscle_villi_classifier"
 
-mask_values = si.add_mask(classifier_path, classifier_name, plot=False)
+mask_values = si.add_mask(classifier_path, classifier_name)
 values = {0:"immune", 1:"lumen", 2:"muscle", 3:"tissue"}
 si.update_meta(classifier_name, values)
 
@@ -67,7 +67,7 @@ high_expressed = si["nUMI_gene"] > 10000
 si_subset = si[:, high_expressed]
 si_subset.rename("highly_expressed_genes") # otherwise it will be called "subset"
 
-segmentation_path = "qupath/stardist_results.csv"
+segmentation_path = "qupath/stardist_results_new.csv"
 segmentation = pd.read_csv(segmentation_path, sep="\t")
 segmentation.rename(columns={"InCell":"in_cell", "InNuc":'in_nucleus',"Object ID":"Cell_ID"}, inplace=True)
 
@@ -78,8 +78,9 @@ segmentation.rename(columns={"InCell":"in_cell", "InNuc":'in_nucleus',"Object ID
 
 si_subset.agg_stardist(input_df=segmentation, name="SC", obs2add=["Cell: Area µm^2","Eosin: Mean"],
                          obs2agg=["mito_sum","muscle_villi_classifier"])
-
-
+path = r"qupath/cells.geojson"
+si_subset.agg["SC"].import_geometry(path)
+# si = HiVis.load(r"output/mouse_intestine.pkl")
 print(si_subset.agg["SC"])
 #%%
 import scanpy as sc
@@ -102,11 +103,15 @@ sc.pl.umap(adata_sc,color="leiden",size=5)
 si_subset.agg["SC"].merge(adata_sc,obs="leiden",umap=True)
 #%%
 cmap = "tab10"
-fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+fig, axes = plt.subplots(2, 2, figsize=(15, 5))
+axes = axes.flatten()
 si_subset.agg["SC"].plot.spatial("leiden", xlim=[0,400], ylim=[3300,3700],size=15, ax=axes[0], axis_labels=False,cmap=cmap)
 si_subset.agg["SC"].plot.umap("leiden",size=5, ax=axes[1],cmap=cmap)
 si_subset.agg["SC"].plot.hist("leiden", ax=axes[2], ylab="Cells count",cmap=cmap,cropped=True)
+si_subset.agg["SC"].plot.hist("leiden", ax=axes[3],cmap=cmap,xlim=[0,400], ylim=[3300,3700], axis_labels=False)
+
 plt.tight_layout()
+
 #%%
 si_subset.agg["SC"].sync("leiden")
 np.unique(si_subset["leiden"])

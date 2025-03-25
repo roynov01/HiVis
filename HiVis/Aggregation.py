@@ -73,7 +73,7 @@ class Aggregation:
         Adds "geometry" column to self.adata.obs, based on Geojson exported from Qupath.
         
         Parameters:
-            * geojson_path (str) - path to geojson file
+            * geojson_path (str) - path to geojson file (can also be a geodataframe)
             * object_type (str) - which "objectType" to merge from the geojson
         '''
         

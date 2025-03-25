@@ -1,8 +1,5 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
-HiVis/__pycache__/*.pyc
-HiVis/__pycache__
-HiVis/__pycache__/
 *.py[cod]
 *$py.class
 
@@ -45,7 +42,6 @@ htmlcov/
 # Jupyter Notebook checkpoints
 tutorials/.ipynb_checkpoints/
 HiVis/.ipynb_checkpoints/
-/HiVis/__pycache__
 /HiVis/__pycache__/
 
 # macOS files
