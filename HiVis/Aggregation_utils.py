@@ -57,6 +57,12 @@ def split_stardist(input_df):
     split_names = df['Name'].str.split('__', n=1, expand=True)
     split_names.columns = ['Spot_ID', 'Cell_ID']
     split_names['Cell_ID'] = split_names['Cell_ID'].fillna(value=np.nan)
+    
+    # Assign spots with more than one cell to the first one.
+    split_names['Cell_ID'] = split_names['Cell_ID'].apply(
+        lambda x: x.split('_')[0] if isinstance(x, str) and '_' in x else x
+    )
+    
     df[['Spot_ID', 'Cell_ID']] = split_names
     cols = ['in_nucleus', 'in_cell', 'Cell_ID', 'Spot_ID']
     spots_only = df.loc[input_df['Classification']=='Spot',cols]

@@ -19,6 +19,7 @@ from adjustText import adjust_text
 import shapely.wkt
 import shapely.affinity
 import geopandas as gpd
+import warnings
 
 
 from . import HiVis_utils
@@ -653,8 +654,10 @@ class PlotAgg:
             if len(unique_values) == len(colors):
                 self.main.adata.uns[f'{features[0]}_colors'] = colors  # Set colors for the feature categories
             else:
-                raise ValueError("Mismatch between number of unique values and generated colors.")    
-        ax = sc.pl.umap(self.main.adata, color=features,use_raw=False,size=size,ax=ax,
+                raise ValueError("Mismatch between number of unique values and generated colors.")  
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)        
+            ax = sc.pl.umap(self.main.adata, color=features,use_raw=False,size=size,ax=ax,
                         title=title,show=False,legend_loc=legend_loc,layer=layer)
 
         if texts and isinstance(features, str):

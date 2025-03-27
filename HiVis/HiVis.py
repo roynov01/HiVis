@@ -64,7 +64,8 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
         * path_output (str) - path where to save plots and files
         * name (str) - name of the instance
         * crop_images (bool) - crop the regions outside of the spots cover area
-        * properties (dict) - can be any metadata, such as organism, organ, sample_id
+        * properties (dict) - can be any metadata, such as organism, organ, sample_id. \
+            Organism is recomended (i.e human or mouse) for case-sensitivity correction and QC of mitochondrial reads.
         * on_tissue_only (bool) - remove spots that are not classified as "on tissue"
         * min_reads_in_spot (int) - filter out spots with less than X UMIs
         * min_reads_gene (int) - filter out gene that is present in less than X spots
@@ -407,6 +408,7 @@ class HiVis:
         '''
         spots_only, cells_only = Aggregation_utils.split_stardist(input_df)
         
+        self.adata.obs = self.adata.obs.drop(columns=['in_nucleus', 'in_cell', 'Cell_ID'], errors='ignore')
         self.adata.obs = self.adata.obs.join(spots_only,how="left")
         
         aggregation_func = Aggregation_utils._aggregate_data_stardist
