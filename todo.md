@@ -2,6 +2,9 @@
 
 # Todo
 * Remove double-assignment in add_agg_stardist()
+* Lower res in plot mask
+* Dge add gene expression thresh
+* write about QC - mito organism specific
 
 * subset - crop adata.uns["spatial"]:
 	* adata.obsm["spatial"] = adata.obs[["x", "y"]].to_numpy()

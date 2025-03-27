@@ -100,7 +100,7 @@ class Aggregation:
             self.adata.obs = self.adata.obs.join(gdf,how="left")
         
     
-    def merge(self, adata, obs=None, var=None, umap=True, pca=True, hvg=True):
+    def merge(self, adata, obs=None, var=None, layer=None ,umap=True, pca=True, hvg=True):
         '''
         Merge info from an anndata to self.adata, in case genes have been filtered.
         
@@ -108,6 +108,7 @@ class Aggregation:
             * adata (ad.AnnData) - anndata where to get the values from
             * obs - single string or list of obs to merge
             * var - single string or list of var to merge
+            * layer - single string or list of layers to merge
             * umap (bool) - add umap to OBSM, and UMAP coordinates to obs
             * pca (bool) - add PCA to OBSM
             * hvg (bool) - add highly variable genes to vars
@@ -136,6 +137,14 @@ class Aggregation:
             else:
                 if 'highly_variable' not in var:
                     var += ['highly_variable']
+        if layer is not None:
+            if layer in adata.layers:
+                if self.adata.shape[0] == adata.shape[0]:
+                    self.adata.layers[layer] = adata.layers[layer].copy()
+                else:
+                    print(f"Can't add layer {layer} to self.adata.layers, size of adatas don't match")
+            else:
+                print(f"Layer {layer} not found in the provided adata.")
         if obs:
             existing_columns = [col for col in obs if col in self.adata.obs.columns]
             if existing_columns:
@@ -148,9 +157,9 @@ class Aggregation:
             if existing_columns:
                 self.adata.var.drop(columns=existing_columns, inplace=True)
             self.adata.var = self.adata.var.join(adata.var[var], how="left")
+        
             
-                
-    def get(self, what, cropped=False, geometry=False):
+    def get(self, what, cropped=False, geometry=False, layer=None):
         '''
         get a vector from data (a gene) or metadata (from obs or var). or subset the object.
         
@@ -168,18 +177,20 @@ class Aggregation:
         if geometry and self.plot.geometry is not None:
             adata = adata[adata.obs.index.isin(self.plot.geometry.index)]
         if isinstance(what, str):  # Easy access to data or metadata arrays
-            if what in adata.obs.columns:  # Metadata
+            if what in adata.obs.columns:  # Metadata from OBS
                 column_data = adata.obs[what]
                 if column_data.dtype.name == 'category':
                     return column_data.astype(str).values
                 return column_data.values
             elif what in adata.var.index:  # A gene
-                return np.array(adata[:, what].X.todense().ravel()).flatten()
-            elif what in adata.var.columns:  # Gene metadata
+                gene_data = adata[:, what].X if layer is None else adata[:, what].layers[layer]
+                return np.array(gene_data.todense().ravel()).flatten()
+            elif what in adata.var.columns:  # Gene metadata from VAR
                 column_data = adata.var[what]
                 if column_data.dtype.name == 'category':
                     return column_data.astype(str).values
                 return column_data.values
+            
             obs_cols_lower = adata.obs.columns.str.lower()
             if what.lower() in obs_cols_lower:
                 col_name = adata.obs.columns[obs_cols_lower.get_loc(what.lower())]
@@ -188,9 +199,13 @@ class Aggregation:
                     return column_data.astype(str).values
                 return column_data.values
             elif self.viz.organism == "mouse" and (what.lower().capitalize() in adata.var.index):
-                return np.array(adata[:, what.lower().capitalize()].X.todense()).flatten()
+                gene_name = what.lower().capitalize()
+                gene_data = adata[:, gene_name].X if layer is None else adata[:, gene_name].layers[layer]
+                return  np.array(gene_data.todense().ravel()).flatten()
             elif self.viz.organism == "human" and (what.upper() in adata.var.index):
-                return np.array(adata[:, what.upper()].X.todense()).flatten()
+                gene_name = what.lower().upper()
+                gene_data = adata[:, gene_name].X if layer is None else adata[:, gene_name].layers[layer]
+                return  np.array(gene_data.todense().ravel()).flatten()
             var_cols_lower = adata.var.columns.str.lower()
             if what.lower() in var_cols_lower:
                 col_name = adata.var.columns[var_cols_lower.get_loc(what.lower())]
@@ -251,7 +266,7 @@ class Aggregation:
         return expr_df.groupby(group_key, observed=True).mean().T
     
     
-    def smooth(self, what, radius, method="median", new_col_name=None, **kwargs):
+    def smooth(self, what, radius, method="median", new_col_name=None, layer=None, **kwargs):
         '''
         Applies median smoothing to the specified column in adata.obs using spatial neighbors.
         
@@ -259,7 +274,8 @@ class Aggregation:
             * what (str) - what to smooth. either a gene name or column name from self.adata.obs
             * radius (float) - in microns
             * method - ["mode", "median", "mean", "gaussian", "log"]
-            * new_col_name (str) - Optional custom name for the output column.
+            * new_col_name (str) - Optional custom name for the output column
+            * layer (str) - which layer in the AnnData to use
             * \**kwargs - Additional Parameters for specific methods (e.g., sigma for gaussian, offset for log).
         '''
         coords = self.adata.obs[['um_x', 'um_y']].values
@@ -269,7 +285,7 @@ class Aggregation:
             print("Building coordinate tree")
             self.tree = cKDTree(coords)
         
-        values = self[what]
+        values = self.get(what,layer=layer)
         if len(values) != self.adata.shape[0]:
             raise ValueError(f"{what} not in adata.obs or a gene name")
             
@@ -481,7 +497,7 @@ class Aggregation:
     
     def __add__(self, other):
         '''Combines two Aggregation objects into a single adata'''
-        if not isinstance(other, (Aggregation)):
+        if not isinstance(other, type(self)):
             raise ValueError("Addition supported only for Aggregation class")
         self.adata.obs["source_"] = self.name
         other.adata.obs["source_"] = other.name if other.name != self.name else f"{self.name}_1"
@@ -549,9 +565,15 @@ class Aggregation:
         if new_out_path:
             self.path_output = self.viz.path_output + f"/{new_name}"
     
-    def export_to_matlab(self, path=None):
+    def export_to_matlab(self, path=None, layer=None):
         '''
-        Exports gene names, data (sparse matrix) and metadata to a .mat file
+        Exports gene names, data (sparse matrix) and metadata to a .mat file.
+        
+        Parameters:
+            * path (str) - path of mat file to save to
+            * layer - which layer from the adata to use
+            
+        **Returns** path of mat file
         '''
         var_names = self.adata.var_names.to_numpy()  
         if 'X_umap' in self.adata.obsm:
@@ -589,6 +611,8 @@ class Aggregation:
                 os.makedirs(path)
             path = f"{path}/{self.name}.mat"
         print("[Saving mat file]")
-        scipy.io.savemat(path, {"genes": var_names, "mat": self.adata.X,"metadata":obs})
+        mat = self.adata.X if layer is None else self.adata.layers[layer]
+        scipy.io.savemat(path, {"genes": var_names, "mat":mat ,"metadata":obs})
         self.adata.obs.to_csv(path.replace(".mat","metadata.csv"))
+        return path
         

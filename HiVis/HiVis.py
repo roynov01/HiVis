@@ -204,7 +204,7 @@ class HiVis:
         if save:
             self.plot.save(figname="QC", fig=fig)
     
-    def add_mask(self, mask_path:str, name:str, plot=True, cmap="Paired"):
+    def add_mask(self, mask_path:str, name:str, plot=True, cmap="Paired", downscale=10):
         '''
         assigns each spot a value based on mask (image).
         
@@ -213,6 +213,7 @@ class HiVis:
             * name (str) - name of the mask (that will be called in the metadata)
             * plot (bool) - plot the mask
             * cmap (str) - colormap for plotting
+            * downscale (int) - sownscale the plot. only relevent if plot=True
             
         **Returns** the mask (np.array)
         '''
@@ -225,14 +226,17 @@ class HiVis:
             mask_array = np.array(mask)
             return mask_array
         
-        def _plot_mask(mask_array, cmap):
+        def _plot_mask(mask_array, cmap, downscale):
             '''plots the mask'''
+            if downscale > 1:
+                mask_array = mask_array[::downscale, ::downscale]
             plt.figure(figsize=(8, 8))
             plt.imshow(mask_array, cmap=cmap)
             num_colors = len(np.unique(mask_array[~np.isnan(mask_array)]))
             cmap = plt.cm.get_cmap(cmap, num_colors) 
             legend_elements = [Patch(facecolor=cmap(i), label=f'{i}') for i in range(num_colors)]
             plt.legend(handles=legend_elements, loc='lower right', bbox_to_anchor=(1, 0.5))
+            plt.axis('off') 
             plt.show()
 
         def _assign_spots(mask_array, name):
@@ -255,7 +259,7 @@ class HiVis:
 
         mask_array = _import_mask(mask_path)
         if plot:
-            _plot_mask(mask_array, cmap=cmap)
+            _plot_mask(mask_array, cmap=cmap,downscale=downscale)
         _assign_spots(mask_array, name)
         self.plot._init_img()
         print(f"\nTo rename the values in the metadata, call the [update_meta] method with [{name}] and dictionary with current_name:new_name")
@@ -313,7 +317,7 @@ class HiVis:
     
         
     def dge(self, column, group1, group2=None, method="wilcox", two_sided=False,
-            umi_thresh=0, inplace=False):
+            umi_thresh=0, inplace=False, layer=None):
         '''
         Runs differential gene expression analysis between two groups.
         
@@ -327,11 +331,12 @@ class HiVis:
                           and the minimal of both groups (which will also be FDR adjusted)
             * umi_thresh (int) - use only spots with more UMIs than this number
             * inplace (bool) - modify the adata.var with log2fc, pval and expression columns
+            * layer (str) - which layer in adata to use.
             
         **Returns** the DGE results (pd.DataFrame)
         '''
         alternative = "two-sided" if two_sided else "greater"
-        df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,
+        df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
                      method=method, alternative=alternative, inplace=inplace)
         if group2 is None:
             group2 = "rest"
@@ -592,7 +597,7 @@ class HiVis:
         return images
 
     
-    def get(self, what, cropped=False):
+    def get(self, what, cropped=False, layer=None):
         '''
         Get a vector from data (a gene) or metadata (from obs or var). or subset the object.
         
@@ -605,14 +610,15 @@ class HiVis:
         '''
         adata = self.adata_cropped if cropped else self.adata
         if isinstance(what, str):  # Easy access to data or metadata arrays
-            if what in adata.obs.columns:  # Metadata
+            if what in adata.obs.columns:  # Metadata from OBS
                 column_data = adata.obs[what]
                 if column_data.dtype.name == 'category':  # Handle categorical dtype
                     return column_data.astype(str).values
                 return column_data.values
             if what in adata.var.index:  # A gene
-                return np.array(adata[:, what].X.todense().ravel()).flatten()
-            if what in adata.var.columns:  # Gene metadata
+                gene_data = adata[:, what].X if layer is None else adata[:, what].layers[layer]
+                return np.array(gene_data.todense().ravel()).flatten()
+            if what in adata.var.columns:  # Gene metadata from VAR
                 column_data = adata.var[what]
                 if column_data.dtype.name == 'category':  # Handle categorical dtype
                     return column_data.astype(str).values
@@ -625,9 +631,13 @@ class HiVis:
                     return column_data.astype(str).values
                 return column_data.values
             if self.organism == "mouse" and (what.lower().capitalize() in adata.var.index):
-                return np.array(adata[:, what.lower().capitalize()].X.todense()).flatten()
+                gene_name = what.lower().capitalize()
+                gene_data = adata[:, gene_name].X if layer is None else adata[:, gene_name].layers[layer]
+                return  np.array(gene_data.todense().ravel()).flatten()
             if self.organism == "human" and (what.upper() in adata.var.index):
-                return np.array(adata[:, what.upper()].X.todense()).flatten()
+                gene_name = what.lower().upper()
+                gene_data = adata[:, gene_name].X if layer is None else adata[:, gene_name].layers[layer]
+                return  np.array(gene_data.todense().ravel()).flatten()
             var_cols_lower = adata.var.columns.str.lower()
             if what.lower() in var_cols_lower:
                 col_name = adata.var.columns[var_cols_lower.get_loc(what.lower())]

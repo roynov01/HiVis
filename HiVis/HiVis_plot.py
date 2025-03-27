@@ -16,12 +16,10 @@ import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 import seaborn as sns
 from adjustText import adjust_text
-from subprocess import Popen, PIPE
 import shapely.wkt
 import shapely.affinity
 import geopandas as gpd
-import tempfile
-import time
+
 
 from . import HiVis_utils
 
@@ -156,7 +154,7 @@ class PlotVisium:
     
     
     def spatial(self, what=None, exact=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
-                  legend=True, alpha=1, figsize=(8, 8), save=False,brightness=0,contrast=1,
+                  legend=True, alpha=1, figsize=(8, 8), save=False,brightness=0,contrast=1,layer=None,
                   xlim=None, ylim=None, legend_title=None, axis_labels=True, pad=False):
         '''
         plots the image, and/or data/metadata (spatial plot)
@@ -166,7 +164,8 @@ class PlotVisium:
             * image (bool) - plot image?
             * img_resolution - "low","high","full". If None, will determine automatically
             * ax - matplotlib ax, if not passed, new figure will be created with size=figsize
-            * cmap - colormap to use. can be string, or a list of colors.
+            * cmap - colormap to use. can be string, or a list of colors
+            * layer (str) - which layer in adata to use
             * title, legend_title, axis_labels - strings
             * legend (bool)- show legend?
             * xlim, ylim - two values each, in microns, example [50,100]
@@ -214,7 +213,7 @@ class PlotVisium:
             ax.imshow(img, extent=extent)
 
         if what: 
-            values = self.main.get(what, cropped=True)
+            values = self.main.get(what, cropped=True, layer=layer)
             if values is None:
                 raise ValueError(f"{what} not found in adata")
             if np.issubdtype(values.dtype, np.number):  # Filter values that are 0
@@ -266,8 +265,8 @@ class PlotVisium:
             self.save(f"{(what + '_') if what else ''}SPATIAL")
         return ax
     
-    def hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,ax=None,
-             save=False, figsize=(8,8), cmap=None, color="blue",cropped=True):
+    def hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,ax=None,layer=None,
+             save=False, figsize=(8,8), cmap=None, color="blue",cropped=False):
         '''
         plots histogram of data or metadata. if categorical, will plot barplot
         parameters:
@@ -276,15 +275,16 @@ class PlotVisium:
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * cmap - colorbar to use. Can be string, list of colors, or dictionary of {val:color}. overrides the color argument for barplot
             * color (str)- color of the histogram
+            * layer (str) - which layer in adata to use
             * title, xlab, ylab - strings
             * xlim - two values, where to crop the x axis, example [50,100]
             * save (bool)- save the image?
             * cropped (bool) - if False and plot.spatial was run with xlim, ylim hist will be on cropped area
         '''
         title = what if title is None else title
-        if cropped:
+        if not cropped:
             self._crop() # resets adata_cropped to full image
-        to_plot = pd.Series(self.main.get(what, cropped=True))
+        to_plot = pd.Series(self.main.get(what, cropped=True,layer=layer))
         if to_plot is None:
             raise ValueError(f"'{what}' not in adata")
         if ax is None:
@@ -419,7 +419,7 @@ class PlotAgg:
         return save_fig(path, fig, open_file, format_, dpi)
     
     
-    def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
+    def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", layer=None,
                   legend=True, alpha=1, figsize=(8, 8), save=False, size=1,brightness=0,contrast=1,
                   xlim=None, ylim=None, legend_title=None, axis_labels=True):
         '''
@@ -433,6 +433,7 @@ class PlotAgg:
                      or in categorical values case, a dict {"value":"color"}
             * xlim, ylim - two values each, in microns. example: xlim=[50,100]
             * save (bool) - save the plot?
+            * layer (str) - which layer in adata to use
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * brightness (float) - increases brigtness, for example 0.2. 
             * contrast (float) - > 1 increases contrast, < 1 decreases.
@@ -454,7 +455,7 @@ class PlotAgg:
             if ax is None:
                 fig, ax = plt.subplots(figsize=figsize)
             
-            values = self.main.get(what, cropped=True)
+            values = self.main.get(what, cropped=True,layer=layer)
             if np.issubdtype(values.dtype, np.number):  # Filter values that are 0
                 mask = values > 0
             else:
@@ -481,7 +482,7 @@ class PlotAgg:
             self.save(f"{(what + '_') if what else ''}SPATIAL")
         return ax
 
-    def hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,ax=None,
+    def hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,ax=None,layer=None,
              save=False, figsize=(8,8), cmap=None, color="blue",cropped=False):
         '''
         plots histogram of data or metadata. if categorical, will plot barplot.
@@ -491,6 +492,7 @@ class PlotAgg:
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * cmap - colorbar to use. Can be string, list of colors, or dictionary of {val:color}. overrides the color argument for barplot
             * color (str) - color of the histogram
+            * layer (str) - which layer in adata to use
             * title, xlab, ylab - strings
             * save (bool) - save the plot?
             * xlim (list) - two values, where to crop the x axis. example [50,100]
@@ -499,7 +501,7 @@ class PlotAgg:
         title = what if title is None else title
         if not cropped:
             self._crop() # resets adata_cropped to full image
-        to_plot = pd.Series(self.main.get(what, cropped=True))
+        to_plot = pd.Series(self.main.get(what, cropped=True,layer=layer))
         if to_plot is None:
             raise ValueError(f"'{what}' not in adata")
         if ax is None:
@@ -512,7 +514,7 @@ class PlotAgg:
         return ax
     
     def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, 
-              figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,
+              figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,layer=None,
               legend=True, ax=None, title=None, legend_title=None, brightness=0,contrast=1,axis_labels=True):
         '''
         Plot a spatial map of the objects. Can color the borders and fill.
@@ -525,6 +527,7 @@ class PlotAgg:
                      or in categorical values case, a dict {"value":"color"}
             * xlim, ylim - two values each, in microns [50,100]
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
+            * layer (str) - which layer in adata to use.
             * save (bool) - svae the plot?
             * brightness (float) - increases brigtness, for example 0.2. 
             * contrast (float) - > 1 increases contrast, < 1 decreases.
@@ -553,7 +556,7 @@ class PlotAgg:
             self.geometry.boundary.plot(ax=ax, color=line_color, linewidth=linewidth)
         
         if what: 
-            values = self.main.get(what, cropped=True, geometry=True) 
+            values = self.main.get(what, cropped=True, geometry=True,layer=layer) 
             if values is None:
                 raise KeyError(f"No values in [{what}]")
             # if len(values) != len(self.main.adata_cropped):
@@ -622,35 +625,35 @@ class PlotAgg:
             if not isinstance(features, str):
                 raise ValueError("ax can be passed for a single feature only")
         else:
-            
-            fig, ax = plt.subplots(figsize=figsize)
+            if isinstance(features, str):
+                fig, ax = plt.subplots(figsize=figsize)
         if isinstance(features, str):
             features = [features]
         if not legend:
             legend_loc="none"
             
-        if f'{features[0]}_colors' in self.main.adata.uns:
-            del self.main.adata.uns[f'{features[0]}_colors']
-        
-        color_values = self.main[features[0] if isinstance(features, list) else features] 
-        if isinstance(cmap, (str, list, dict)):
-            if pd.api.types.is_categorical_dtype(color_values):
-                # Use the defined categorical ordering
-                categories = color_values.cat.categories.astype(str)
-                colors = get_colors(categories, cmap)
-                unique_values = categories
+        if features is not None:
+            color_values = self.main[features[0] if isinstance(features, list) else features] 
+            if f'{features[0]}_colors' in self.main.adata.uns:
+                del self.main.adata.uns[f'{features[0]}_colors']
+            if isinstance(cmap, (str, list, dict)):
+                if pd.api.types.is_categorical_dtype(color_values):
+                    # Use the defined categorical ordering
+                    categories = color_values.cat.categories.astype(str)
+                    colors = get_colors(categories, cmap)
+                    unique_values = categories
+                else:
+                    # For non-categorical data, filter out NaNs
+                    filtered_color_values = color_values[~pd.isna(color_values)]
+                    colors = get_colors(filtered_color_values, cmap)
+                    unique_values = np.unique(filtered_color_values.astype(str))
             else:
-                # For non-categorical data, filter out NaNs
-                filtered_color_values = color_values[~pd.isna(color_values)]
-                colors = get_colors(filtered_color_values, cmap)
-                unique_values = np.unique(filtered_color_values.astype(str))
-        else:
-            raise ValueError("cmap must be a string, list, or dict")
-
-        if len(unique_values) == len(colors):
-            self.main.adata.uns[f'{features[0]}_colors'] = colors  # Set colors for the feature categories
-        else:
-            raise ValueError("Mismatch between number of unique values and generated colors.")    
+                raise ValueError("cmap must be a string, list, or dict")
+    
+            if len(unique_values) == len(colors):
+                self.main.adata.uns[f'{features[0]}_colors'] = colors  # Set colors for the feature categories
+            else:
+                raise ValueError("Mismatch between number of unique values and generated colors.")    
         ax = sc.pl.umap(self.main.adata, color=features,use_raw=False,size=size,ax=ax,
                         title=title,show=False,legend_loc=legend_loc,layer=layer)
 

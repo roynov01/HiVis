@@ -52,6 +52,7 @@ si = HiVis.new(path_image_fullres,
 classifier_path = r"qupath\pixel_classifier_immune_muscle.tif"
 classifier_name = "muscle_villi_classifier"
 
+
 mask_values = si.add_mask(classifier_path, classifier_name)
 values = {0:"immune", 1:"lumen", 2:"muscle", 3:"tissue"}
 si.update_meta(classifier_name, values)
@@ -67,11 +68,12 @@ high_expressed = si["nUMI_gene"] > 10000
 si_subset = si[:, high_expressed]
 si_subset.rename("highly_expressed_genes") # otherwise it will be called "subset"
 
-segmentation_path = "qupath/stardist_results_new.csv"
+segmentation_path = "qupath/stardist_results.csv"
 segmentation = pd.read_csv(segmentation_path, sep="\t")
 segmentation.rename(columns={"InCell":"in_cell", "InNuc":'in_nucleus',"Object ID":"Cell_ID"}, inplace=True)
 
-
+si_subset.agg_stardist(input_df=segmentation, name="SC", obs2add=["Cell: Area µm^2","Eosin: Mean"],
+                         obs2agg=["mito_sum","muscle_villi_classifier"])
 
 #%%
 # del si_subset["Cell_ID"];del si_subset["in_cell"];del si_subset["in_nucleus"];
