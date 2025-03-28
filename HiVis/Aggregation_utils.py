@@ -11,9 +11,6 @@ from tqdm import tqdm
 import anndata as ad
 from scipy.sparse import lil_matrix
 
-# from . import HiVis_utils
-
-
 
 def new_adata(adata, aggregate_by, aggregation_func, obs2agg=None, **aggregation_kwargs):
     '''
@@ -47,9 +44,9 @@ def new_adata(adata, aggregate_by, aggregation_func, obs2agg=None, **aggregation
     if layers:
         for layer_name, layer_data in layers.items():
             adata_agg.layers[layer_name] = layer_data
-
+    
     return adata_agg, other_results
-
+    
 
 def split_stardist(input_df):
     df = input_df.copy()
@@ -128,7 +125,6 @@ def _aggregate_meta(adata, aggregate_by, custom_agg):
     return updated_obs, group_order
 
 
-
 def _aggregate_data_stardist(adata, group_col="Cell_ID", in_cell_col="in_cell", nuc_only=False, nuc_col="in_nucleus"):
     '''
     Aggregates expression data for all spots inside each cell,
@@ -160,49 +156,33 @@ def _aggregate_data_stardist(adata, group_col="Cell_ID", in_cell_col="in_cell", 
     return cell_data, cells_ids, layers, None
 
 
-# def _aggregate_data_stardist(adata, group_col="Cell_ID", in_cell_col="in_cell",nuc_col="in_nucleus"):
-#     '''
-#     Helper function that can be used for as "aggregation_func" in new_adata().
-#     Aggregates expression data based on processed dataframe from 
-#     Ofras pipeline that uses Stardist + extension. (version used in small intestine).    
-#     '''
-#     adata_filtered = adata[(adata.obs[in_cell_col] == 1)]
-    
-#     # Split into nucleus/cytoplasm subsets
-#     print("[Splitting data to nuc/cyto]")
-#     adata_nuc = adata_filtered[adata_filtered.obs[nuc_col] == 1].copy()
-#     adata_cyto = adata_filtered[adata_filtered.obs[nuc_col] == 0].copy()
-#     ind_dict_nuc = adata_nuc.obs.groupby(by=[group_col]).indices
-#     ind_dict_cyto = adata_cyto.obs.groupby(by=[group_col]).indices
-
-#     # Find cell ids that have both nucleus and cytoplasm
-#     cells_ids = np.intersect1d(list(ind_dict_nuc.keys()), list(ind_dict_cyto.keys()))
-#     num_genes = adata_filtered.shape[1]
-#     num_cells = len(cells_ids)
-    
-#     # Preallocate sparse matrices
-#     nucleus_data = lil_matrix((num_cells, num_genes), dtype=np.float32)
-#     cyto_data = lil_matrix((num_cells, num_genes), dtype=np.float32)
-    
-#     # Aggregate the spots in nucleus and in cytoplasm for each cell
-#     for i, cell in enumerate(tqdm(cells_ids, desc='Aggregating spots expression')): 
-#         nucleus_data[i, :] = adata_nuc[ind_dict_nuc[cell],:].X.sum(axis=0) 
-#         cyto_data[i, :] = adata_cyto[ind_dict_cyto[cell],:].X.sum(axis=0) 
-    
-#     # Convert to sparse
-#     print("[Converting to sparse matrices]")
-#     nucleus_data = nucleus_data.tocsr()
-#     cyto_data = cyto_data.tocsr()
-    
-#     cell_data = nucleus_data + cyto_data
-#     layers = {"nuc":nucleus_data}
-
-#     return cell_data, cells_ids, layers, None
-
-
 def merge_cells(cells_only,  adata, additional_obs)    :
     additional_obs += ["Cell_ID"]
     additional_obs = list(set(additional_obs))
     additional_obs = cells_only.columns[cells_only.columns.isin(additional_obs)]
     adata.obs = adata.obs.join(cells_only[additional_obs],how="left", on="Cell_ID")
     
+
+def add_spatial_keys(hivis_obj, adata, name):
+    """
+    Adds spatial keys to the AnnData object to make it Scanpy/Squidpy spatial plot compatible.
+    
+    Parameters:
+        * hivis_obj (HiVis) - that has images and scalefactors json
+        * adata (AnnData) - AnnData object to which spatial keys will be added.
+        * name (str) - name of adata, will be concatinated to hivis_obj.name
+    
+    **Returns:** The updated AnnData object.
+    """
+    required_cols = ["pxl_col_in_fullres", "pxl_row_in_fullres"]
+    if not all(col in adata.obs.columns for col in required_cols):
+        raise ValueError("Missing required spatial coordinate columns in adata.obs")
+    
+    adata.obsm["spatial"] = adata.obs[["pxl_col_in_fullres", "pxl_row_in_fullres"]].to_numpy()
+        
+    adata.uns["spatial"] = {
+        name: {"images": {"hires": hivis_obj.image_highres,"lowres": hivis_obj.image_lowres},
+            "scalefactors": hivis_obj.json,
+            "metadata": hivis_obj.properties}}
+    
+    return adata

@@ -379,6 +379,7 @@ class HiVis:
             * adata_agg (ad.AnnData) - anndata containing aggregations
             * name (str) - name of the aggregation object
         '''
+        
         if not isinstance(adata_agg, ad.AnnData):
             raise TypeError("adata_agg must be anndata")
         if self.agg:
@@ -418,6 +419,8 @@ class HiVis:
         
         obs2add = [col for col in cells_only.columns if col in obs2add]
         Aggregation_utils.merge_cells(cells_only, adata_agg, obs2add)
+        
+        adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
         
         self.add_agg(adata_agg, name=name)
     

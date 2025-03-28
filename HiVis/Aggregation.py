@@ -502,8 +502,6 @@ class Aggregation:
         self.adata.obs["source_"] = self.name
         other.adata.obs["source_"] = other.name if other.name != self.name else f"{self.name}_1"
         adata = ad.concat([self.adata, other.adata], join='outer')
-        del self.adata.obs["source_"]
-        del other.adata.obs["source_"]
         return adata
     
     def __delitem__(self, key):

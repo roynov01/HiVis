@@ -26,7 +26,7 @@ from HiVis import HiVis, HiVis_utils
 import importlib
 importlib.reload(HiVis_utils.HiVis_plot)
 importlib.reload(HiVis.Aggregation_utils)
-importlib.reload(HiVis_utils)
+importlib.reload(HiVis.HiVis_utils)
 importlib.reload(HiVis)
 
 
