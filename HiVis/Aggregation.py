@@ -37,14 +37,13 @@ class Aggregation:
             * name (str) - name of object
             * geojson_path (str) - path of geojson, exported annotations
         '''
-        
         if not isinstance(adata_agg, ad._core.anndata.AnnData): 
             raise ValueError("Adata must be Anndata object")
         if not "pxl_col_in_fullres" in adata_agg.obs.columns or not "pxl_row_in_fullres" in adata_agg.obs.columns:
             raise ValueError("Anndata.obs must include [pxl_col_in_fullres, pxl_row_in_fullres ]")
         adata_agg = adata_agg[adata_agg.obs["pxl_col_in_fullres"].notna(),:].copy()
         if adata_agg.shape[0] == 0:
-            raise ValueError("Filtered AnnData object is empty. No valid rows remain.")
+            raise ValueError("AnnData object is empty columns")
         
         scalefactor_json = hiviz_instance.json
         adata_agg.obs["pxl_col_in_lowres"] = adata_agg.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
@@ -76,7 +75,8 @@ class Aggregation:
             * geojson_path (str) - path to geojson file (can also be a geodataframe)
             * object_type (str) - which "objectType" to merge from the geojson
         '''
-        
+        print("[Importing geometry]")
+
         if isinstance(geojson_path,str):
             gdf = gpd.read_file(geojson_path)
         elif isinstance(geojson_path,gpd.GeoDataFrame):

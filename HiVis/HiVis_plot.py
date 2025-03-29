@@ -254,7 +254,7 @@ class PlotVisium:
             ax.set_xticklabels([]) 
             ax.set_yticks([])  
             ax.set_yticklabels([]) 
-        if title:
+        if title is not None:
             ax.set_title(title)    
             
         ax.set_xlim(0, width)
@@ -583,7 +583,7 @@ class PlotAgg:
             self.save(f"{what}_HIST")
         return ax
     
-    def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, 
+    def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, color_zeros=False,
               figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,layer=None,
               legend=True, ax=None, title=None, legend_title=None, brightness=0,contrast=1,axis_labels=True):
         '''
@@ -601,7 +601,7 @@ class PlotAgg:
             * save (bool) - svae the plot?
             * brightness (float) - increases brigtness, for example 0.2. 
             * contrast (float) - > 1 increases contrast, < 1 decreases.
-            * figsize, line_color, legend, linewidth, title, legend_title, axis_labels - cosmetic parameters            
+            * figsize, line_color, color_zeros, legend, linewidth, title, legend_title, axis_labels - cosmetic parameters            
         '''
         if "geometry" not in self.main.adata.obs.columns:
             raise ValueError("No 'geometry' column found in adata.obs.")
@@ -627,6 +627,8 @@ class PlotAgg:
         
         if what: 
             values = self.main.get(what, cropped=True, geometry=True,layer=layer) 
+            if not color_zeros:
+                values[values==0] = np.nan
             if values is None:
                 raise KeyError(f"No values in [{what}]")
             # if len(values) != len(self.main.adata_cropped):
@@ -640,7 +642,7 @@ class PlotAgg:
                     cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
                 self.geometry.plot(column="temp", ax=ax, cmap=cmap_obj, legend=False, alpha=alpha)
                 if legend:
-                    norm = plt.Normalize(vmin=values.min(), vmax=values.max())
+                    norm = plt.Normalize(vmin=np.nanmin(values), vmax=np.nanmax(values))
                     sm = plt.cm.ScalarMappable(cmap=cmap_obj, norm=norm)
                     sm.set_array([])  
                     cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
@@ -891,7 +893,7 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
         ax.set_xlabel(xlab)
     if ylab:
         ax.set_ylabel(ylab)
-    if title:
+    if title is not None:
         ax.set_title(title)
     return ax
 
@@ -1225,7 +1227,7 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
         ax.set_xlabel(xlab)
     if ylab:
         ax.set_ylabel(ylab)
-    if title:
+    if title is not None:
         ax.set_title(title)
     return ax
 

@@ -394,7 +394,7 @@ class HiVis:
         self.agg[name] = agg
         
     
-    def agg_stardist(self, input_df, name="SC", obs2add=None, obs2agg=None):
+    def agg_stardist(self, input_df, name="SC", obs2add=None, obs2agg=None, geojson_path=None):
         '''
         Adds Aggregation object to self.agg[name], based on CSV output of Stardist pipeline.
         
@@ -423,6 +423,8 @@ class HiVis:
         adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
         
         self.add_agg(adata_agg, name=name)
+        if geojson_path:
+            self.agg[name].import_geometry(geojson_path)
     
     
     def add_meta(self, name:str, values, type_="obs"):
@@ -688,7 +690,10 @@ class HiVis:
                     adata_agg_shifted = self.__shift_adata(adata_agg_shifted, xlim_pixels_fullres, ylim_pixels_fullres)
                 else:
                     adata_agg_shifted = self.agg[agg].adata
-                new_obj.add_agg(adata_agg_shifted.copy(),agg)
+                if not adata_agg_shifted.shape[0] == 0:
+                    new_obj.add_agg(adata_agg_shifted.copy(),agg)
+                else:
+                    print(f"Aggregation [{agg}] is empty")
         return new_obj
    
 
