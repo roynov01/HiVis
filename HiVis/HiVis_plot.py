@@ -297,6 +297,75 @@ class PlotVisium:
             self.save(f"{what}_HIST")
         return ax
     
+    def cor(self, what, number_of_genes=10, normilize=True, self_corr_value=np.nan,
+            layer=None, cluster=True, ax=None,figsize=(8,8),save=False,
+           size=15,text=True,cmap="copper",legend=True,legend_title=None):
+        '''
+        Plots correlation of a gene with all genes, or a correlation matrix between list of genes.
+        Parameters:
+            * what - either a str or a list. if a single genes, will plot correlation to all other genes. 
+                                                in this case, will pull and save the data to Aggregation.adata.var.
+                                        if a list of genes, will plot a heatmap.
+            * number_of_genes (int) - only applicable if what is a single gene.  
+                                        how many gene names (text) to add to the plot.
+            * cluster (bool) - only applicable if what is a list of genes. cluster the heatmap?
+            * normilize (bool) - normilize data before performing correlation.
+            * layer (str)- which layer to use from the self.adata. If None, will use X
+            * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
+            * cmap - colormap for scatterplot / heatmap. in heatmap can be list of colors.
+            * size (int) - size of spots in scatterplot.
+            * save (bool) - svae the plot?
+            * text, legend, legend_title - cosmetic parameters
+        '''
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)   
+        if isinstance(cmap, list):
+            cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+        
+        if isinstance(what,str):
+            if f"cor_{what}" in self.main.adata.var:
+                df = pd.DataFrame({"r":self.main.adata.var[f"cor_{what}"],
+                                   "expression_mean":self.main.adata.var[f"exp_{what}"],
+                                   "qval":self.main.adata.var[f"cor_qval_{what}"],
+                                   "gene":self.main.adata.var_names})
+                if self_corr_value is not None:
+                    df.loc[df["gene"] == what,"r"] = self_corr_value
+            else:
+                df = self.main.cor(what,normilize=normilize,layer=layer,
+                                        inplace=True,self_corr_value=self_corr_value)
+                df.rename(columns={f"exp_{what}":"expression_mean"},inplace=True)
+                df.rename(columns={f"cor_qval_{what}":"qval"},inplace=True)
+                
+            df["expression_mean_log10"] = np.log10(df["expression_mean"])
+            df["qval_log10"] = -np.log(df["qval"] + df["qval"][df["qval"]>0].min())
+            df.index = df["gene"].values
+            df = df.dropna(subset=["expression_mean_log10", "r", "qval_log10"])
+            cor_series_clean = df["r"]
+            top_abs_indices = cor_series_clean.abs().nlargest(number_of_genes).index
+    
+            # Retrieve the original correlations (with their sign) in the order of their absolute value
+            top_cor = cor_series_clean.loc[top_abs_indices]
+            top_genes = list(top_cor.index)
+    
+            ax = plot_scatter_signif(df, "expression_mean_log10", "r",genes=top_genes,
+                                title=what,text=text,color="qval_log10",ax=ax,
+                                xlab="log10(mean expression)",size=size,cmap=cmap,
+                                ylab="Spearman correlation",legend=legend,color_genes="black")
+            print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
+        else:
+            df = self.main.cor(what,normilize=normilize,layer=layer)
+            if cluster:
+                df = HiVis_utils.cluster_df(df,correlation=True)
+            df[np.isclose(df, 1)] = np.nan
+            ax = plot_heatmap(df,sort=False,ax=ax,cmap=cmap,legend=legend,legend_title=legend_title)
+            if len(what) > 8: # lots of genes
+                ax.tick_params(axis='x', rotation=45)
+        
+        self.current_ax = ax
+        if save:
+            self.save(f"{what}_COR")
+        return ax 
+    
     
     def __repr__(self):
         s = f"Plots available for [{self.main.name}]:\n\tsave(), spatial(), hist()"
@@ -682,7 +751,7 @@ class PlotAgg:
     
     
     def cor(self, what, number_of_genes=10, normilize=True, self_corr_value=np.nan,
-            layer=None, cluster=False, ax=None,figsize=(8,8),save=False,
+            layer=None, cluster=True, ax=None,figsize=(8,8),save=False,
            size=15,text=True,cmap="copper",legend=True,legend_title=None):
         '''
         Plots correlation of a gene with all genes, or a correlation matrix between list of genes.
@@ -712,6 +781,8 @@ class PlotAgg:
                                    "expression_mean":self.main.adata.var[f"exp_{what}"],
                                    "qval":self.main.adata.var[f"cor_qval_{what}"],
                                    "gene":self.main.adata.var_names})
+                if self_corr_value is not None:
+                    df.loc[df["gene"] == what,"r"] = self_corr_value
             else:
                 df = self.main.cor(what,normilize=normilize,layer=layer,
                                         inplace=True,self_corr_value=self_corr_value)

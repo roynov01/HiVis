@@ -3,15 +3,6 @@
 # Todo
 
 * fix import cells geometry from stardist
-* subset - crop adata.uns["spatial"]:
-	* adata.obsm["spatial"] = adata.obs[["x", "y"]].to_numpy()
-	* adata.uns["spatial"] = {"your_sample_name": {"images": {"hires": np.array(image)},
-                                             "scalefactors": {"tissue_hires_scalef": 1.0},
-                                             "metadata": {"source": "your_data"}}}
-
-* convert noise_mean to plot
-* add cor() to HiVis
-* Test adding of Aggs
 
 * Update links in:
 	* readme
