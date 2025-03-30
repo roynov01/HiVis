@@ -68,12 +68,24 @@ high_expressed = si["nUMI_gene"] > 10000
 si_subset = si[:, high_expressed]
 si_subset.rename("highly_expressed_genes") # otherwise it will be called "subset"
 
-segmentation_path = "qupath/stardist_results.csv"
+s = si_subset[(si_subset.adata.obs["um_x"] < 500) & (si_subset.adata.obs["um_y"] > 3200) & (si_subset.adata.obs["um_y"] < 3700),:]
+
+segmentation_path = r"A:\royno\HiVis_proj\export\sub_fullres_detections.csv"
 segmentation = pd.read_csv(segmentation_path, sep="\t")
 segmentation.rename(columns={"InCell":"in_cell", "InNuc":'in_nucleus',"Object ID":"Cell_ID"}, inplace=True)
 
-si_subset.agg_stardist(input_df=segmentation, name="SC", obs2add=["Cell: Area µm^2","Eosin: Mean"],
+s.agg_stardist(input_df=segmentation, name="SC", obs2add=["Cell: Area µm^2","Eosin: Mean"],
                          obs2agg=["mito_sum","muscle_villi_classifier"])
+s.agg["SC"].import_geometry(r"A:\royno\HiVis_proj\export\sub_fullres_cells.geojson")
+s.agg["SC"].plot.cells()
+
+
+# segmentation_path = "qupath/stardist_results.csv"
+# segmentation = pd.read_csv(segmentation_path, sep="\t")
+# segmentation.rename(columns={"InCell":"in_cell", "InNuc":'in_nucleus',"Object ID":"Cell_ID"}, inplace=True)
+
+# si_subset.agg_stardist(input_df=segmentation, name="SC", obs2add=["Cell: Area µm^2","Eosin: Mean"],
+#                          obs2agg=["mito_sum","muscle_villi_classifier"])
 
 #%%
 # del si_subset["Cell_ID"];del si_subset["in_cell"];del si_subset["in_nucleus"];
