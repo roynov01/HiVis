@@ -521,7 +521,6 @@ class HiVis:
         
         Parameters:
             * layer - which layer in the AnnData to use
-            * signif_thresh (float) - for plotting, add text for genes in this residual percentile
             * inplace (bool) - add the mean_expression, cv and residuals to VAR
             
         **Returns** dataframe with expression, CV and residuals of each gene (pd.DataFrame). 

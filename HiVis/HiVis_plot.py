@@ -390,7 +390,7 @@ class PlotVisium:
             * signif_thresh (float) - add text for genes in this residual percentile
             * layer (str) - which layer in the AnnData to use
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
-            * cmap - colormap for scatterplot
+            * cmap - colormap for scatterplot. can be name of colormap, or list of colors
             * size (int) - size of spots in scatterplot
             * save (bool) - svae the plot
             * xlab,ylab (str) - axis labels
@@ -828,7 +828,7 @@ class PlotAgg:
     
     def cor(self, what, number_of_genes=10, normilize=True, self_corr_value=np.nan,
             layer=None, cluster=True, ax=None,figsize=(8,8),save=False,
-           size=15,text=True,cmap="copper",legend=True,legend_title=None):
+           size=15,text=True,cmap="copper",legend=True,legend_title=None,print_=False):
         '''
         Plots correlation of a gene with all genes, or a correlation matrix between list of genes.
         
@@ -846,6 +846,7 @@ class PlotAgg:
             * size (int) - size of spots in scatterplot.
             * save (bool) - svae the plot
             * text, legend, legend_title - cosmetic Parameters
+            * print\_ (bool) - print most correlated genes
             
         **Returns** ax
         '''
@@ -883,7 +884,8 @@ class PlotAgg:
                                 title=what,text=text,color="qval_log10",ax=ax,
                                 xlab="log10(mean expression)",size=size,cmap=cmap,
                                 ylab="Spearman correlation",legend=legend,color_genes="black")
-            print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
+            if print_:
+                print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
         else:
             df = self.main.cor(what,normilize=normilize,layer=layer)
             if cluster:
@@ -907,7 +909,7 @@ class PlotAgg:
             * signif_thresh (float) - add text for genes in this residual percentile
             * layer (str) - which layer in the AnnData to use
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
-            * cmap - colormap for scatterplot
+            * cmap - colormap for scatterplot. can be name of colormap, or list of colors
             * size (int) - size of dots in scatterplot
             * save (bool) - svae the plot
             * repel (bool) - repel text

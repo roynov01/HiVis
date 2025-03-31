@@ -19,6 +19,7 @@ Methods are called by HiVis.plot.
 .. automethod:: HiVis.HiVis_plot.PlotVisium.spatial
 .. automethod:: HiVis.HiVis_plot.PlotVisium.hist
 .. automethod:: HiVis.HiVis_plot.PlotVisium.cor
+.. automethod:: HiVis.HiVis_plot.PlotVisium.noise_mean_curve
 .. automethod:: HiVis.HiVis_plot.PlotVisium.save
 
 
@@ -32,4 +33,5 @@ Methods are called by Aggregation.plot.
 .. automethod:: HiVis.HiVis_plot.PlotAgg.umap
 .. automethod:: HiVis.HiVis_plot.PlotAgg.hist
 .. automethod:: HiVis.HiVis_plot.PlotAgg.cor
+.. automethod:: HiVis.HiVis_plot.PlotAgg.noise_mean_curve
 .. automethod:: HiVis.HiVis_plot.PlotAgg.save
