@@ -342,7 +342,7 @@ class Aggregation:
             new_col_name = f'{what}_smooth_r{radius}'
         self.adata.obs[new_col_name] = smoothed_values
         
-    def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, inplace=False, **kwargs):
+    def noise_mean_curve(self, layer=None,inplace=False):
         '''
         Generates a noise-mean curve of the data.
         
@@ -355,8 +355,7 @@ class Aggregation:
         **Returns** dataframe with expression, CV and residuals of each gene (pd.DataFrame). \
             If plot=true, will also return ax.
         '''
-        return HiVis_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
-                                               signif_thresh=signif_thresh,inplace=inplace, **kwargs)
+        return HiVis_utils.noise_mean_curve(self.adata,layer=layer,inplace=inplace)
         
     
     def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):

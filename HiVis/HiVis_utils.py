@@ -783,7 +783,7 @@ def pca(df, k_means=None, first_pc=1, title="PCA", number_of_genes=20):
     return result
 
 
-def noise_mean_curve(adata, plot=False, layer=None,signif_thresh=0.95, inplace=False, **kwargs):
+def noise_mean_curve(adata,layer=None,inplace=False, **kwargs):
     if layer is None:
         X = adata.X
     else:
@@ -828,11 +828,7 @@ def noise_mean_curve(adata, plot=False, layer=None,signif_thresh=0.95, inplace=F
         adata.var.loc[df["gene"], "cv"] = df["cv"].values
         adata.var.loc[df["gene"], "expression_mean"] = df["mean"].values
         adata.var.loc[df["gene"], "residual"] = df["residual"].values
-    if plot:
-        thresh = np.quantile(np.abs(residuals), signif_thresh)
-        signif_genes = df.loc[np.abs(df["residual"]) > thresh, "gene"]
-        ax = HiVis_plot.plot_scatter_signif(df, "mean_log", "cv_log", color="residual", genes=list(signif_genes), **kwargs)
-        return df, ax
+    
     return df
 
 

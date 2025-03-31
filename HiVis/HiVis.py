@@ -515,21 +515,18 @@ class HiVis:
             result[i, :] = group_mean.A1     
         return pd.DataFrame(result.T, index=self.adata.var_names, columns=unique_groups)
     
-    def noise_mean_curve(self, plot=False, layer=None, signif_thresh=0.95, inplace=False, **kwargs):
+    def noise_mean_curve(self, layer=None, inplace=False):
         '''
-        Generates a noise-mean curve of the data.
+        Generates a noise-mean curve of the data and calculates residuals.
         
         Parameters:
-            * plot (bool) - plot the curve
             * layer - which layer in the AnnData to use
             * signif_thresh (float) - for plotting, add text for genes in this residual percentile
             * inplace (bool) - add the mean_expression, cv and residuals to VAR
             
-        **Returns** dataframe with expression, CV and residuals of each gene (pd.DataFrame). \
-            If plot=true, will also return ax.
+        **Returns** dataframe with expression, CV and residuals of each gene (pd.DataFrame). 
         '''
-        return HiVis_utils.noise_mean_curve(self.adata, plot=plot,layer=layer,
-                                               signif_thresh=signif_thresh,inplace=inplace, **kwargs)
+        return HiVis_utils.noise_mean_curve(self.adata,layer=layer,inplace=inplace)
     
     def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
         '''

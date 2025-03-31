@@ -381,6 +381,52 @@ class PlotVisium:
             self.save(f"{what}_COR")
         return ax 
     
+    def noise_mean_curve(self,signif_thresh=0.95,layer=None,save=False,ax=None,text=True, figsize=(8,8), color="black",
+    size=10,cmap="viridis",repel=False, title=None,legend=True):
+        '''
+        Generates a noise-mean curve of the data.
+        
+        Parameters:
+            * signif_thresh (float) - add text for genes in this residual percentile
+            * layer (str) - which layer in the AnnData to use
+            * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
+            * cmap - colormap for scatterplot
+            * size (int) - size of spots in scatterplot
+            * save (bool) - svae the plot
+            * xlab,ylab (str) - axis labels
+            * repel (bool) - repel text
+            * title, color, legend - cosmetic parameters
+            
+        **returns** ax
+        '''
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)   
+        if isinstance(cmap, list):
+            cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+        
+        if "cv" in self.main.adata.var:
+            df = pd.DataFrame({"cv_log10":np.log10(self.main.adata.var["cv"]),
+                               "expression_mean_log10":np.log10(self.main.adata.var["expression_mean"]),
+                               "residual":self.main.adata.var["residual"]})
+        else:
+            df = HiVis_utils.noise_mean_curve(self.main.adata,layer=layer,inplace=True)
+            df["expression_mean_log10"] = np.log10(df["expression_mean"])
+            df["cv_log10"] = np.log10(df["cv"])
+            
+        df["gene"] = self.main.adata.var.index.values
+        thresh = np.quantile(np.abs(df["residual"]), signif_thresh)
+        signif_genes = list(df.loc[np.abs(df["residual"]) > thresh, "gene"])
+        
+        ax = plot_scatter_signif(df, "expression_mean_log10", "cv_log10",genes=signif_genes,
+                                   title=title,text=text,color="residual",ax=ax,
+                                   xlab="log10(mean expression)",size=size,cmap=cmap,
+                                   ylab="log10(CV)",legend=legend,color_genes=color)     
+  
+        self.current_ax = ax
+        if save:
+            self.save("noise_mean_curve")
+        return ax
+    
     
     def __repr__(self):
         s = f"Plots available for [{self.main.name}]:\n\tsave(), spatial(), hist()"
@@ -701,7 +747,7 @@ class PlotAgg:
 
         
     def umap(self, features=None, title=None, size=None,layer=None,legend=True,texts=False,
-              legend_loc='right margin', save=False, ax=None, figsize=(8,8),cmap="viridis"):
+              legend_loc='right margin', save=False, ax=None, figsize=(8,8),cmap="viridis", axis_labels=True):
         '''
         Plot a UMAP of self.adata, if present
         
@@ -711,7 +757,7 @@ class PlotAgg:
             * texts (bool) - add text in the center of mass of categorical case
             * cmap - can be string (name of pellate), list of colors, or in categorical values case, a dict {"value":"color"}
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
-            * figsize, size, legend, legend_loc, title, legend_title - cosmetic Parameters  
+            * figsize, size, legend, legend_loc, title, legend_title, axis_labels - cosmetic Parameters  
             * save (bool) - svae the plot
             
         **Returns** ax
@@ -756,7 +802,7 @@ class PlotAgg:
             ax = sc.pl.umap(self.main.adata, color=features,use_raw=False,size=size,ax=ax,
                         title=title,show=False,legend_loc=legend_loc,layer=layer)
 
-        if texts and isinstance(features, str):
+        if texts and len(features) == 1:
             values = self.main.adata.obs[features]
         
             if isinstance(values.dtype, pd.CategoricalDtype) or values.dtype.name == 'category':
@@ -770,6 +816,9 @@ class PlotAgg:
             
                     plt.text(centroid_x, centroid_y, str(cluster), color='black',
                              fontsize=10, ha='center', va='center', weight='bold')
+        if not axis_labels:
+            ax.set_xlabel(None)
+            ax.set_ylabel(None)
                 
         self.current_ax = ax
         if save:
@@ -848,6 +897,51 @@ class PlotAgg:
         if save:
             self.save(f"{what}_COR")
         return ax 
+    
+    def noise_mean_curve(self,signif_thresh=0.95,layer=None,save=False,ax=None,text=True, figsize=(8,8), color="black",
+    size=10,cmap="viridis",repel=False, title=None,legend=True):
+        '''
+        Generates a noise-mean curve of the data.
+        
+        Parameters:
+            * signif_thresh (float) - add text for genes in this residual percentile
+            * layer (str) - which layer in the AnnData to use
+            * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
+            * cmap - colormap for scatterplot
+            * size (int) - size of dots in scatterplot
+            * save (bool) - svae the plot
+            * repel (bool) - repel text
+            * title, color, legend - cosmetic parameters
+            
+        **returns** ax
+        '''
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)   
+        if isinstance(cmap, list):
+            cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+        
+        if "cv" in self.main.adata.var:
+            df = pd.DataFrame({"cv_log10":np.log10(self.main.adata.var["cv"]),
+                               "expression_mean_log10":np.log10(self.main.adata.var["expression_mean"]),
+                               "residual":self.main.adata.var["residual"]})
+        else:
+            df = HiVis_utils.noise_mean_curve(self.main.adata,layer=layer,inplace=True)
+            df["expression_mean_log10"] = np.log10(df["expression_mean"])
+            df["cv_log10"] = np.log10(df["cv"])
+            
+        df["gene"] = self.main.adata.var.index.values
+        thresh = np.quantile(np.abs(df["residual"]), signif_thresh)
+        signif_genes = list(df.loc[np.abs(df["residual"]) > thresh, "gene"])
+        
+        ax = plot_scatter_signif(df, "expression_mean_log10", "cv_log10",genes=signif_genes,
+                                   title=title,text=text,color="residual",ax=ax,
+                                   xlab="log10(mean expression)",size=size,cmap=cmap,
+                                   ylab="log10(CV)",legend=legend,color_genes=color)     
+  
+        self.current_ax = ax
+        if save:
+            self.save("noise_mean_curve")
+        return ax
         
     
     def __repr__(self):
