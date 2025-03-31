@@ -208,14 +208,16 @@ class PlotVisium:
             if exact:
                 extent = [0, width, height, 0]
             img = self.image_cropped.copy()
-            if contrast != 1:
-                # Change contrast
-                mean_value = np.mean(img)  
-                img_contrast = mean_value + contrast * (img - mean_value)
-                img = np.clip(img_contrast, 0, 1)
-                # Change brigtness
-            if brightness:
-                img = np.clip(img + brightness, 0, 1)
+
+            if brightness != 1 or contrast != 1:
+                img = img / 255.0 if img.max() > 1 else img
+                if contrast != 1:
+                    mean_value = np.mean(img)
+                    img = mean_value + contrast * (img - mean_value)
+                    img = np.clip(img, 0, 1)
+            
+                if brightness != 1:
+                    img = np.clip(img * brightness, 0, 1)
                 
             ax.imshow(img, extent=extent)
 
@@ -308,7 +310,7 @@ class PlotVisium:
     
     def cor(self, what, number_of_genes=10, normilize=True, self_corr_value=np.nan,
             layer=None, cluster=True, ax=None,figsize=(8,8),save=False,
-           size=15,text=True,cmap="copper",legend=True,legend_title=None):
+           size=15,text=True,cmap="copper",legend=True,legend_title=None,print_=False):
         '''
         Plots correlation of a gene with all genes, or a correlation matrix between list of genes.
         
@@ -325,6 +327,7 @@ class PlotVisium:
             * size (int) - size of spots in scatterplot.
             * save (bool) - svae the plot
             * text, legend, legend_title - cosmetic Parameters
+            * print\_ (bool) - print most correlated genes
             
         **Returns** ax
         '''
@@ -362,7 +365,8 @@ class PlotVisium:
                                 title=what,text=text,color="qval_log10",ax=ax,
                                 xlab="log10(mean expression)",size=size,cmap=cmap,
                                 ylab="Spearman correlation",legend=legend,color_genes="black")
-            print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
+            if print_:
+                print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
         else:
             df = self.main.cor(what,normilize=normilize,layer=layer)
             if cluster:
