@@ -346,9 +346,9 @@ class Aggregation:
         self.adata.obs[new_col_name] = smoothed_values
         return smoothed_values
     
-    def score(self, gene_list:list, score_name:str, z_normilize=False):
+    def score_genes(self, gene_list:list, score_name:str, z_normilize=False):
         '''
-        Assigns score for each bin, based on a list of genes.
+        Assigns score for each object, based on a list of genes.
         
         Parameters:
             * gene_list (list) - list of genes

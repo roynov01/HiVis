@@ -552,7 +552,7 @@ class HiVis:
         return HiVis_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
     
 
-    def score(self, gene_list:list, score_name:str, z_normilize=False):
+    def score_genes(self, gene_list:list, score_name:str, z_normilize=False):
         '''
         Assigns score for each bin, based on a list of genes.
         

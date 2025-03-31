@@ -2,6 +2,10 @@
 
 # Todo
 
+* Run all tutorials
+* Docs - subsections in HiVis and Agg
+
+
 * fix import cells geometry from stardist
 * Add cor, smooth, score to image in readme
 
@@ -15,12 +19,9 @@
 	* pixel classifier + script
 	* Annotations + geojson
 	* Stardist/cellpose (+installation)
+	
+* update doc, pypi
 
 
-
-## future additions
-* Add smooth() to HiVis
-* Add module_score() 
-* Add HiVis objects
 
 
