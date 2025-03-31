@@ -17,6 +17,10 @@ import pandas as pd
 import geopandas as gpd
 from shapely import wkt, affinity
 import anndata as ad
+from scipy.stats import mode, zscore
+from scipy.spatial import cKDTree
+import scanpy as sc
+
 # Plotting libraries
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -130,6 +134,7 @@ class HiVis:
     def __init__(self, adata, image_fullres, image_highres, image_lowres, scalefactor_json, 
                  name, path_output, properties=None, agg=None, fluorescence=False, plot_qc=True):
         self.agg = agg
+        self.tree = None
         self.name, self.path_output = name, path_output 
         self.properties = properties if properties else {}
         self.organism = self.properties.get("organism")
@@ -545,7 +550,106 @@ class HiVis:
             x = self[what]
             return HiVis_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
         return HiVis_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
+    
+
+    def score(self, gene_list:list, score_name:str, z_normilize=False):
+        '''
+        Assigns score for each bin, based on a list of genes.
         
+        Parameters:
+            * gene_list (list) - list of genes
+            * score_name (str) - name of column that will store the score in self.adata.obs
+            * z_normilize (bool) - Z transform the score values
+        
+        **returns** score values (pd.Series)
+        '''
+        if not isinstance(gene_list, list):
+            raise ValueError("gene_list must be a list")
+        sc.tl.score_genes(self.adata, gene_list=gene_list, score_name=score_name)
+        if z_normilize:
+            self.adata.obs[score_name] = zscore(self.adata.obs[score_name])
+        return self.adata.obs[score_name]
+
+
+    def smooth(self, what, radius, method="mean", new_col_name=None, layer=None, **kwargs):
+        '''
+        Applies median smoothing to the specified column in adata.obs using spatial neighbors.
+        
+        Parameters:
+            * what (str) - what to smooth. either a gene name or column name from self.adata.obs
+            * radius (float) - in microns
+            * method - ["mode", "median", "mean", "gaussian", "log"]
+            * new_col_name (str) - Optional custom name for the output column
+            * layer (str) - which layer in the AnnData to use
+            * \**kwargs - Additional Parameters for specific methods (e.g., sigma for gaussian, offset for log).
+            
+        **returns** smoothed values (pd.Series)
+        '''
+        coords = self.adata.obs[['um_x', 'um_y']].values
+
+        if self.tree is None:
+            # Build a KDTree for fast neighbor look-up.
+            print("Building coordinate tree")
+            self.tree = cKDTree(coords)
+        
+        values = self.get(what,layer=layer)
+        if len(values) != self.adata.shape[0]:
+            raise ValueError(f"{what} not in adata.obs or a gene name")
+            
+        if isinstance(values[0], str):
+            if method != "mode":
+                raise ValueError("Smoothing on string columns is only supported using the 'mode' method.")
+    
+        smoothed_values = []
+        
+        if method == "log":
+            offset = kwargs.get("offset", 1.0)
+            if np.min(values) < -offset:
+                raise ValueError(f"Negative values detected in '{what}'. Log smoothing requires all values >= {-offset}.")
+        elif method == "gaussian":
+            sigma = kwargs.get("sigma", radius / 2)
+    
+        # Iterate through each object's coordinates, find neighbors, and compute the median.
+        for i, point in enumerate(tqdm(coords, desc=f"{method} filtering '{what}' in radius {radius}")):
+            # Find all neighbors within the given radius.
+            indices = self.tree.query_ball_point(point, radius)
+            if not indices:
+                # Assign the original value or np.nan if no neighbor is found.
+                new_val = values[i]
+            neighbor_values = values[indices]
+            
+            if method == "median":
+                new_val = np.median(neighbor_values)
+            elif method == "mean":
+                new_val = np.mean(neighbor_values)
+            elif method == "mode":
+                if isinstance(neighbor_values[0], str):
+                    unique_vals, counts = np.unique(neighbor_values, return_counts=True)
+                    new_val = unique_vals[np.argmax(counts)] 
+                else:
+                    new_val = mode(neighbor_values).mode
+            elif method == "gaussian":
+                # Calculate distances to neighbors.
+                distances = np.linalg.norm(coords[indices] - point, axis=1)
+                
+                # Compute Gaussian weights.
+                weights = np.exp(- (distances**2) / (2 * sigma**2))
+                new_val = np.sum(neighbor_values * weights) / np.sum(weights)
+            elif method == "log":
+                # Apply a log1p transform to handle zero values; add an offset if necessary.
+                offset = kwargs.get("offset", 1.0)
+                # It is assumed that neighbor_values + offset > 0.
+                new_val = np.expm1(np.median(np.log1p(neighbor_values + offset))) - offset
+            else:
+                raise ValueError(f"Unknown smoothing method: {method}")
+
+            smoothed_values.append(new_val)
+
+        if not new_col_name:
+            new_col_name = f'{what}_smooth_r{radius}'
+        self.adata.obs[new_col_name] = smoothed_values
+        return smoothed_values
+    
                 
     def export_h5(self, path=None, force=False):
         '''

@@ -3,6 +3,7 @@
 # Todo
 
 * fix import cells geometry from stardist
+* Add cor, smooth, score to image in readme
 
 * Update links in:
 	* readme

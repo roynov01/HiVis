@@ -158,7 +158,7 @@ class PlotVisium:
     
     
     def spatial(self, what=None, exact=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
-                  legend=True, alpha=1, figsize=(8, 8), save=False,brightness=0,contrast=1,layer=None,
+                  legend=True, alpha=1, figsize=(8, 8), save=False,brightness=1,contrast=1,layer=None,
                   xlim=None, ylim=None, legend_title=None, axis_labels=True, pad=False):
         '''
         Plots the image, and/or data/metadata (spatial plot)
@@ -228,7 +228,7 @@ class PlotVisium:
             if np.issubdtype(values.dtype, np.number):  # Filter values that are 0
                 if np.nansum(values) == 0:
                     raise ValueError(f"{what} is equal to zero in the specified xlim,ylim")
-                mask = values > 0
+                mask = values != 0
             else:
                 mask = [True for _ in values]   # No need for filtering
             values = values[mask]
@@ -554,7 +554,7 @@ class PlotAgg:
     
     
     def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", layer=None,
-                  legend=True, alpha=1, figsize=(8, 8), save=False, size=1,brightness=0,contrast=1,
+                  legend=True, alpha=1, figsize=(8, 8), save=False, size=1,brightness=1,contrast=1,
                   xlim=None, ylim=None, legend_title=None, axis_labels=True):
         '''
         Plot a spatial representation of self.adata.
@@ -593,7 +593,7 @@ class PlotAgg:
             
             values = self.main.get(what, cropped=True,layer=layer)
             if np.issubdtype(values.dtype, np.number):  # Filter values that are 0
-                mask = values > 0
+                mask = values != 0
             else:
                 mask = [True for _ in values]   # No need for filtering
             values = values[mask]

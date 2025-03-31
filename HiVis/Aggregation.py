@@ -12,11 +12,12 @@ import numpy as np
 import pandas as pd
 import anndata as ad
 from shapely.affinity import scale
-from scipy.stats import mode
+from scipy.stats import mode, zscore
 import scipy.io
 from scipy.spatial import cKDTree
 from tqdm import tqdm
 import geopandas as gpd
+import scanpy as sc
 
 from . import HiVis_plot
 from . import HiVis_utils
@@ -266,7 +267,7 @@ class Aggregation:
         return expr_df.groupby(group_key, observed=True).mean().T
     
     
-    def smooth(self, what, radius, method="median", new_col_name=None, layer=None, **kwargs):
+    def smooth(self, what, radius, method="mean", new_col_name=None, layer=None, **kwargs):
         '''
         Applies median smoothing to the specified column in adata.obs using spatial neighbors.
         
@@ -277,6 +278,8 @@ class Aggregation:
             * new_col_name (str) - Optional custom name for the output column
             * layer (str) - which layer in the AnnData to use
             * \**kwargs - Additional Parameters for specific methods (e.g., sigma for gaussian, offset for log).
+            
+        **returns** smoothed values (pd.Series)
         '''
         coords = self.adata.obs[['um_x', 'um_y']].values
 
@@ -341,6 +344,25 @@ class Aggregation:
         if not new_col_name:
             new_col_name = f'{what}_smooth_r{radius}'
         self.adata.obs[new_col_name] = smoothed_values
+        return smoothed_values
+    
+    def score(self, gene_list:list, score_name:str, z_normilize=False):
+        '''
+        Assigns score for each bin, based on a list of genes.
+        
+        Parameters:
+            * gene_list (list) - list of genes
+            * score_name (str) - name of column that will store the score in self.adata.obs
+            * z_normilize (bool) - Z transform the score values
+        
+        **returns** score values (pd.Series)
+        '''
+        if not isinstance(gene_list, list):
+            raise ValueError("gene_list must be a list")
+        sc.tl.score_genes(self.adata, gene_list=gene_list, score_name=score_name)
+        if z_normilize:
+            self.adata.obs[score_name] = zscore(self.adata.obs[score_name])
+        return self.adata.obs[score_name]
         
     def noise_mean_curve(self, layer=None,inplace=False):
         '''
