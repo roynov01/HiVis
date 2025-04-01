@@ -98,23 +98,28 @@ si_subset.agg["SC"].import_geometry(path)
 print(si_subset.agg["SC"])
 #%%
 import scanpy as sc
-adata_sc = si_subset.agg["SC"].adata.copy()
+adata_sc = s.agg["SC"].adata.copy()
 
 sc.pp.normalize_total(adata_sc, target_sum=1e4)
 adata_sc.var["expression_mean"] = np.array(adata_sc.X.mean(axis=0)).flatten()/1e4
 adata_sc.var["expression_max"] =  np.array(adata_sc.X.max(axis=0).toarray()).flatten()/1e4
 sc.pp.log1p(adata_sc)
-sc.pp.highly_variable_genes(adata_sc, n_top_genes=1000)
+sc.pp.highly_variable_genes(adata_sc, n_top_genes=2000)
 adata_sc_full = adata_sc.copy()
 adata_sc = adata_sc[:,(adata_sc.var['highly_variable'] == True) ].copy()
 sc.pp.scale(adata_sc, max_value=10)
 sc.tl.pca(adata_sc, svd_solver="arpack")
 sc.pl.pca_variance_ratio(adata_sc, log=True)
-sc.pp.neighbors(adata_sc, n_neighbors=15, n_pcs=20) 
+sc.pp.neighbors(adata_sc, n_neighbors=15, n_pcs=8) 
 sc.tl.umap(adata_sc)
-sc.tl.leiden(adata_sc,resolution=0.7,random_state=0,n_iterations=2,directed=False)
-sc.pl.umap(adata_sc,color="leiden",size=5)
-si_subset.agg["SC"].merge(adata_sc,obs="leiden",umap=True)
+#%%
+resolution = 2.5
+sc.tl.leiden(adata_sc,resolution=0.4,random_state=0,n_iterations=2,directed=False)
+sc.pl.umap(adata_sc,color="leiden",size=15)
+s.agg["SC"].merge(adata_sc,obs="leiden",umap=True)
+s.agg["SC"].plot.cells("leiden",cmap="Set1",xlim=[0,320],ylim=[120,480])
+sc.tl.rank_genes_groups(s.agg["SC"].adata, groupby='leiden', method='wilcoxon')
+sc.pl.rank_genes_groups(s.agg["SC"].adata)
 #%%
 cmap = "tab10"
 fig, axes = plt.subplots(2, 2, figsize=(15, 5))

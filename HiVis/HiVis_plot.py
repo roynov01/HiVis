@@ -410,7 +410,7 @@ class PlotVisium:
                                "residual":self.main.adata.var["residual"]})
         else:
             df = HiVis_utils.noise_mean_curve(self.main.adata,layer=layer,inplace=True)
-            df["expression_mean_log10"] = np.log10(df["expression_mean"])
+            df["expression_mean_log10"] = np.log10(df["mean_expression"])
             df["cv_log10"] = np.log10(df["cv"])
             
         df["gene"] = self.main.adata.var.index.values
@@ -653,7 +653,7 @@ class PlotAgg:
     
     def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, color_zeros=False,
               figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,layer=None,
-              legend=True, ax=None, title=None, legend_title=None, brightness=0,contrast=1,axis_labels=True):
+              legend=True, ax=None, title=None, legend_title=None, brightness=1,contrast=1,axis_labels=True):
         '''
         Plot a spatial map of the objects. Can color the borders and fill
         
@@ -802,12 +802,10 @@ class PlotAgg:
             ax = sc.pl.umap(self.main.adata, color=features,use_raw=False,size=size,ax=ax,
                         title=title,show=False,legend_loc=legend_loc,layer=layer)
 
-        if texts and len(features) == 1:
-            values = self.main.adata.obs[features]
-        
+        if (texts and len(features) == 1) and (features[0] in self.main.adata.obs):
+            values = self.main.adata.obs[features[0]]
             if isinstance(values.dtype, pd.CategoricalDtype) or values.dtype.name == 'category':
                 cluster_coords = self.main.adata.obsm['X_umap']
-                values = self.main.adata.obs[features]
                 unique_clusters = values.unique()
                 for cluster in unique_clusters:
                     mask = values == cluster

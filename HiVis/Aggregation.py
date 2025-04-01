@@ -534,6 +534,14 @@ class Aggregation:
         else:
             raise TypeError(f"Key must be a string, not {type(key).__name__}")
     
+    def __setitem__(self, key, value):
+        if len(value) == self.adata.shape[0]:
+            self.adata.obs[key] = value
+        elif len(value) == self.adata.shape[1]:
+            self.adata.var[key] = value
+        else:
+            raise ValueError("Values must be in the length of OBS or VAR")
+    
     def update(self):
         '''
         Updates the methods in the instance. 

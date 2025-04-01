@@ -7,6 +7,7 @@ import os
 import dill
 import gc
 import warnings
+from pathlib import Path
 
 from tqdm import tqdm
 from copy import deepcopy
@@ -109,6 +110,9 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
         HiVis_utils._export_images(path_image_fullres_cropped, path_image_highres_cropped, 
                                       path_image_lowres_cropped,image_fullres,
                                       image_highres, image_lowres)
+        cols = ['in_tissue', 'array_row', 'array_col', 'pxl_row_in_fullres','pxl_col_in_fullres']        
+        csv_path = Path(path_image_fullres_cropped).parent / "tissue_positions_cropped.csv"
+        adata.obs[cols].to_csv(csv_path, index=True, index_label="barcode")
     
     if fluorescence:
         HiVis_utils._measure_fluorescence(adata, image_fullres, list(fluorescence.keys()), scalefactor_json["spot_diameter_fullres"])
@@ -433,7 +437,7 @@ class HiVis:
     
     
     def add_meta(self, name:str, values, type_="obs"):
-        '''
+        r'''
         Adds a vector to metadata (obs or var)
         
         Parameters:
@@ -452,7 +456,7 @@ class HiVis:
         self.plot._init_img()
     
     def update_meta(self, name:str, values:dict, type_="obs"):
-        '''
+        r'''
         Updates values in metadata (obs or var)
         
         Parameters:
@@ -572,7 +576,7 @@ class HiVis:
 
 
     def smooth(self, what, radius, method="mean", new_col_name=None, layer=None, **kwargs):
-        '''
+        r'''
         Applies median smoothing to the specified column in adata.obs using spatial neighbors.
         
         Parameters:
@@ -983,6 +987,16 @@ class HiVis:
         # s = f"HiVis[{self.name}]"
         s = self.__str__()
         return s
+    
+    
+    def __setitem__(self, key, value):
+        if len(value) == self.adata.shape[0]:
+            self.adata.obs[key] = value
+        elif len(value) == self.adata.shape[1]:
+            self.adata.var[key] = value
+        else:
+            raise ValueError("Values must be in the length of OBS or VAR")
+        self.plot._init_img()
     
     def __delitem__(self, key):
         '''deletes metadata'''
