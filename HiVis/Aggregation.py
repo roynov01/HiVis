@@ -483,7 +483,6 @@ class Aggregation:
    
     @property
     def shape(self):
-        '''**Returns** Aggregation.adata.shape'''
         return self.adata.shape
     
     def __str__(self):
@@ -557,7 +556,6 @@ class Aggregation:
     
     @property
     def columns(self):
-        '''**Returns** Aggregation.adata.obs.columns'''
         return self.adata.obs.columns.copy()
     
     def copy(self, new_name=None, new_out_path=False, full=False):

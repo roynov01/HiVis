@@ -436,25 +436,6 @@ class HiVis:
             self.agg[name].import_geometry(geojson_path)
     
     
-    def add_meta(self, name:str, values, type_="obs"):
-        r'''
-        Adds a vector to metadata (obs or var)
-        
-        Parameters:
-            * name (str) - name of metadata
-            * values (array like) - values to add
-            * type\_ - either "obs" or "var"
-        '''
-        if type_ == "obs":
-            if name in self.adata.obs.columns:
-                raise ValueError(f"[{name}] allready present in adata.obs")
-            self.adata.obs[name] = values
-        elif type_ == "var":
-            if name in self.adata.var.columns:
-                raise ValueError(f"[{name}] allready present in adata.var")
-            self.adata.var[name] = values
-        self.plot._init_img()
-    
     def update_meta(self, name:str, values:dict, type_="obs"):
         r'''
         Updates values in metadata (obs or var)
@@ -675,7 +656,7 @@ class HiVis:
     
     def export_images(self, path=None, force=False):
         '''
-        Exports full, high and low resolution images
+        Exports full, high and low resolution images, and bins x,y coordinates, and the unit conversion json.
         
         Parameters:
             * path (str) - path to save the image files. If None, will save to path_output
@@ -1017,12 +998,10 @@ class HiVis:
     
     @property
     def shape(self):
-        '''**Returns** HiVis.adata.shape'''
         return self.adata.shape
     
     @property
     def columns(self):
-        '''**Returns** HiVis.adata.obs.columns'''
         return self.adata.obs.columns.copy()
     
     def rename(self, new_name: str, new_out_path=False, full=False):
