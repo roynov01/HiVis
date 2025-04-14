@@ -32,7 +32,7 @@ conda activate HiVis
 
 We recommend two options to then install HiVis in your virtual environment.
 
-Use the package manager [pip](https://pip.pypa.io/en/stable/) to install HiVis. 
+Use the package manager [pip](https://pypi.org/project/HiVis/) to install HiVis. 
 In a terminal run the command:
 
 ```bash
@@ -56,15 +56,9 @@ and/or [Cellpose](https://github.com/BIOP/qupath-extension-cellpose) extensions 
 
 
 ### Usage and Documentation
-Please refer to the demo notebooks:
-* [Full HiVis analysis](https://github.com/roynov01/HiVis/blob/main/tutorials/HiVis_tutorial.ipynb)
-* [Fluorescence demo](https://github.com/roynov01/HiVis/blob/main/tutorials/HiVis_fluorescence_tutorial.ipynb)
+Please refer to the [demo notebooks](https://github.com/roynov01/HiVis/tree/main/tutorials).
 
-For QuPath, please refer to the tutorials:
-* [Pixel classification]()
-* [Manual annotations]()
-* [Cell segmentation]()
-
+For QuPath, please refer to the [tutorial](https://github.com/roynov01/HiVis/tree/main/QuPath).
 
 Function docstrings are available on [ReadTheDocs](https://hivis.readthedocs.io/en/latest/).
 
