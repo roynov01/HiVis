@@ -159,7 +159,7 @@ class PlotVisium:
     
     def spatial(self, what=None, exact=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
                   legend=True, alpha=1, figsize=(8, 8), save=False,brightness=1,contrast=1,layer=None,
-                  xlim=None, ylim=None, legend_title=None, axis_labels=True, pad=False):
+                  xlim=None, ylim=None, legend_title=None, axis_labels=True, pad=False,show_zeros=False):
         '''
         Plots the image, and/or data/metadata (spatial plot)
         
@@ -225,8 +225,8 @@ class PlotVisium:
             values = self.main.get(what, cropped=True, layer=layer)
             if values is None:
                 raise ValueError(f"{what} not found in adata")
-            if np.issubdtype(values.dtype, np.number):  # Filter values that are 0
-                if np.nansum(values) == 0:
+            if np.issubdtype(values.dtype, np.number) and not show_zeros:  # Filter values that are 0
+                if np.all(values == 0):
                     raise ValueError(f"{what} is equal to zero in the specified xlim,ylim")
                 mask = values != 0
             else:
@@ -531,7 +531,7 @@ class PlotAgg:
         self.geometry = gdf
     
     def save(self, figname:str, fig=None, ax=None, open_file=False, format_='png', dpi=300):
-        '''
+        r'''
         Saves a figure or ax. If no fig or ax are specified, will save the last plot.
         
         Parameters:

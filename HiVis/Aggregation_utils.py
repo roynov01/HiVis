@@ -65,7 +65,7 @@ def split_stardist(input_df):
     spots_only = df.loc[input_df['Classification']=='Spot',cols]
     spots_only = spots_only.set_index("Spot_ID")
         
-    cells_only = input_df.loc[input_df['Classification']=='Cell']
+    cells_only = input_df.loc[input_df['Classification']!='Spot']
     cells_only = cells_only.set_index("Cell_ID")
     # vizium_instance.adata.obs = vizium_instance.adata.obs.join(cells_only,how='left',on="Cell_ID")
     

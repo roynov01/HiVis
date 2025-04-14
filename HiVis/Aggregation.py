@@ -82,6 +82,8 @@ class Aggregation:
             gdf = gpd.read_file(geojson_path)
         elif isinstance(geojson_path,gpd.GeoDataFrame):
             gdf = geojson_path
+        if gdf.shape[0] != self.shape[0]:
+            print(f"Number of shapes ({gdf.shape[0]}) isn't the same as the number of cells in adata ({self.shape[0]})")
         gdf = gdf[gdf["objectType"] == object_type]
         gdf = gdf.loc[:,["id","geometry"]]
         gdf.rename(columns={"id":self.adata.obs.index.name},inplace=True)
