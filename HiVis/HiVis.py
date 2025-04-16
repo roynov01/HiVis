@@ -1003,6 +1003,8 @@ class HiVis:
     
     
     def __setitem__(self, key, value):
+        if not hasattr(value, '__len__'):
+            raise ValueError("Assigned value must be iterable or array-like")
         if len(value) == self.adata.shape[0]:
             self.adata.obs[key] = value
         elif len(value) == self.adata.shape[1]:

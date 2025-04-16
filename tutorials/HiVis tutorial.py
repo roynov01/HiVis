@@ -11,27 +11,17 @@ os.chdir(r"C:\Users\royno.WISMAIN\Documents\GitHub\HiVis\tutorials")
 
 # sys.path.append(os.path.abspath(".."))
 
-
-
-
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
 from HiVis import HiVis, HiVis_utils
 
-
-
 import importlib
 importlib.reload(HiVis_utils.HiVis_plot)
 importlib.reload(HiVis.Aggregation_utils)
 importlib.reload(HiVis.HiVis_utils)
 importlib.reload(HiVis)
-
-
-
-
 
 
 #%%
@@ -60,8 +50,9 @@ si.update_meta(classifier_name, values)
 
 annotation_path = r"qupath\annotation.geojson"
 annotation_name = "intestine_part"
-
 mask_values = si.add_annotations(annotation_path, annotation_name)
+si.agg_from_annotation("intestine_part_id",name="test",obs2agg=["mito_sum"],geojson_path=annotation_path)
+si.agg["test"].plot.cells("intestine_part",cmap=["lightgreen","yellow"])
 
 
 high_expressed = si["nUMI_gene"] > 10000
