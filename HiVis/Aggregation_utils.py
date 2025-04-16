@@ -156,6 +156,32 @@ def _aggregate_data_stardist(adata, group_col="Cell_ID", in_cell_col="in_cell", 
     return cell_data, cells_ids, layers, None
 
 
+
+def _aggregate_data_annotations(adata, group_col):
+    '''
+    Aggregates expression data for all spots inside each annotation,
+    '''
+    # Group the spots by group_col
+    ind_dict = adata.obs.groupby(by=[group_col]).indices
+    cells_ids = list(ind_dict.keys())
+    num_cells = len(cells_ids)
+    num_genes = adata.shape[1]
+    
+    # Preallocate a sparse matrix for the aggregated cell data
+    cell_data = lil_matrix((num_cells, num_genes), dtype=np.float32)
+    
+    # Sum all spots for each cell
+    for i, cell in enumerate(tqdm(cells_ids, desc='Aggregating spots expression')):
+        cell_data[i, :] = adata[ind_dict[cell], :].X.sum(axis=0)
+    
+    cell_data = cell_data.tocsr()
+    
+    layers = {}
+    
+    return cell_data, cells_ids, layers, None
+
+
+
 def merge_cells(cells_only,  adata, additional_obs)    :
     additional_obs += ["Cell_ID"]
     additional_obs = list(set(additional_obs))

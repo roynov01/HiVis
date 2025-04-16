@@ -403,7 +403,7 @@ class HiVis:
         self.agg[name] = agg
         
     
-    def agg_stardist(self, input_df, name="SC", obs2add=None, obs2agg=None, geojson_path=None):
+    def agg_stardist(self, input_df, name="SC", obs2add=None, obs2agg=None, nuc_only=False, geojson_path=None):
         '''
         Adds Aggregation object to self.agg[name], based on CSV output of Stardist pipeline.
         
@@ -415,6 +415,7 @@ class HiVis:
                         Can be a dictionary specifying the aggregation function. \
                         examples: {"value_along_axis":np.median} or {"value_along_axis":[np.median,np.mean]}
             * obs2add (list) - which columns from input_df should be copied to the Aggregation.adata.obs
+            * geojson_path (str) - path to geojson file that was exported from Qupath
         '''
         spots_only, cells_only = Aggregation_utils.split_stardist(input_df)
         
@@ -424,7 +425,7 @@ class HiVis:
         aggregation_func = Aggregation_utils._aggregate_data_stardist
 
         adata_agg, _ = Aggregation_utils.new_adata(self.adata, "Cell_ID", aggregation_func,
-                                       obs2agg=obs2agg,in_cell_col="in_cell",nuc_col="in_nucleus")
+                                       obs2agg=obs2agg,in_cell_col="in_cell",nuc_col="in_nucleus", nuc_only=nuc_only)
         
         obs2add = [col for col in cells_only.columns if col in obs2add]
         Aggregation_utils.merge_cells(cells_only, adata_agg, obs2add)
@@ -434,6 +435,37 @@ class HiVis:
         self.add_agg(adata_agg, name=name)
         if geojson_path:
             self.agg[name].import_geometry(geojson_path)
+            
+            
+    def agg_from_annotations(self, annotation_id_col, name="SC", obs2agg=None, geojson_path=None):
+        '''
+        Adds Aggregation object to self.agg[name], based on annotation column.
+        
+        Parameters:
+            * annotation_id_col (str) - column name that the aggregation will be based on
+            * name (str) - name to store the Aggregation in. Can be accessed via HiVis.agg[name]
+            * obs2agg - what obs to aggregate from the HiVis. \
+                        Can be a list of column names. numeric columns will be summed, categorical will be the mode. \
+                        Can be a dictionary specifying the aggregation function. \
+                        examples: {"value_along_axis":np.median} or {"value_along_axis":[np.median,np.mean]}
+            * geojson_path (str) - path to geojson file that was used to create the annotations
+        '''        
+        aggregation_func = Aggregation_utils._aggregate_data_annotations
+        
+        annotation_col = annotation_id_col.replace("_id","")
+        if annotation_col in self.adata.obs.columns and annotation_col not in obs2agg:
+            if isinstance(obs2agg, list):
+                obs2agg += [annotation_col]
+            else:
+                obs2agg[annotation_col] = None
+        
+        adata_agg, _ = Aggregation_utils.new_adata(self.adata, annotation_id_col, aggregation_func,obs2agg=obs2agg)
+        
+        adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
+        self.add_agg(adata_agg, name=name)
+        if geojson_path:
+            self.agg[name].import_geometry(geojson_path, object_type="annotation")            
+ 
     
     
     def update_meta(self, name:str, values:dict, type_="obs"):
