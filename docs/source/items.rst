@@ -20,9 +20,10 @@ General methods
 
 Segmentations, annotations, masks
 **********************************
-.. automethod:: HiVis.HiVis.HiVis.agg_stardist
 .. automethod:: HiVis.HiVis.HiVis.add_mask
 .. automethod:: HiVis.HiVis.HiVis.add_annotations
+.. automethod:: HiVis.HiVis.HiVis.agg_stardist
+.. automethod:: HiVis.HiVis.HiVis.agg_from_annotations
 
 Analyses
 **********************************
