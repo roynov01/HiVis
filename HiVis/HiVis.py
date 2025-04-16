@@ -453,11 +453,15 @@ class HiVis:
         aggregation_func = Aggregation_utils._aggregate_data_annotations
         
         annotation_col = annotation_id_col.replace("_id","")
-        if annotation_col in self.adata.obs.columns and annotation_col not in obs2agg:
-            if isinstance(obs2agg, list):
-                obs2agg += [annotation_col]
+        if annotation_col in self.adata.obs.columns: # Add annotation class to each object
+            if obs2agg is not None:
+                if annotation_col not in obs2agg:
+                    if isinstance(obs2agg, list):
+                        obs2agg += [annotation_col]
+                    else:
+                        obs2agg[annotation_col] = None
             else:
-                obs2agg[annotation_col] = None
+                obs2agg = [annotation_col]
         
         adata_agg, _ = Aggregation_utils.new_adata(self.adata, annotation_id_col, aggregation_func,obs2agg=obs2agg)
         
