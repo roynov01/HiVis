@@ -126,9 +126,9 @@ Attributes
 .. rubric:: AnnData that stores the data and metadata of the objects
 .. autoattribute:: HiVis.Aggregation.Aggregation.viz
 .. rubric:: HiVis parent object that is linked to this instance
-.. autoattribute:: HiVis.HiVis.HiVis.shape
+.. autoattribute:: HiVis.Aggregation.Aggregation.shape
 .. rubric:: Returns adata.shape
-.. autoattribute:: HiVis.HiVis.HiVis.columns
+.. autoattribute:: HiVis.Aggregation.Aggregation.columns
 .. rubric:: Returns adata.columns
 .. autoattribute:: HiVis.Aggregation.Aggregation.name
 .. rubric:: Name of the object
