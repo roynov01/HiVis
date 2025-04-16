@@ -79,8 +79,7 @@ Attributes
 Aggregation
 =====================================================
 
-Main class. Stores the data and images of the VisiumHD, enables plotting via HiVis.plot, and can store Aggregation instances in HiVis.agg.
-To make a new class, call the new() function.
+Stores the data and images of the aggregated VisiumHD bins, enables plotting via Aggregation.plot.
 
 General methods
 ****************
