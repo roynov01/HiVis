@@ -109,7 +109,7 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
         path_image_lowres_cropped = path_image_lowres.replace("." + path_image_lowres.split(".")[-1], "_cropped.tif")
         HiVis_utils._export_images(path_image_fullres_cropped, path_image_highres_cropped, 
                                       path_image_lowres_cropped,image_fullres,
-                                      image_highres, image_lowres)
+                                      image_highres, image_lowres,um_per_pxl=scalefactor_json["microns_per_pixel"])
         cols = ['in_tissue', 'array_row', 'array_col', 'pxl_row_in_fullres','pxl_col_in_fullres']        
         csv_path = Path(path_image_fullres_cropped).parent / "tissue_positions_cropped.csv"
         adata.obs[cols].to_csv(csv_path, index=True, index_label="barcode")
@@ -710,7 +710,8 @@ class HiVis:
         path_image_lowres = f"{path}/{self.name}_lowres.tif"
         images = HiVis_utils._export_images(path_image_fullres, path_image_highres, 
                                       path_image_lowres, image_fullres, 
-                                      self.image_highres, self.image_lowres, force=force)
+                                      self.image_highres, self.image_lowres, force=force,
+                                      um_per_pxl=self.json["microns_per_pixel"])
         
         path_json = f"{path}/{self.name}_scalefactors_json.json"
         with open(path_json, 'w') as file:

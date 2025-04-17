@@ -455,7 +455,7 @@ def _crop_images_permenent(adata, image_fullres, image_highres, image_lowres, sc
     
 
 def _export_images(path_image_fullres, path_image_highres, path_image_lowres,
-                    image_fullres, image_highres, image_lowres, force=False):
+                    image_fullres, image_highres, image_lowres, force=False,um_per_pxl=None):
     '''Saves cropped images. force - overrite existing files?'''
     def _export_image(img, path):
         nonlocal printed_message
@@ -465,16 +465,21 @@ def _export_images(path_image_fullres, path_image_highres, path_image_lowres,
                 printed_message = True
             if img.max() <= 1:
                 img = (img * 255).astype(np.uint8)
+            
+            if um_per_pxl:
+                pixels_per_cm = 1 / (um_per_pxl * 1e-4) 
+                tifffile.imwrite(path, img, resolution=(pixels_per_cm, pixels_per_cm), resolutionunit='CENTIMETER')
+            else:
+                tifffile.imwrite(path, img)
             # image = Image.fromarray(img)
-            tifffile.imwrite(path, img)
             # image.save(save_path, format='TIFF')
             
     printed_message = False
-    
     images = [image_fullres, image_highres, image_lowres]
     paths = [path_image_fullres, path_image_highres, path_image_lowres]
     for img, path in zip(images, paths):
         _export_image(img, path)
+        um_per_pxl = None # We want this value only for the fullres image
     return images
               
 
