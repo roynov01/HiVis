@@ -243,6 +243,11 @@ class Aggregation:
         if item is None:
             raise KeyError(f"[{what}] isn't in data or metadatas")
         return item
+    
+    def __contains__(self, what):
+        if (what in self.adata.obs) or (what in self.adata.var):
+            return True
+        return False
      
     def pseudobulk(self, by=None,layer=None):
         '''
