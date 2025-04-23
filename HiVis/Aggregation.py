@@ -121,6 +121,8 @@ class Aggregation:
             obs = []
         elif isinstance(obs, str):
             obs = [obs]
+        if isinstance(var, str):
+            var = [var]
         if umap and "X_umap" in adata.obsm:
             if self.adata.shape[0] == adata.shape[0]:
                 self.adata.obsm['X_umap'] = adata.obsm['X_umap'].copy()
@@ -153,13 +155,16 @@ class Aggregation:
             if existing_columns:
                 self.adata.obs.drop(columns=existing_columns, inplace=True)
             self.adata.obs = self.adata.obs.join(adata.obs[obs], how="left")
+            
+            HiVis_utils._convert_bool_columns_to_float(self.adata.obs)
+                        
         if var:
-            if isinstance(var, str):
-                var = [var]
             existing_columns = [col for col in var if col in self.adata.var.columns]
             if existing_columns:
                 self.adata.var.drop(columns=existing_columns, inplace=True)
             self.adata.var = self.adata.var.join(adata.var[var], how="left")
+            
+            HiVis_utils._convert_bool_columns_to_float(self.adata.var)
         
             
     def get(self, what, cropped=False, geometry=False, layer=None):
@@ -436,16 +441,15 @@ class Aggregation:
         Values will be saved in self.var: expression_mean, log2fc, pval
         
         Parameters:
-            * column - which column in obs has the groups classification
-            * group1 - specific value in the "column"
-            * group2 - specific value in the "column". \
+            * column (str) - which column in obs has the groups classification
+            * group1 (str) - specific value in the "column"
+            * group2 (str) - specific value in the "column". \
                        if None, will run against all other values, and will be called "rest"
-            * method - either "wilcox" or "t_test"
-            * two_sided - if one sided, will give the pval for each group, \
+            * method (str) - one of ["fisher_exact", "wilcox", "t_test"]
+            * two_sided (bool) - if one sided, will give the pval for each group, \
                           and the minimal of both groups (which will also be FDR adjusted)
-            * umi_thresh - use only spots with more UMIs than this number
-            * expression - function F {mean, mean, max} F(mean(group1),mean(group2))
-            * inplace - modify the adata.var with log2fc, pval and expression columns
+            * umi_thresh (int) - use only spots with more UMIs than this number
+            * inplace (bool) - modify the adata.var with log2fc, pval and expression columns
             * layer (str) - which layer in the AnnData to use
             
         **Returns** the DGE results (pd.DataFrame)

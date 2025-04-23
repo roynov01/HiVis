@@ -288,7 +288,10 @@ class HiVis:
         HiVis_utils.validate_exists(path)
         annotations = gpd.read_file(path)
         if "classification" in annotations.columns:
-            annotations["classification"] = annotations["classification"].apply(json.loads)
+            annotations["classification"] = annotations["classification"].apply(
+                lambda x: json.loads(x) if isinstance(x, str) else x
+            )
+            # annotations["classification"] = annotations["classification"].apply(json.loads)
             annotations[name] = [x["name"] for x in annotations["classification"]]
         else:
             annotations[name] = annotations.index
@@ -326,17 +329,18 @@ class HiVis:
         self.plot._init_img()
     
         
-    def dge(self, column, group1, group2=None, method="wilcox", two_sided=False,
+    def dge(self, column, group1, group2=None, method="fisher_exact", two_sided=False,
             umi_thresh=0, inplace=False, layer=None):
         '''
         Runs differential gene expression analysis between two groups.
         
         Parameters:
             * column (str) - which column in obs has the groups classification
-            * group1 - specific value in the "column"
-            * group2 - specific value in the "column". \
+            * group1 (str) - specific value in the "column"
+            * group2 (str) - specific value in the "column". \
                        if None, will run against all other values, and will be called "rest"
-            * method - either "wilcox" or "t_test"
+            * method (str)- one of ["fisher_exact", "wilcox", "t_test"]. \
+                Since the gene expression in bins is sparse, it's recomended to use "fisher_exact".
             * two_sided (bool) - if one sided, will give the pval for each group, \
                           and the minimal of both groups (which will also be FDR adjusted)
             * umi_thresh (int) - use only spots with more UMIs than this number
@@ -905,6 +909,14 @@ class HiVis:
         if item is None:
             raise KeyError(f"[{what}] isn't in data or metadatas")
         return item
+    
+    def __contains__(self, what):
+        if (what in self.adata.obs) or (what in self.adata.var):
+            return True
+        if self.agg:
+            if what in self.agg:
+                return True
+        return False
     
     def remove_pixels(self, column: str, values: list, marging=1):
         '''

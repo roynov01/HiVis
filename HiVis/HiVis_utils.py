@@ -14,7 +14,7 @@ import tifffile
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba
 import scipy.sparse as sp
-from scipy.stats import mannwhitneyu, ttest_ind, spearmanr
+from scipy.stats import mannwhitneyu, ttest_ind, spearmanr, fisher_exact
 from scipy.spatial.distance import squareform
 from scipy.cluster.hierarchy import linkage, dendrogram
 from statsmodels.stats.multitest import multipletests
@@ -94,6 +94,7 @@ def matnorm(df, axis="col"):
         return df.div(df.sum())
 
     if isinstance(df, (np.ndarray, np.matrix)):
+        df = np.asarray(df)  # Convert matrix to array if needed
         axis_num = 1 if axis == "row" else 0
         sums = df.sum(axis=axis_num, keepdims=True)
         sums[sums == 0] = 1  # Avoid division by zero
@@ -122,8 +123,6 @@ def matnorm(df, axis="col"):
             return df.dot(diag_inv)  # Normalize columns
 
     raise ValueError("df is not a supported type (list, numpy array, sparse matrix, or dataframe)")
-
-
         
 
 def validate_exists(file_path):
@@ -136,76 +135,9 @@ def validate_exists(file_path):
          if not os.path.exists(file_path):
              raise FileNotFoundError(f"No such file or directory:\n\t{file_path}")    
              
-             
-             
-# def dge(adata, column, group1, group2=None, umi_thresh=0,layer=None,
-#                  method="wilcox",alternative="two-sided",inplace=False):
-#     '''
-#     Runs differential gene expression analysis between two groups.
-#     Values will be saved in self.var: expression_mean, log2fc, pval
-#     parameters:
-#         * column - which column in obs has the groups classification
-#         * group1 - specific value in the "column"
-#         * group2 - specific value in the "column". 
-#                    if None,will run agains all other values, and will be called "rest"
-#         * method - either "wilcox" or "t_test"
-#         * alternative - {"two-sided", "less", "greater"}
-#         * umi_thresh - use only spots with more UMIs than this number
-#         * inplace - modify the adata.var with log2fc, pval and expression columns?
-#     '''
-#     df = adata.var.copy()
-        
-#     # Get the expression of the two groups
-#     group1_exp = adata[adata.obs[column] == group1].copy()
-#     group1_exp = group1_exp[group1_exp.X.sum(axis=1) > umi_thresh].copy()  # delete low quality spots
-#     print(f'Normilizing "{group1}" spots')
-#     group1_exp.X = matnorm(group1_exp.X,axis="row") 
-
-#     # group1_exp.X = group1_exp.X / group1_exp.X.sum(axis=1).A1[:, None]  # matnorm
-#     group1_exp = group1_exp.X.todense()
-#     df[group1] = group1_exp.mean(axis=0).A1  # save avarage expression of group1 to vars
-        
-#     if group2 is None:
-#         group2_exp = adata[(adata.obs[column] != group1) & ~adata.obs[column].isna()].copy()
-#         group2 = "rest"
-#     else:
-#         group2_exp = adata[adata.obs[column] == group2].copy()
-#     group2_exp = group2_exp[group2_exp.X.sum(axis=1) > umi_thresh].copy()  # delete empty spots
-
-#     print(f'Normilizing "{group2}" spots')
-#     group2_exp.X = matnorm(group2_exp.X,axis="row") 
-#     # group2_exp.X = group2_exp.X / group2_exp.X.sum(axis=1).A1[:, None]  # matnorm
-#     group2_exp = group2_exp.X.todense()
-#     df[group2] = group2_exp.mean(axis=0).A1  # save avarage expression of group2 to vars
-#     # df[group2 + "_med"] = np.median(group2_exp, axis=0).A1
-#     # df[group2+"_med"] = group2_exp.median(axis=0).A1  
-#     print(f"Number of spots in group1: {group1_exp.shape}, in group2: {group2_exp.shape}")
-#     # Calculate mean expression in each group and log2(group1/group2)
-#     df[f"expression_mean_{column}"] = df[[group1,group2]].mean(axis=1)
-#     pn = df[f"expression_mean_{column}"][df[f"expression_mean_{column}"]>0].min()
-#     df[f"log2fc_{column}"] = (df[group1] + pn) / (df[group2] + pn)
-#     df[f"log2fc_{column}"] = np.log2(df[f"log2fc_{column}"])  
-
-#     # Wilcoxon rank-sum test
-#     df[f"pval_{column}"] = np.nan
-#     for j, gene in enumerate(tqdm(df.index, desc=f"Running wilcoxon on [{column}]")):
-#         if (df.loc[gene,group1] == 0) and (df.loc[gene,group2] == 0):
-#             p_value = np.nan
-#         else:
-#             cur_gene_group1 = group1_exp[:,j]
-#             cur_gene_group2 = group2_exp[:,j]
-#             if method == "wilcox":
-                
-#                 _, p_value = mannwhitneyu(cur_gene_group1, cur_gene_group2, alternative=alternative)
-#             elif method == "t_test":
-#                 _, p_value = ttest_ind(cur_gene_group1, cur_gene_group2, alternative=alternative)
-#         df.loc[gene,f"pval_{column}"] = p_value
-#     if inplace:
-#         adata.var = adata.var.join(df, how="left")
-#     return df
 
 def dge(adata, column, group1, group2=None, umi_thresh=0,layer=None,
-                 method="wilcox",alternative="two-sided",inplace=False):
+                 method="fisher_exact",alternative="two-sided",inplace=False):
     '''
     Runs differential gene expression analysis between two groups.
     Values will be saved in self.var: expression_mean, log2fc, pval
@@ -215,7 +147,7 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,layer=None,
         * group2 - specific value in the "column". 
                    if None,will run agains all other values, and will be called "rest"
         * layer - which layer to get the data from (if None will get from adata.X)
-        * method - either "wilcox" or "t_test"
+        * method - one of ["fisher_exact", "wilcox", "t_test"]
         * alternative - {"two-sided", "less", "greater"}
         * umi_thresh - use only cells with more UMIs than this number
         * inplace - modify the adata.var with log2fc, pval and expression columns?
@@ -226,12 +158,14 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,layer=None,
     df = adata.var.copy()
 
     group1_adata = adata[adata.obs[column] == group1].copy()
+    
     group1_data = get_data(group1_adata, layer)
     if umi_thresh:
         # Filter out low-UMI rows
         mask1 = group1_data.sum(axis=1) > umi_thresh
         group1_adata = group1_adata[mask1].copy()
         group1_data = get_data(group1_adata, layer)
+    group1_adata_raw = group1_data.copy()
 
     print(f'Normalizing "{group1}" spots')
     if layer is None:
@@ -253,6 +187,7 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,layer=None,
         group2_adata = group2_adata[mask2].copy()
         group2_data = get_data(group2_adata, layer)
     print(f'Normalizing "{group2}" spots')
+    group2_adata_raw = group2_data.copy()
     if layer is None:
         group2_adata.X = matnorm(group2_data, axis="row")
         group2_exp = group2_adata.X.todense()
@@ -278,7 +213,19 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,layer=None,
         else:
             cur_gene_group1 = group1_exp[:, j]
             cur_gene_group2 = group2_exp[:, j]
-            if method == "wilcox":
+
+            if method == "fisher_exact":
+                g1_count_gene = group1_adata_raw[:, j].sum()
+                g2_count_gene = group2_adata_raw[:, j].sum()
+                g1_count_total = group1_adata_raw.sum()
+                g2_count_total = group2_adata_raw.sum()
+                
+                contingency_table = [
+                    [g1_count_gene,                     g2_count_gene],
+                    [g1_count_total - g1_count_gene,    g2_count_total - g2_count_gene]
+                ]
+                _, p_value = fisher_exact(contingency_table, alternative=alternative)
+            elif method == "wilcox":
                 _, p_value = mannwhitneyu(cur_gene_group1, cur_gene_group2, alternative=alternative)
             elif method == "t_test":
                 _, p_value = ttest_ind(cur_gene_group1, cur_gene_group2, alternative=alternative)
@@ -290,7 +237,6 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,layer=None,
         adata.var = adata.var.join(df, how="left")
 
     return df
-
 
 
 def load_images(path_image_fullres, path_image_highres, path_image_lowres):
@@ -465,7 +411,6 @@ def _export_images(path_image_fullres, path_image_highres, path_image_lowres,
                 printed_message = True
             if img.max() <= 1:
                 img = (img * 255).astype(np.uint8)
-            
             if um_per_pxl:
                 pixels_per_cm = 1 / (um_per_pxl * 1e-4) 
                 tifffile.imwrite(path, img, resolution=(pixels_per_cm, pixels_per_cm), resolutionunit='CENTIMETER')
@@ -1004,6 +949,19 @@ def estimate_dense_memory(matrix):
     return total_gb
 
 
-
+def _convert_bool_columns_to_float(df):
+    """
+    For columns with bool dtype or object columns that only contain
+    True/False/NaN, convert to float. (True=1.0, False=0.0, NaN stays NaN)
+    """
+    for col in df.columns:
+        if pd.api.types.is_bool_dtype(df[col]):
+            # Pure bool column -> convert directly
+            df[col] = df[col].astype(float)
+        elif pd.api.types.is_object_dtype(df[col]):
+            # a mix of True/False/NaN
+            unique_vals = df[col].dropna().unique()
+            if set(unique_vals).issubset({True, False}):
+                df[col] = df[col].astype(float)
 
 
