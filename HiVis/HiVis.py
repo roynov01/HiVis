@@ -292,7 +292,11 @@ class HiVis:
                 lambda x: json.loads(x) if isinstance(x, str) else x
             )
             # annotations["classification"] = annotations["classification"].apply(json.loads)
-            annotations[name] = [x["name"] for x in annotations["classification"]]
+            # annotations[name] = [x["name"] for x in annotations["classification"] if isinstance(x, dict) else x]
+            annotations[name] = [
+                x["name"] if isinstance(x, dict) else np.nan
+                for x in annotations["classification"]
+            ]
         else:
             annotations[name] = annotations.index
         annotations[f"{name}_id"] = annotations["id"]
@@ -419,6 +423,7 @@ class HiVis:
                         Can be a dictionary specifying the aggregation function. \
                         examples: {"value_along_axis":np.median} or {"value_along_axis":[np.median,np.mean]}
             * obs2add (list) - which columns from input_df should be copied to the Aggregation.adata.obs
+            * nuc_only (bool) - aggregate only spots in nuclei
             * geojson_path (str) - path to geojson file that was exported from Qupath
         '''
         spots_only, cells_only = Aggregation_utils.split_stardist(input_df)
@@ -431,8 +436,9 @@ class HiVis:
         adata_agg, _ = Aggregation_utils.new_adata(self.adata, "Cell_ID", aggregation_func,
                                        obs2agg=obs2agg,in_cell_col="in_cell",nuc_col="in_nucleus", nuc_only=nuc_only)
         
-        obs2add = [col for col in cells_only.columns if col in obs2add]
-        Aggregation_utils.merge_cells(cells_only, adata_agg, obs2add)
+        if obs2add:
+            obs2add = [col for col in cells_only.columns if col in obs2add]
+            Aggregation_utils.merge_cells(cells_only, adata_agg, obs2add)
         
         adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
         
@@ -812,7 +818,10 @@ class HiVis:
                     adata_agg = self.agg[agg].adata.copy()
                     idx_col = adata_agg.obs.index.name
                     adata_agg_shifted = adata_agg[adata_agg.obs.index.isin(adata_shifted.obs[idx_col]),adata_shifted.var_names]
+                    # remove columns from previous analyses
                     adata_agg_shifted.var = adata_agg_shifted.var.loc[:,~adata_agg_shifted.var.columns.str.startswith(("cor_","exp_"))]
+                    adata_agg_shifted.var = adata_agg_shifted.var.drop(columns=[col for col in ["residual","cv","expression_mean"] if col in adata_agg_shifted.var.columns])
+
                     adata_agg_shifted = self.__shift_adata(adata_agg_shifted, xlim_pixels_fullres, ylim_pixels_fullres)
                 else:
                     adata_agg_shifted = self.agg[agg].adata

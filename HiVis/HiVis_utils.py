@@ -767,7 +767,7 @@ def noise_mean_curve(adata,layer=None,inplace=False, **kwargs):
     
     df = pd.DataFrame({
         "gene": np.array(adata.var_names)[valid_genes],
-        "mean": mean_expression[valid_genes],
+        "expression_mean": mean_expression[valid_genes],
         "mean_log": exp_log,
         "cv": cv[valid_genes],
         "cv_log": cv_log,
@@ -776,7 +776,7 @@ def noise_mean_curve(adata,layer=None,inplace=False, **kwargs):
     
     if inplace:
         adata.var.loc[df["gene"], "cv"] = df["cv"].values
-        adata.var.loc[df["gene"], "expression_mean"] = df["mean"].values
+        adata.var.loc[df["gene"], "expression_mean"] = df["expression_mean"].values
         adata.var.loc[df["gene"], "residual"] = df["residual"].values
     
     return df

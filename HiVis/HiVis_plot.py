@@ -407,13 +407,13 @@ class PlotVisium:
         if "cv" in self.main.adata.var:
             df = pd.DataFrame({"cv_log10":np.log10(self.main.adata.var["cv"]),
                                "expression_mean_log10":np.log10(self.main.adata.var["expression_mean"]),
-                               "residual":self.main.adata.var["residual"]})
+                               "residual":self.main.adata.var["residual"],
+                               "gene":self.main.adata.var.index.values}).dropna()
         else:
             df = HiVis_utils.noise_mean_curve(self.main.adata,layer=layer,inplace=True)
-            df["expression_mean_log10"] = np.log10(df["mean_expression"])
+            df["expression_mean_log10"] = np.log10(df["expression_mean"])
             df["cv_log10"] = np.log10(df["cv"])
             
-        df["gene"] = self.main.adata.var.index.values
         thresh = np.quantile(np.abs(df["residual"]), signif_thresh)
         signif_genes = list(df.loc[np.abs(df["residual"]) > thresh, "gene"])
         
@@ -1294,11 +1294,13 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
             cmap_obj = colormaps.get_cmap(cmap)
         elif isinstance(cmap, list):
             cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-        norm = mcolors.Normalize(vmin=np.min(values), vmax=np.max(values))
+        norm = mcolors.Normalize(vmin=np.nanmin(values), vmax=np.nanmax(values))
 
         # Add rectangles for each data point
         for xi, yi, vi in zip(x, y, values):
             # Calculate the lower-left corner position to center the square at (xi, yi)
+            if np.isnan(vi):
+                continue
             ll_corner_x = xi - size / 2
             ll_corner_y = yi - size / 2
 
