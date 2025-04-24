@@ -355,7 +355,7 @@ class HiVis:
         '''
         alternative = "two-sided" if two_sided else "greater"
         df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
-                     method=method, alternative=alternative, inplace=inplace)
+                     method=method, alternative=alternative)
         if group2 is None:
             group2 = "rest"
         df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
@@ -383,6 +383,7 @@ class HiVis:
                 "expression_max":f"expression_max_{column}",
                 },inplace=True)
             del var["gene"]
+            self.adata.var.drop(columns=var.columns,inplace=True)
             self.adata.var = self.adata.var.join(var, how="left")
         return df
     

@@ -234,6 +234,7 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,layer=None,
         df.loc[gene, f"pval_{column}"] = p_value
 
     if inplace:
+        adata.var.drop(columns=df.columns,inplace=True)
         adata.var = adata.var.join(df, how="left")
 
     return df

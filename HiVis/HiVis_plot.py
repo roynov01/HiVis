@@ -555,7 +555,7 @@ class PlotAgg:
     
     def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", layer=None,
                   legend=True, alpha=1, figsize=(8, 8), save=False, size=1,brightness=1,contrast=1,
-                  xlim=None, ylim=None, legend_title=None, axis_labels=True):
+                  xlim=None, ylim=None, legend_title=None, axis_labels=True,show_zeros=False):
         '''
         Plot a spatial representation of self.adata.
         
@@ -592,10 +592,15 @@ class PlotAgg:
                 fig, ax = plt.subplots(figsize=figsize)
             
             values = self.main.get(what, cropped=True,layer=layer)
-            if np.issubdtype(values.dtype, np.number):  # Filter values that are 0
+            if values is None:
+                raise ValueError(f"{what} not found in adata")
+            if np.issubdtype(values.dtype, np.number) and not show_zeros:  # Filter values that are 0
+                if np.all(values == 0):
+                    raise ValueError(f"{what} is equal to zero in the specified xlim,ylim")
                 mask = values != 0
             else:
                 mask = [True for _ in values]   # No need for filtering
+
             values = values[mask]
             x = self.pixel_x[mask]
             y = self.pixel_y[mask]
@@ -651,7 +656,7 @@ class PlotAgg:
             self.save(f"{what}_HIST")
         return ax
     
-    def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, color_zeros=False,
+    def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, show_zeros=False,
               figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,layer=None,
               legend=True, ax=None, title=None, legend_title=None, brightness=1,contrast=1,axis_labels=True):
         '''
@@ -697,15 +702,16 @@ class PlotAgg:
         
         if what: 
             values = self.main.get(what, cropped=True, geometry=True,layer=layer) 
-            if not color_zeros:
-                values[values==0] = np.nan
             if values is None:
-                raise KeyError(f"No values in [{what}]")
-            # if len(values) != len(self.main.adata_cropped):
-            #     raise ValueError("Can only plot OBS or gene expression")
-            self.geometry["temp"] = values
-            
+                raise ValueError(f"{what} not found in adata")
             if np.issubdtype(values.dtype, np.number):
+                if not show_zeros:
+                    values[values==0] = np.nan
+                if values is None:
+                    raise KeyError(f"No values in [{what}]")
+                # if len(values) != len(self.main.adata_cropped):
+                #     raise ValueError("Can only plot OBS or gene expression")
+                self.geometry["temp"] = values
                 if isinstance(cmap, str):
                     cmap_obj = colormaps.get_cmap(cmap)
                 elif isinstance(cmap, list):
@@ -718,6 +724,7 @@ class PlotAgg:
                     cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
                     cbar.set_label(legend_title)
             else: # Categorical case
+                self.geometry["temp"] = values
                 unique_values = np.unique(values.astype(str))
                 unique_values = unique_values[unique_values != 'nan']
                 if isinstance(cmap, (str,list)):
