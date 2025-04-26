@@ -595,8 +595,6 @@ class HiVis:
         
         **returns** score values (pd.Series)
         '''
-        if not isinstance(gene_list, list):
-            raise ValueError("gene_list must be a list")
         sc.tl.score_genes(self.adata, gene_list=gene_list, score_name=score_name)
         if z_normilize:
             self.adata.obs[score_name] = zscore(self.adata.obs[score_name])
@@ -809,6 +807,10 @@ class HiVis:
         image_fullres_crop, image_highres_crop, image_lowres_crop, xlim_pixels_fullres, ylim_pixels_fullres = self.__crop_images(adata, remove_empty_pixels)
         name = self.name + "_subset" if not self.name.endswith("_subset") else ""
         adata_shifted = self.__shift_adata(adata, xlim_pixels_fullres, ylim_pixels_fullres)
+        # remove columns from previous analyses
+        adata_shifted.var = adata_shifted.var.loc[:,~adata_shifted.var.columns.str.startswith(("cor_","exp_"))]
+        adata_shifted.var = adata_shifted.var.drop(columns=[col for col in ["residual","cv","expression_mean"] if col in adata_shifted.var.columns])
+
         new_obj = HiVis(adata_shifted, image_fullres_crop, image_highres_crop, 
                            image_lowres_crop, self.json, name, self.path_output,agg=None,plot_qc=False,
                            properties=self.properties.copy(),fluorescence=self.fluorescence.copy() if self.fluorescence else None)    

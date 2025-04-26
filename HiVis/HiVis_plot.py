@@ -225,6 +225,8 @@ class PlotVisium:
             values = self.main.get(what, cropped=True, layer=layer)
             if values is None:
                 raise ValueError(f"{what} not found in adata")
+            if values.dtype == np.bool_:
+                values = values.astype(int)
             if np.issubdtype(values.dtype, np.number) and not show_zeros:  # Filter values that are 0
                 if np.all(values == 0):
                     raise ValueError(f"{what} is equal to zero in the specified xlim,ylim")
@@ -592,8 +594,11 @@ class PlotAgg:
                 fig, ax = plt.subplots(figsize=figsize)
             
             values = self.main.get(what, cropped=True,layer=layer)
+
             if values is None:
                 raise ValueError(f"{what} not found in adata")
+            if values.dtype == np.bool_:
+                values = values.astype(int)
             if np.issubdtype(values.dtype, np.number) and not show_zeros:  # Filter values that are 0
                 if np.all(values == 0):
                     raise ValueError(f"{what} is equal to zero in the specified xlim,ylim")
@@ -704,6 +709,8 @@ class PlotAgg:
             values = self.main.get(what, cropped=True, geometry=True,layer=layer) 
             if values is None:
                 raise ValueError(f"{what} not found in adata")
+            if values.dtype == np.bool_:
+                values = values.astype(int)
             if np.issubdtype(values.dtype, np.number):
                 if not show_zeros:
                     values[values==0] = np.nan
@@ -1294,7 +1301,6 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
 
     # Set the aspect ratio to 'equal' to ensure squares remain squares
     ax.set_aspect('equal')
-
     if np.issubdtype(values.dtype, np.number):  # Numeric case: Use colorbar
         # Normalize the values for the colormap
         if isinstance(cmap, str):

@@ -369,8 +369,6 @@ class Aggregation:
         
         **returns** score values (pd.Series)
         '''
-        if not isinstance(gene_list, list):
-            raise ValueError("gene_list must be a list")
         sc.tl.score_genes(self.adata, gene_list=gene_list, score_name=score_name)
         if z_normilize:
             self.adata.obs[score_name] = zscore(self.adata.obs[score_name])
