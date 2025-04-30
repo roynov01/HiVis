@@ -23,7 +23,7 @@ import statsmodels.api as sm
 
 from . import HiVis_plot
 
-MAX_RAM = 50 # maximum GB RAM to use for a variable
+MAX_RAM = 16 # maximum GB RAM to use for a variable
 
 def update_instance_methods(instance):
     '''reloads the methods in an instance'''

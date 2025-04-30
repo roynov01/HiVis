@@ -464,7 +464,7 @@ class HiVis:
         aggregation_func = Aggregation_utils._aggregate_data_annotations
         
         annotation_col = annotation_id_col.replace("_id","")
-        if annotation_col in self.adata.obs.columns: # Add annotation class to each object
+        if annotation_col != annotation_id_col and annotation_col in self.adata.obs.columns: # Add annotation class to each object
             if obs2agg is not None:
                 if annotation_col not in obs2agg:
                     if isinstance(obs2agg, list):
@@ -478,6 +478,7 @@ class HiVis:
         
         adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
         self.add_agg(adata_agg, name=name)
+        self.agg[name].adata.obs[f"{annotation_col}_col"] = self.agg[name].adata.obs.index
         if geojson_path:
             self.agg[name].import_geometry(geojson_path, object_type="annotation")            
  
