@@ -944,6 +944,7 @@ class PlotAgg:
             df["cv_log10"] = np.log10(df["cv"])
             
         df["gene"] = self.main.adata.var.index.values
+        df.dropna(inplace=True)
         thresh = np.quantile(np.abs(df["residual"]), signif_thresh)
         signif_genes = list(df.loc[np.abs(df["residual"]) > thresh, "gene"])
         
@@ -1039,7 +1040,7 @@ def plot_scatter_signif(df, x_col, y_col,
                         text=True, figsize=(8,8), size=10, legend=False, title=None,
                         ax=None, xlab=None, ylab=None,
                         color="black", color_genes="red", color_genes2="blue",
-                        x_line=None, y_line=None,cmap="viridis",repel=False):
+                        x_line=None, y_line=None,cmap="viridis",repel=False,edgecolor=None):
     '''
     Plots a scatterplot based on a dataframe.
     
@@ -1050,9 +1051,11 @@ def plot_scatter_signif(df, x_col, y_col,
         * text (bool) - whether to annotate gene names on the plot
         * size - marker size
         * x_line, y_line (float)- numbers to add vertical and horizontal reference lines
-        * ax (optional) - matplotlib Axes, if provided
-        * xlab, ylab, title, color, color_genes, color_genes2 (str) - cosmetic Parameters
-        * figsize - tuple, figure size
+        * ax - matplotlib Axes, optional
+        * color (str) - either a color, or a column in df that you want to color the dots by
+        * cmap (str) - relevent if color is a column
+        * xlab, ylab, title, color, color_genes, color_genes2 (str), edgecolor - cosmetic Parameters
+        * figsize (tuple) -figure size, if ax is not provided
 
     '''
     
@@ -1082,10 +1085,10 @@ def plot_scatter_signif(df, x_col, y_col,
     # Plot background points (those not in any group)
     if color in df.columns:
         ax = sns.scatterplot(data=df, x=x_col, y=y_col,palette=cmap,
-                        s=size, legend=legend,ax=ax, hue=color, edgecolor=None)
+                        s=size, legend=legend,ax=ax, hue=color, edgecolor=edgecolor)
     else:
         ax = sns.scatterplot(data=df[df["group"] == ""], x=x_col, y=y_col,
-                        s=size, legend=legend,ax=ax, color=color, edgecolor=None)
+                        s=size, legend=legend,ax=ax, color=color, edgecolor=edgecolor)
     
     # Add reference lines if specified.
     if y_line is not None:

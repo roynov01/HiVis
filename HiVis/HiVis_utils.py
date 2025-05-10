@@ -734,7 +734,7 @@ def pca(df, k_means=None, first_pc=1, title="PCA", number_of_genes=20):
     return result
 
 
-def noise_mean_curve(adata,layer=None,inplace=False, **kwargs):
+def noise_mean_curve(adata,layer=None,inplace=False):
     if layer is None:
         X = adata.X
     else:
@@ -966,3 +966,107 @@ def _convert_bool_columns_to_float(df):
                 df[col] = df[col].astype(float)
 
 
+
+
+def gsea(gene_list=None, log2fc_ratio=None, geneset="hallmark", organism="mouse", nperm=1000, seed=42):
+    '''
+    Run GSEA (prerank) on list of genes 
+    
+    Parameters:
+        * geneset (str) - can be a .gmt file, or one of:
+            "hallmark"
+            "kegg"
+            "KEGG_2021_Human"
+            "GO_Molecular_Function_2025"
+            "GO_Cellular_Component_2025"
+            "GO_Biological_Process_2025"
+            for full list: gp.get_library_name(organism='Human')
+        * organism (str) - human or mouse
+        * nperm (int) - reduce for speed, increase for accuracy
+    '''
+    import gseapy as gp
+    org = organism.capitalize()
+    available = gp.get_library_name(organism=org)
+    if (gene_list is None):
+        print(f"Available datasets for {org}:")
+        _ = [print(i) for i in available]
+        return
+        
+    if len(gene_list) != len(log2fc_ratio):
+        raise ValueError("gene_list and log2fc_ratio must be the same length")
+    rnk = pd.DataFrame({'gene': gene_list, 'score': list(log2fc_ratio)})
+    rnk.dropna(inplace=True)
+    rnk.set_index('gene', inplace=True)
+
+    
+    lib = geneset
+    
+    if geneset.lower() == "hallmark":
+        lib = "MSigDB_Hallmark_2020"
+    elif geneset.lower() == "kegg":
+        # this will pick e.g. "KEGG_2019_Rat" if you passed organism="rat"
+        lib = f"KEGG_2019_{org}"
+    else:
+        
+        if (lib not in available) or lib.endswith(".gmt"):
+            raise ValueError(f"Library '{lib}' not found for organism '{org}'")
+    print(f"GSEA for {org}, dataset: {lib}")
+    
+    gsea_res = gp.prerank(rnk=rnk, gene_sets=lib, outdir=None, permutation_num=nperm, seed=seed)
+    return gsea_res
+
+
+def plot_gsea_dotplot(df, title="GSEA",q_thresh=0.25,
+                      ax=None,directions=["upregulated","downregulated"],
+                      colors=["red","blue"], grid=False, figsize=(10,6)):
+    """Dotplot of GSEA results."""
+    import seaborn as sns
+    import gseapy as gp
+    
+    if isinstance(df,gp.Prerank):
+        df = df.res2d
+    df = df.copy()
+    df = df.loc[df["FDR q-val"] <= q_thresh]
+    if df.empty:
+        raise ValueError("no entries to plot")
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)   
+
+
+
+    df = df.sort_values("NES",ascending=False)
+    df["Term"] = pd.Categorical(df["Term"], categories=df["Term"], ordered=True)
+    df["direction"] = directions[0]
+    df.loc[df["NES"]<0,"direction"] = directions[1]
+    
+
+    sns.set(style="whitegrid" if grid else "white")
+    palette = {directions[0]: colors[0],directions[1]: colors[1]}
+    df["Gene %"] = df["Gene %"].str.rstrip('%').astype(float)
+
+    sns.scatterplot(data=df, x="NES", y="Term", hue="direction", size="Gene %",
+                    palette={k: palette[k] for k in df["direction"].unique()}, 
+                    sizes=(40,400), ax=ax)
+    ax.set_title(title)
+    ax.invert_yaxis()
+    ax.set_xlabel("NES")
+    ax.set_ylabel(None)
+
+    ax.grid(grid)
+    return ax
+
+def plot_gsea_pathway(gsea_res,pathway=None,q_thresh=0.05, figsize=(3,4),legend_kws=None):
+    '''
+    Plot pathway(s) hits
+    Parameters:
+        * gsea_res - results of gsea()
+        * pathway - name of pathway or a list of names. If None, will plot all significant, then provide q_thresh
+        * legend_kws (dict) - for example {'loc': (1.2, 0)}
+    '''
+    if pathway is None:
+        pathway = gsea_res.res2d.loc[gsea_res.res2d["FDR q-val"] <= q_thresh,"Term"]
+    elif isinstance(pathway, str):
+        pathway = [pathway]
+
+    ax = gsea_res.plot(terms=pathway,legend_kws=legend_kws,show_ranking=False,figsize=figsize)
+    return ax
