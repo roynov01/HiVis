@@ -26,9 +26,7 @@ from . import HiVis_utils
 
 POINTS_PER_INCH = 72
 MAX_SQUARES_TO_DRAW_EXACT = 500 # how many squares to draw in perfect positions in spatial plot
-MAX_BARS = 30 # in barplot
 DEFAULT_COLOR ='None' # for plotting categorical
-chrome_path = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
 FULLRES_THRESH = 1000 # in microns, below which, a full-res image will be plotted
 HIGHRES_THRESH = 3000 # in microns, below which, a high-res image will be plotted
 
@@ -120,7 +118,7 @@ class PlotVisium:
     def _init_img(self):
         '''resets the cropped image and updates the cropped adata'''
         self.image_cropped = None
-        self.ax_current = None # stores the last plot that was made
+        self.current_ax = None # stores the last plot that was made
         self.pixel_x, self.pixel_y = None, None 
         self.main.adata_cropped = self.main.adata
         self._crop() # creates self.main.adata_cropped & self.image_cropped
@@ -1430,119 +1428,3 @@ def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True,
     
     return ax
 
-
-def plot_dotplot(df, x, y, size_col, val_col,
-                 normalize_size=False, normalize_col=False, sort=True, sort_method="sum",
-                 ax=None, xlab=None, ylab=None, title=None,max_dot_size=100, 
-                 cmap="coolwarm", figsize=(8,16),legend=True, rotate_xticklab=False,
-                 legend_col_title=None, legend_size_title=None):
-    '''
-    Plots a dotplot.
-    Parameters:
-        * df - dataframe of 4 columns, x, y, size_col, val_col
-        * x, y, size_col, val_col - which columns to use
-        * normalize_size,normalize_col - whether to normilize each row to the maximal value of the row
-        * sort - sort the rows
-        * sort_method - if sort is True, how to sort. possible values are "sum","std","mean"
-        * ax - matplotlib Axes, if provided
-        * figsize, cmap, legend, xlab, ylab, title, legend_col_title, 
-        legend_size_title, rotate_xticklab - cosmetic Parameters
-    '''
-    color_data = df.pivot(index=y, columns=x, values=val_col)
-    size_data  = df.pivot(index=y, columns=x, values=size_col)
-    
-    if normalize_col:
-        color_data = color_data.div(color_data.max(axis=1), axis=0)
-    if normalize_size:
-        size_data  = size_data.div(size_data.max(axis=1), axis=0)
-
-    if sort:
-        if sort_method == "sum":
-            color_data["delta"] = color_data.sum(axis=1, skipna=True)
-        elif sort_method == "mean":
-            color_data["delta"] = color_data.mean(axis=1, skipna=True)
-        elif sort_method == "std":
-            color_data["delta"] = color_data.std(axis=1, skipna=True)
-        else:
-            raise ValueError(f"Invalid sort_method: {sort_method}. "
-                             "Choose from ['sum','mean','std']")
-        color_data = color_data.sort_values("delta", ascending=False)
-        size_data  = size_data.loc[color_data.index, :]
-        del color_data["delta"]
-
-    if ax is None:
-        fig, ax = plt.subplots(figsize=figsize)
-    else:
-        fig = ax.figure
-
-    row_labels, col_labels  = list(color_data.index), list(color_data.columns)
-
-    xvals, yvals, colors, sizes = [], [], [], []
-    for i, row_name in enumerate(row_labels):
-        for j, col_name in enumerate(col_labels):
-            xvals.append(j)
-            yvals.append(i)
-            c_val = color_data.loc[row_name, col_name]
-            colors.append(c_val)
-            s_val = size_data.loc[row_name, col_name]
-            sizes.append(np.nan_to_num(s_val, nan=0))
-
-    all_sizes_arr = np.array(sizes)
-    current_max = np.nanmax(all_sizes_arr)
-    if current_max > 0:
-        sizes_normed = all_sizes_arr / current_max
-    else:
-        sizes_normed = all_sizes_arr  # if all zero/NaN
-
-    # scale up to user-requested maximum size
-    scatter_sizes = [max_dot_size * s for s in sizes_normed]
-
-    if isinstance(cmap, list):
-        cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-
-    sca = ax.scatter(xvals, yvals,c=colors,
-        s=scatter_sizes,cmap=cmap,edgecolors="none")
-
-    ax.set_xticks(range(len(col_labels)))
-    ax.set_xticklabels(col_labels, rotation=90 if rotate_xticklab else 0)
-    ax.set_yticks(range(len(row_labels)))
-    ax.set_yticklabels(row_labels)
-    if xlab is not None:
-        ax.set_xlabel(xlab)
-    if ylab is not None:
-        ax.set_ylabel(ylab)
-    if title is not None:
-        ax.set_title(title)
-
-    if legend:
-        # Shrink main axis to free space on the right
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width*0.8, box.height])
-
-        # Create a new Axes in top half for colorbar
-        cbar_ax = fig.add_axes([box.x0 + box.width*0.85, box.y0 + box.height*0.5, 
-            0.03, box.height*0.45])
-        cbar = fig.colorbar(sca, cax=cbar_ax)
-        if legend_col_title:
-            cbar.set_label(legend_col_title)
-
-        if current_max > 0:
-            # Example fractions of original data's range
-            fraction_values = [0.25, 0.50, 0.75, 1.00]
-            # Convert fraction -> actual data scale
-            actual_sizes = [fraction * current_max for fraction in fraction_values]
-            # Human-readable labels
-            size_labels = [f"{v:.2g}" for v in actual_sizes]
-            
-            # Convert fraction -> scatter circle area
-            size_legend_scaled = [max_dot_size * f for f in fraction_values]
-
-            # Make dummy scatter patches to display in the legend
-            legend_patches = [plt.scatter([], [], s=s, color="gray",alpha=0.8) 
-                              for s in size_legend_scaled]
-            # Place them in the bottom half
-            ax.legend(legend_patches,size_labels,title=legend_size_title,loc="upper left",
-                bbox_to_anchor=(1.02, 0.45),frameon=True,
-                labelspacing=2,handletextpad=1.5 ,borderpad=1.5)
-
-    return ax

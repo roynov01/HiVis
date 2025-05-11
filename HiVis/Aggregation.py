@@ -582,7 +582,6 @@ class Aggregation:
         if new_name:
             new.rename(new_name, new_out_path=new_out_path, full=full)
         return new
-        return new
     
     def rename(self, new_name: str, new_out_path=True, full=False):
         '''
