@@ -239,6 +239,30 @@ def dge(adata, column, group1, group2=None, umi_thresh=0,layer=None,
     return df
 
 
+def add_spatial_keys(hivis_obj, adata, name):
+    """
+    Adds spatial keys to the AnnData object to make it Scanpy/Squidpy spatial plot compatible.
+    
+    Parameters:
+        * hivis_obj (HiVis) - that has images and scalefactors json
+        * adata (AnnData) - AnnData object to which spatial keys will be added.
+        * name (str) - name of adata, will be concatinated to hivis_obj.name
+    
+    """
+    required_cols = ["pxl_col_in_fullres", "pxl_row_in_fullres"]
+    if not all(col in adata.obs.columns for col in required_cols):
+        raise ValueError("Missing required spatial coordinate columns in adata.obs")
+    
+    adata.obsm["spatial"] = adata.obs[required_cols].to_numpy()
+        
+    adata.uns["spatial"] = {
+        name: {"images": {"hires": hivis_obj.image_highres,
+                          "lowres": hivis_obj.image_lowres},
+                           "scalefactors": hivis_obj.json,
+                           "metadata": hivis_obj.properties}}
+    
+
+
 def load_images(path_image_fullres, path_image_highres, path_image_lowres):
     '''
     Loads images.

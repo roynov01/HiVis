@@ -46,7 +46,10 @@ class Aggregation:
         if adata_agg.shape[0] == 0:
             raise ValueError("AnnData object is empty columns")
         
+        HiVis_utils.add_spatial_keys(hiviz_instance, adata_agg, name) # add obsm["spatial"] and uns["spatial"]
+        
         scalefactor_json = hiviz_instance.json
+
         adata_agg.obs["pxl_col_in_lowres"] = adata_agg.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
         adata_agg.obs["pxl_row_in_lowres"] = adata_agg.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
         adata_agg.obs["pxl_col_in_highres"] = adata_agg.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_hires_scalef"]

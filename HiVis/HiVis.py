@@ -146,14 +146,20 @@ class HiVis:
             image_fullres, image_highres, image_lowres = HiVis_utils.load_images(image_fullres, image_highres, image_lowres)
         
         self.image_fullres, self.image_highres, self.image_lowres = image_fullres, image_highres, image_lowres
+        
+        
+        
         self.fluorescence = fluorescence
         
         if isinstance(scalefactor_json, str):
             with open(scalefactor_json) as file:
                 scalefactor_json = json.load(file)        
         self.json = scalefactor_json
+        
+        HiVis_utils.add_spatial_keys(self, adata, name) # add obsm["spatial"] and uns["spatial"]
             
         self.adata = adata
+        
         adata.obs["pxl_col_in_lowres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
         adata.obs["pxl_row_in_lowres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
         adata.obs["pxl_col_in_highres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
@@ -441,7 +447,7 @@ class HiVis:
             obs2add = [col for col in cells_only.columns if col in obs2add]
             Aggregation_utils.merge_cells(cells_only, adata_agg, obs2add)
         
-        adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
+        # adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
         
         self.add_agg(adata_agg, name=name)
         if geojson_path:
@@ -476,7 +482,7 @@ class HiVis:
         
         adata_agg, _ = Aggregation_utils.new_adata(self.adata, annotation_id_col, aggregation_func,obs2agg=obs2agg)
         
-        adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
+        # adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
         self.add_agg(adata_agg, name=name)
         self.agg[name].adata.obs[f"{annotation_col}_col"] = self.agg[name].adata.obs.index
         if geojson_path:
@@ -811,10 +817,12 @@ class HiVis:
         # remove columns from previous analyses
         adata_shifted.var = adata_shifted.var.loc[:,~adata_shifted.var.columns.str.startswith(("cor_","exp_"))]
         adata_shifted.var = adata_shifted.var.drop(columns=[col for col in ["residual","cv","expression_mean"] if col in adata_shifted.var.columns])
-
+        
+        
         new_obj = HiVis(adata_shifted, image_fullres_crop, image_highres_crop, 
                            image_lowres_crop, self.json, name, self.path_output,agg=None,plot_qc=False,
                            properties=self.properties.copy(),fluorescence=self.fluorescence.copy() if self.fluorescence else None)    
+        # HiVis.HiVis_utils.add_spatial_keys(new_obj, new_obj)
         # update the link in all aggregations to the new HiVis instance
         if self.agg: 
             for agg in self.agg:
