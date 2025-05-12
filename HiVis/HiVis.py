@@ -17,6 +17,8 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from shapely import wkt, affinity
+from shapely.strtree import STRtree
+from shapely.geometry import Point
 import anndata as ad
 from scipy.stats import mode, zscore
 from scipy.spatial import cKDTree
@@ -686,6 +688,48 @@ class HiVis:
             new_col_name = f'{what}_smooth_r{radius}'
         self.adata.obs[new_col_name] = smoothed_values
         return smoothed_values
+    
+    
+    
+        
+        
+    def compute_distances(self, agg_name, dist_col_name=None, nearest_col_name=None):
+        '''
+        Compute distances of each bin too the nearest aggregation.
+
+        Parameters:
+            * agg_name (str) - name of agg
+            * dist_col_name (str) - Name of column to save distance to. default is dist_to_{agg_name}
+            * nearest_col_name (str) -  Name of column to save the closest aggregation name
+        '''
+        
+        if agg_name not in self.agg:
+            raise ValueError(f"{agg_name} is not a valid aggregation in {self.name}")
+
+        dist_col_name = dist_col_name if dist_col_name is not None else f"dist_to_{agg_name}"
+        nearest_col_name = nearest_col_name if nearest_col_name is not None else f"nearest_{agg_name}"
+
+        target_geoms = self.agg[agg_name].adata.obs.geometry.apply(wkt.loads).tolist()
+        tree = STRtree(target_geoms)
+
+        x_coords = self["um_x"]
+        y_coords = self["um_y"]
+        n_pts = len(x_coords)
+        distances = [0.0] * n_pts
+        nearest_obs_ids = [None] * n_pts
+
+        for i, (x, y) in enumerate(tqdm(zip(x_coords, y_coords), total=n_pts, desc=f"Computing distance to {agg_name}")):
+            pt = Point(x, y)
+            nearest_index = tree.nearest(pt)
+            nearest_geom = target_geoms[nearest_index] 
+            distances[i] = pt.distance(nearest_geom)
+            nearest_obs_ids[i] = self.agg[agg_name].adata.obs.index[nearest_index]
+
+        self.adata.obs[dist_col_name] = distances
+        self.adata.obs[nearest_col_name] = nearest_obs_ids
+
+    
+    
     
                 
     def export_h5(self, path=None, force=False):
