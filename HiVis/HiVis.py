@@ -1127,6 +1127,11 @@ class HiVis:
         else:
             if not path.endswith(".pkl"):
                 path += ".pkl"
+        self.plot.current_ax = None
+        if self.agg:
+            for agg in self.agg:
+                self.agg[agg].plot.current_ax = None
+
         with open(path, "wb") as f:
             dill.dump(self, f)            
         return path

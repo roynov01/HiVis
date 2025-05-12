@@ -14,6 +14,8 @@ from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.patches as patches
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
+from matplotlib.colors import Normalize
+from scipy.interpolate import griddata
 import seaborn as sns
 from adjustText import adjust_text
 import shapely.wkt
@@ -1428,52 +1430,69 @@ def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True,
     
     return ax
 
-def plot_spatial_3d(agg, what, color=None, cmap="hot",axis_labels=True,ax=None,
-                    figsize=(8,8),title=None,legend_title=None, grid=False):
 
-    from scipy.interpolate import griddata
-    import matplotlib.colors as colors
+def plot_spatial_3d(agg, what, color=None, cmap="hot", axis_labels=True, ax=None,
+                    figsize=(8, 8), title=None, legend_title=None, grid=False,
+                    legend=True):  # New legend toggle
+
 
     if color is None:
         color = what
+
     if ax is None:
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111, projection='3d')
     else:
         fig = ax.get_figure()
-        if not hasattr(ax, 'zaxis'):  # Not 3D ax
+        if not hasattr(ax, 'zaxis'):
             geometry = ax.get_subplotspec()
             fig.delaxes(ax)
             ax = fig.add_subplot(geometry, projection='3d')
-   
+
     x = agg["um_x"]
     y = agg["um_y"]
     z = agg[what]
-    c = agg[color]
-    cmap = plt.get_cmap(cmap)
-    
+    c_raw = agg[color]
+
+    is_categorical = np.issubdtype(c_raw.dtype, np.object_) or np.issubdtype(c_raw.dtype, np.str_)
+
+    if is_categorical:
+        unique_categories, c_codes = np.unique(c_raw, return_inverse=True)
+        cmap = plt.get_cmap(cmap, len(unique_categories))
+        norm = Normalize(vmin=-0.5, vmax=len(unique_categories) - 0.5)
+        color_values = c_codes
+    else:
+        color_values = c_raw.astype(float)
+        cmap = plt.get_cmap(cmap)
+        norm = Normalize(vmin=np.nanmin(color_values), vmax=np.nanmax(color_values))
+
+    # Grid interpolation
     xi = np.linspace(x.min(), x.max(), 100)
     yi = np.linspace(y.min(), y.max(), 100)
     Xi, Yi = np.meshgrid(xi, yi)
     Zi = griddata((x, y), z, (Xi, Yi), method='cubic')
-    Ci = griddata((x, y), c, (Xi, Yi), method='cubic')
-    
-    norm = colors.Normalize(vmin=np.nanmin(Ci), vmax=np.nanmax(Ci))
+    Ci = griddata((x, y), color_values, (Xi, Yi), method='nearest' if is_categorical else 'cubic')
+
     facecolors = cmap(norm(Ci))
-    
     ax.plot_surface(Xi, Yi, Zi, facecolors=facecolors, edgecolor='none')
-    mappable = cm.ScalarMappable(norm=norm, cmap=cmap)
-    mappable.set_array([])
-    legend_title = legend_title if legend_title is not None else color
-    fig.colorbar(mappable, ax=ax, shrink=0.5, aspect=10, label=legend_title)
+
+    if legend:
+        if is_categorical:
+            handles = [Patch(color=cmap(norm(i)), label=label) for i, label in enumerate(unique_categories)]
+            ax.legend(handles=handles, title=legend_title or color, loc='upper right')
+        else:
+            mappable = cm.ScalarMappable(norm=norm, cmap=cmap)
+            mappable.set_array([])
+            fig.colorbar(mappable, ax=ax, shrink=0.5, aspect=10, label=legend_title or color)
+
     if not grid:
         ax.grid(False)
         ax.xaxis.pane.fill = False
         ax.yaxis.pane.fill = False
         ax.zaxis.pane.fill = False
-    
-    title = title if title is not None else what
-    ax.set_title(title)
+
+    ax.set_title(title if title else what)
     if not axis_labels:
         ax.set_axis_off()
+
     return ax
