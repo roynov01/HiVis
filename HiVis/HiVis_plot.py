@@ -1428,3 +1428,52 @@ def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True,
     
     return ax
 
+def plot_spatial_3d(agg, what, color=None, cmap="hot",axis_labels=True,ax=None,
+                    figsize=(8,8),title=None,legend_title=None, grid=False):
+
+    from scipy.interpolate import griddata
+    import matplotlib.colors as colors
+
+    if color is None:
+        color = what
+    if ax is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111, projection='3d')
+    else:
+        fig = ax.get_figure()
+        if not hasattr(ax, 'zaxis'):  # Not 3D ax
+            geometry = ax.get_subplotspec()
+            fig.delaxes(ax)
+            ax = fig.add_subplot(geometry, projection='3d')
+   
+    x = agg["um_x"]
+    y = agg["um_y"]
+    z = agg[what]
+    c = agg[color]
+    cmap = plt.get_cmap(cmap)
+    
+    xi = np.linspace(x.min(), x.max(), 100)
+    yi = np.linspace(y.min(), y.max(), 100)
+    Xi, Yi = np.meshgrid(xi, yi)
+    Zi = griddata((x, y), z, (Xi, Yi), method='cubic')
+    Ci = griddata((x, y), c, (Xi, Yi), method='cubic')
+    
+    norm = colors.Normalize(vmin=np.nanmin(Ci), vmax=np.nanmax(Ci))
+    facecolors = cmap(norm(Ci))
+    
+    ax.plot_surface(Xi, Yi, Zi, facecolors=facecolors, edgecolor='none')
+    mappable = cm.ScalarMappable(norm=norm, cmap=cmap)
+    mappable.set_array([])
+    legend_title = legend_title if legend_title is not None else color
+    fig.colorbar(mappable, ax=ax, shrink=0.5, aspect=10, label=legend_title)
+    if not grid:
+        ax.grid(False)
+        ax.xaxis.pane.fill = False
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
+    
+    title = title if title is not None else what
+    ax.set_title(title)
+    if not axis_labels:
+        ax.set_axis_off()
+    return ax
