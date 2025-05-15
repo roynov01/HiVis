@@ -688,10 +688,7 @@ class HiVis:
             new_col_name = f'{what}_smooth_r{radius}'
         self.adata.obs[new_col_name] = smoothed_values
         return smoothed_values
-    
-    
-    
-        
+
         
     def compute_distances(self, agg_name, dist_col_name=None, nearest_col_name=None):
         '''
@@ -729,9 +726,7 @@ class HiVis:
         self.adata.obs[nearest_col_name] = nearest_obs_ids
 
     
-    
-    
-                
+
     def export_h5(self, path=None, force=False):
         '''
         Exports the adata as h5ad.
