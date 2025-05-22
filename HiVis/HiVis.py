@@ -869,7 +869,9 @@ class HiVis:
                 if crop_agg:
                     adata_agg = self.agg[agg].adata.copy()
                     idx_col = adata_agg.obs.index.name
-                    adata_agg_shifted = adata_agg[adata_agg.obs.index.isin(adata_shifted.obs[idx_col]),adata_shifted.var_names]
+                    obs_mask = adata_agg.obs.index.isin(adata_shifted.obs[idx_col])
+                    common_genes = adata_agg.var_names.intersection(adata_shifted.var_names)
+                    adata_agg_shifted = adata_agg[obs_mask, common_genes]
                     # remove columns from previous analyses
                     adata_agg_shifted.var = adata_agg_shifted.var.loc[:,~adata_agg_shifted.var.columns.str.startswith(("cor_","exp_"))]
                     adata_agg_shifted.var = adata_agg_shifted.var.drop(columns=[col for col in ["residual","cv","expression_mean"] if col in adata_agg_shifted.var.columns])
