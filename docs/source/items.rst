@@ -34,6 +34,7 @@ Analyses
 .. automethod:: HiVis.HiVis.HiVis.cor
 .. automethod:: HiVis.HiVis.HiVis.score_genes
 .. automethod:: HiVis.HiVis.HiVis.smooth
+.. automethod:: HiVis.HiVis.HiVis.compute_distances
 
 Plots
 *************************************
@@ -101,6 +102,7 @@ Analyses
 .. automethod:: HiVis.Aggregation.Aggregation.cor
 .. automethod:: HiVis.Aggregation.Aggregation.score_genes
 .. automethod:: HiVis.Aggregation.Aggregation.smooth
+.. automethod:: HiVis.Aggregation.Aggregation.compute_distances
 
 Plots
 ************************************
