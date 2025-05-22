@@ -499,6 +499,14 @@ class Aggregation:
     
     
     def compute_distances(self, target_agg, dist_col_name=None, nearest_col_name=None):
+        '''
+        Compute distances of each object to the nearest object of another Aggregation.
+        
+        Parameters:
+            * target_agg - either Aggregation object, or a name (str) that is the key in self.viz.agg
+            * dist_col_name (str) - Name of column to save distance to. default is dist_to_{agg_name}
+            * nearest_col_name (str) -  Name of column to save the closest aggregation name
+        '''
         if isinstance(target_agg, str):
             target_agg = self.viz.agg[target_agg]
         if target_agg is self:
