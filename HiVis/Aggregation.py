@@ -9,17 +9,10 @@ import re
 import gc
 import os
 import numpy as np
-import pandas as pd
 import anndata as ad
 from shapely.affinity import scale
-from scipy.stats import mode, zscore
 import scipy.io
-from scipy.spatial import cKDTree
-from shapely.strtree import STRtree
-from shapely import from_wkt
-from tqdm import tqdm
 import geopandas as gpd
-import scanpy as sc
 
 from . import HiVis_plot
 from . import HiVis_utils
@@ -254,163 +247,6 @@ class Aggregation:
             return True
         return False
      
-    def pseudobulk(self, by=None,layer=None):
-        '''
-        Sums the gene expression for each group in a single obs.
-        
-        Parameters:
-            * by (str) - return a dataframe, each column is a value in "by" (for example cluster), rows are genes. \
-            If None, will return the mean expression of every gene. 
-            * layer (str) - which layer in adata to use.
-            
-        **Returns** the gene expression for each group (pd.DataFrame)
-        '''
-        if layer is None:
-            x = self.adata.X
-        else:
-            if layer not in self.adata.layers:
-                raise KeyError(f"Layer '{layer}' not found in self.adata.layers. Available layers: {list(self.adata.layers.keys())}")
-            x = self.adata.layers[layer]
-        
-        if by is None:
-            pb = x.mean(axis=0).A1
-            return pd.Series(pb, index=self.adata.var_names)
-    
-        expr_df = pd.DataFrame(x.toarray(),
-                               index=self.adata.obs_names,
-                               columns=self.adata.var_names)
-        
-        group_key = self.adata.obs[by]
-        return expr_df.groupby(group_key, observed=True).mean().T
-    
-    
-    def smooth(self, what, radius, method="mean", new_col_name=None, layer=None, **kwargs):
-        '''
-        Applies median smoothing to the specified column in adata.obs using spatial neighbors.
-        
-        Parameters:
-            * what (str) - what to smooth. either a gene name or column name from self.adata.obs
-            * radius (float) - in microns
-            * method - ["mode", "median", "mean", "gaussian", "log"]
-            * new_col_name (str) - Optional custom name for the output column
-            * layer (str) - which layer in the AnnData to use
-            * \**kwargs - Additional Parameters for specific methods (e.g., sigma for gaussian, offset for log).
-            
-        **returns** smoothed values (pd.Series)
-        '''
-        coords = self.adata.obs[['um_x', 'um_y']].values
-
-        if self.tree is None:
-            # Build a KDTree for fast neighbor look-up.
-            print("Building coordinate tree")
-            self.tree = cKDTree(coords)
-        
-        values = self.get(what,layer=layer)
-        if len(values) != self.adata.shape[0]:
-            raise ValueError(f"{what} not in adata.obs or a gene name")
-            
-        if isinstance(values[0], str):
-            if method != "mode":
-                raise ValueError("Smoothing on string columns is only supported using the 'mode' method.")
-    
-        smoothed_values = []
-        
-        if method == "log":
-            offset = kwargs.get("offset", 1.0)
-            if np.min(values) < -offset:
-                raise ValueError(f"Negative values detected in '{what}'. Log smoothing requires all values >= {-offset}.")
-        elif method == "gaussian":
-            sigma = kwargs.get("sigma", radius / 2)
-    
-        # Iterate through each object's coordinates, find neighbors, and compute the median.
-        for i, point in enumerate(tqdm(coords, desc=f"{method} filtering '{what}' in radius {radius}")):
-            # Find all neighbors within the given radius.
-            indices = self.tree.query_ball_point(point, radius)
-            if not indices:
-                # Assign the original value or np.nan if no neighbor is found.
-                new_val = values[i]
-            neighbor_values = values[indices]
-            
-            if method == "median":
-                new_val = np.median(neighbor_values)
-            elif method == "mean":
-                new_val = np.mean(neighbor_values)
-            elif method == "mode":
-                if isinstance(neighbor_values[0], str):
-                    unique_vals, counts = np.unique(neighbor_values, return_counts=True)
-                    new_val = unique_vals[np.argmax(counts)] 
-                else:
-                    new_val = mode(neighbor_values).mode
-            elif method == "gaussian":
-                # Calculate distances to neighbors.
-                distances = np.linalg.norm(coords[indices] - point, axis=1)
-                
-                # Compute Gaussian weights.
-                weights = np.exp(- (distances**2) / (2 * sigma**2))
-                new_val = np.sum(neighbor_values * weights) / np.sum(weights)
-            elif method == "log":
-                # Apply a log1p transform to handle zero values; add an offset if necessary.
-                offset = kwargs.get("offset", 1.0)
-                # It is assumed that neighbor_values + offset > 0.
-                new_val = np.expm1(np.median(np.log1p(neighbor_values + offset))) - offset
-            else:
-                raise ValueError(f"Unknown smoothing method: {method}")
-
-            smoothed_values.append(new_val)
-
-        if not new_col_name:
-            new_col_name = f'{what}_smooth_r{radius}'
-        self.adata.obs[new_col_name] = smoothed_values
-        return smoothed_values
-    
-    def score_genes(self, gene_list:list, score_name:str, z_normilize=False):
-        '''
-        Assigns score for each object, based on a list of genes.
-        
-        Parameters:
-            * gene_list (list) - list of genes
-            * score_name (str) - name of column that will store the score in self.adata.obs
-            * z_normilize (bool) - Z transform the score values
-        
-        **returns** score values (pd.Series)
-        '''
-        sc.tl.score_genes(self.adata, gene_list=gene_list, score_name=score_name)
-        if z_normilize:
-            self.adata.obs[score_name] = zscore(self.adata.obs[score_name])
-        return self.adata.obs[score_name]
-        
-    def noise_mean_curve(self, layer=None,inplace=False):
-        '''
-        Generates a noise-mean curve of the data.
-        
-        Parameters:
-            * layer (str) - which layer in the AnnData to use
-            * inplace (bool) - add the mean_expression, cv and residuals to VAR
-            
-        **Returns** dataframe with expression, CV and residuals of each gene (pd.DataFrame).
-        '''
-        return HiVis_utils.noise_mean_curve(self.adata,layer=layer,inplace=inplace)
-        
-    
-    def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
-        '''
-        Calculates gene(s) correlation.
-        
-        Parameters:
-            * what (str or list) - if str, computes Spearman correlation of a given gene with all genes. \
-                                    if list, will compute correlation between all genes in the list
-            * self_corr_value - replace the correlation of the gene with itself by this value
-            * normalize (bool) - normilize expression before computing correlation
-            * layer (str) - which layer in the AnnData to use
-            * inplace (bool) - add the correlation to VAR
-            
-        **Returns** dataframe of spearman correlation between genes (pd.DataFrame)
-        '''
-        if isinstance(what, str):
-            x = self[what]
-            return HiVis_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
-        return HiVis_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
-
     def sync(self, what: str):
         '''
         Transfers metadata assignment from the Aggregation to the spots.
@@ -425,7 +261,6 @@ class Aggregation:
             raise KeyError(f"'{agg_id_col}' does not exist in HiViz.adata.obs.")
         mapping = self.adata.obs[what]
         self.viz.adata.obs[what] = self.viz.adata.obs[agg_id_col].map(mapping)
-
         
     def export_h5(self, path=None):
         '''
@@ -441,103 +276,6 @@ class Aggregation:
             path = f"{self.path_output}/{self.name}.h5ad"
         self.adata.write(path)
         return path
-    
-    def dge(self, column, group1, group2=None, method="wilcox", two_sided=False,
-            umi_thresh=0, inplace=False, layer=None):
-        '''
-        Runs differential gene expression analysis between two groups.
-        Values will be saved in self.var: expression_mean, log2fc, pval
-        
-        Parameters:
-            * column (str) - which column in obs has the groups classification
-            * group1 (str) - specific value in the "column"
-            * group2 (str) - specific value in the "column". \
-                       if None, will run against all other values, and will be called "rest"
-            * method (str) - one of ["fisher_exact", "wilcox", "t_test"]
-            * two_sided (bool) - if one sided, will give the pval for each group, \
-                          and the minimal of both groups (which will also be FDR adjusted)
-            * umi_thresh (int) - use only spots with more UMIs than this number
-            * inplace (bool) - modify the adata.var with log2fc, pval and expression columns
-            * layer (str) - which layer in the AnnData to use
-            
-        **Returns** the DGE results (pd.DataFrame)
-        '''
-        alternative = "two-sided" if two_sided else "greater"
-        df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
-                     method=method, alternative=alternative, inplace=inplace)
-        if group2 is None:
-            group2 = "rest"
-        df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
-        df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
-        if not two_sided:
-            df[f"pval_{group1}"] = 1 - df[f"pval_{column}"]
-            df[f"pval_{group2}"] = df[f"pval_{column}"]
-            df["pval"] = df[[f"pval_{group1}",f"pval_{group2}"]].min(axis=1)
-        else:
-            df["pval"] = df[f"pval_{column}"]
-        del df[f"pval_{column}"]
-        df["qval"] = HiVis_utils.p_adjust(df["pval"])
-        df["expression_mean"] = df[[group1, group2]].mean(axis=1)
-        df["expression_min"] = df[[group1, group2]].min(axis=1)
-        df["expression_max"] = df[[group1, group2]].max(axis=1)
-        df["gene"] = df.index
-        if inplace:
-            var = df.copy()
-            var.rename(columns={
-                "qval":f"qval_{column}",
-                "pval":f"pval_{column}",
-                "log2fc":f"log2fc_{column}",
-                "expression_mean":f"expression_mean_{column}",
-                "expression_min":f"expression_min_{column}",
-                "expression_max":f"expression_max_{column}",
-                },inplace=True)
-            del var["gene"]
-            cols_to_drop = [col for col in var.columns if col in self.adata.var.columns]
-            self.adata.var.drop(columns=cols_to_drop,inplace=True)
-            self.adata.var = self.adata.var.join(var, how="left")
-        return df
-    
-    
-    def compute_distances(self, target_agg, dist_col_name=None, nearest_col_name=None):
-        '''
-        Compute distances of each object to the nearest object of another Aggregation.
-        
-        Parameters:
-            * target_agg - either Aggregation object, or a name (str) that is the key in self.viz.agg
-            * dist_col_name (str) - Name of column to save distance to. default is dist_to_{agg_name}
-            * nearest_col_name (str) -  Name of column to save the closest aggregation name
-        '''
-        if isinstance(target_agg, str):
-            target_agg = self.viz.agg[target_agg]
-        if target_agg is self:
-            raise ValueError("target_agg should be either another Agg object or key in HiVis.agg")
-
-        target_name = target_agg.name
-        dist_col_name = dist_col_name    or f"dist_to_{target_name}"
-        nearest_col_name = nearest_col_name or f"nearest_{target_name}"
-
-        def to_geoms(series):
-            if series.dtype == "object" and isinstance(series.iloc[0], str):
-                return series.map(from_wkt)
-            return series
-
-        cur_geoms = to_geoms(self.adata.obs.geometry)
-        target_geoms = to_geoms(target_agg.adata.obs.geometry)
-
-        # build STRtree for fast nearest-neighbour look-ups 
-        target_list = target_geoms.tolist()
-        tree  = STRtree(target_list)
-        id2idx = {id(g): i for i, g in enumerate(target_list)}  # map geom → row index
-
-        distances = [0.0]  * len(cur_geoms)
-        nearest_ids = [None] * len(cur_geoms)
-        for i, poly in enumerate(tqdm(cur_geoms, desc=f"Distances → {target_name}")):
-            nearest_geom = tree.nearest(poly)
-            distances[i] = poly.distance(nearest_geom)
-            nearest_ids[i] = target_agg.adata.obs.index[id2idx[id(nearest_geom)]]
-
-        self.adata.obs[dist_col_name] = distances
-        self.adata.obs[nearest_col_name] = nearest_ids
     
    
     @property
