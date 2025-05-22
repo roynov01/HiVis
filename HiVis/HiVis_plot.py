@@ -253,6 +253,11 @@ class PlotVisium:
                               alpha=alpha,cmap=cmap,ax=ax,
                               legend=legend,xlab=None,ylab=None, 
                               legend_title=legend_title)
+        
+        # Add legend to fluorescence image
+        if self.main.fluorescence and legend and image:
+            legend_elements = [Patch(facecolor=stain, label=c) for c, stain in self.main.fluorescence.items()]
+            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.98, 0.98), frameon=True, title=None)
 
         if axis_labels:
             ax.set_xlabel("Spatial 1 (µm)")

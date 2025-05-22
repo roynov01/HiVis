@@ -391,7 +391,8 @@ class HiVis:
                 "expression_max":f"expression_max_{column}",
                 },inplace=True)
             del var["gene"]
-            self.adata.var.drop(columns=var.columns,inplace=True)
+            cols_to_drop = [col for col in var.columns if col in self.adata.var.columns]
+            self.adata.var.drop(columns=cols_to_drop,inplace=True)
             self.adata.var = self.adata.var.join(var, how="left")
         return df
     
@@ -971,11 +972,12 @@ class HiVis:
         return item
     
     def __contains__(self, what):
-        if (what in self.adata.obs) or (what in self.adata.var):
+        if (what in self.adata.obs) or (what in self.adata.var) or (what in self.adata.var_names):
             return True
         if self.agg:
             if what in self.agg:
                 return True
+        
         return False
     
     def remove_pixels(self, column: str, values: list, marging=1):

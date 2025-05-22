@@ -15,6 +15,8 @@ from shapely.affinity import scale
 from scipy.stats import mode, zscore
 import scipy.io
 from scipy.spatial import cKDTree
+from shapely.strtree import STRtree
+from shapely import from_wkt
 from tqdm import tqdm
 import geopandas as gpd
 import scanpy as sc
@@ -490,8 +492,45 @@ class Aggregation:
                 "expression_max":f"expression_max_{column}",
                 },inplace=True)
             del var["gene"]
+            cols_to_drop = [col for col in var.columns if col in self.adata.var.columns]
+            self.adata.var.drop(columns=cols_to_drop,inplace=True)
             self.adata.var = self.adata.var.join(var, how="left")
         return df
+    
+    
+    def compute_distances(self, target_agg, dist_col_name=None, nearest_col_name=None):
+        if isinstance(target_agg, str):
+            target_agg = self.viz.agg[target_agg]
+        if target_agg is self:
+            raise ValueError("target_agg should be either another Agg object or key in HiVis.agg")
+
+        target_name = target_agg.name
+        dist_col_name = dist_col_name    or f"dist_to_{target_name}"
+        nearest_col_name = nearest_col_name or f"nearest_{target_name}"
+
+        def to_geoms(series):
+            if series.dtype == "object" and isinstance(series.iloc[0], str):
+                return series.map(from_wkt)
+            return series
+
+        cur_geoms = to_geoms(self.adata.obs.geometry)
+        target_geoms = to_geoms(target_agg.adata.obs.geometry)
+
+        # build STRtree for fast nearest-neighbour look-ups 
+        target_list = target_geoms.tolist()
+        tree  = STRtree(target_list)
+        id2idx = {id(g): i for i, g in enumerate(target_list)}  # map geom → row index
+
+        distances = [0.0]  * len(cur_geoms)
+        nearest_ids = [None] * len(cur_geoms)
+        for i, poly in enumerate(tqdm(cur_geoms, desc=f"Distances → {target_name}")):
+            nearest_geom = tree.nearest(poly)
+            distances[i] = poly.distance(nearest_geom)
+            nearest_ids[i] = target_agg.adata.obs.index[id2idx[id(nearest_geom)]]
+
+        self.adata.obs[dist_col_name] = distances
+        self.adata.obs[nearest_col_name] = nearest_ids
+    
    
     @property
     def shape(self):

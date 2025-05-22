@@ -68,19 +68,19 @@ def find_markers(exp_df, celltypes=None, ratio_thresh=2, exp_thresh=0,
     if "gene" in exp_df.columns:
         exp_df.index = exp_df["gene"]
         del exp_df["gene"]
-    if not celltypes:
+    if celltypes is None:
         print(exp_df.columns)
         return
     exp_df = matnorm(exp_df)
     chosen = exp_df[celltypes]
-    if isinstance(celltypes, list):
-        other_names = exp_df.columns[~exp_df.columns.isin(celltypes)]
-        if chosen_fun == "max":
-            chosen = chosen.max(axis=1)
-        elif chosen_fun == "mean":
-            chosen = chosen.mean(axis=1)
-    else:
-        other_names = exp_df.columns[exp_df.columns != celltypes]
+    if isinstance(celltypes, str):
+        celltypes = [celltypes]
+    other_names = exp_df.columns[~exp_df.columns.isin(celltypes)]
+    if chosen_fun == "max":
+        chosen = chosen.max(axis=1)
+    elif chosen_fun == "mean":
+        chosen = chosen.mean(axis=1)
+
     if ignore:
         other_names = [name for name in other_names if name not in ignore]
     other = exp_df[other_names]
