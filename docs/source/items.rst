@@ -27,14 +27,14 @@ Segmentations, annotations, masks
 
 Analyses
 **********************************
-.. automethod:: HiVis.HiVis.HiVis.qc
-.. automethod:: HiVis.HiVis.HiVis.dge
-.. automethod:: HiVis.HiVis.HiVis.pseudobulk
-.. automethod:: HiVis.HiVis.HiVis.noise_mean_curve
-.. automethod:: HiVis.HiVis.HiVis.cor
-.. automethod:: HiVis.HiVis.HiVis.score_genes
-.. automethod:: HiVis.HiVis.HiVis.smooth
-.. automethod:: HiVis.HiVis.HiVis.compute_distances
+.. automethod:: HiVis.HiVis_analysis.AnalysisVisium.qc
+.. automethod:: HiVis.HiVis_analysis.AnalysisVisium.dge
+.. automethod:: HiVis.HiVis_analysis.AnalysisVisium.pseudobulk
+.. automethod:: HiVis.HiVis_analysis.AnalysisVisium.noise_mean_curve
+.. automethod:: HiVis.HiVis_analysis.AnalysisVisium.cor
+.. automethod:: HiVis.HiVis_analysis.AnalysisVisium.score_genes
+.. automethod:: HiVis.HiVis_analysis.AnalysisVisium.smooth
+.. automethod:: HiVis.HiVis_analysis.AnalysisVisium.compute_distances
 
 Plots
 *************************************
@@ -96,13 +96,13 @@ General methods
 
 Analyses
 **********************************
-.. automethod:: HiVis.Aggregation.Aggregation.dge
-.. automethod:: HiVis.Aggregation.Aggregation.pseudobulk
-.. automethod:: HiVis.Aggregation.Aggregation.noise_mean_curve
-.. automethod:: HiVis.Aggregation.Aggregation.cor
-.. automethod:: HiVis.Aggregation.Aggregation.score_genes
-.. automethod:: HiVis.Aggregation.Aggregation.smooth
-.. automethod:: HiVis.Aggregation.Aggregation.compute_distances
+.. automethod:: HiVis.HiVis_analysis.AnalysisAgg.dge
+.. automethod:: HiVis.HiVis_analysis.AnalysisAgg.pseudobulk
+.. automethod:: HiVis.HiVis_analysis.AnalysisAgg.noise_mean_curve
+.. automethod:: HiVis.HiVis_analysis.AnalysisAgg.cor
+.. automethod:: HiVis.HiVis_analysis.AnalysisAgg.score_genes
+.. automethod:: HiVis.HiVis_analysis.AnalysisAgg.smooth
+.. automethod:: HiVis.HiVis_analysis.AnalysisAgg.compute_distances
 
 Plots
 ************************************

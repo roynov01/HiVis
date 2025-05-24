@@ -17,12 +17,8 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from shapely import wkt, affinity
-from shapely.strtree import STRtree
-from shapely.geometry import Point
+
 import anndata as ad
-from scipy.stats import mode, zscore
-from scipy.spatial import cKDTree
-import scanpy as sc
 
 # Plotting libraries
 import matplotlib.pyplot as plt
@@ -33,6 +29,8 @@ from PIL import Image
 from . import HiVis_utils
 from .Aggregation import Aggregation
 from . import HiVis_plot
+from . import HiVis_analysis
+from . import other_utils
 from . import Aggregation_utils
 
 Image.MAX_IMAGE_PIXELS = 1063425001 # Enable large images loading
@@ -149,8 +147,6 @@ class HiVis:
         
         self.image_fullres, self.image_highres, self.image_lowres = image_fullres, image_highres, image_lowres
         
-        
-        
         self.fluorescence = fluorescence
         
         if isinstance(scalefactor_json, str):
@@ -161,22 +157,34 @@ class HiVis:
         HiVis_utils.add_spatial_keys(self, adata, name) # add obsm["spatial"] and uns["spatial"]
             
         self.adata = adata
-        
-        adata.obs["pxl_col_in_lowres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
-        adata.obs["pxl_row_in_lowres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
-        adata.obs["pxl_col_in_highres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
-        adata.obs["pxl_row_in_highres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
-        adata.obs["um_x"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["microns_per_pixel"]
-        adata.obs["um_y"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["microns_per_pixel"]
+        if self.json is not None:
+            adata.obs["pxl_col_in_lowres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
+            adata.obs["pxl_row_in_lowres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
+            adata.obs["pxl_col_in_highres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
+            adata.obs["pxl_row_in_highres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
+            adata.obs["um_x"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["microns_per_pixel"]
+            adata.obs["um_y"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["microns_per_pixel"]
         
         self.plot = HiVis_plot.PlotVisium(self)
-        if fluorescence:
-            self.image_fullres_orig = self.image_fullres.copy()
-            self.recolor(fluorescence)
-        else:
+        self.analysis = HiVis_analysis.AnalysisVisium(self)
+        
+        if image_fullres is not None:
+            if fluorescence:
+                self.image_fullres_orig = self.image_fullres.copy()
+                self.recolor(fluorescence)
             self.plot._init_img()
-        if plot_qc:
-            self.qc(save=True)
+        else: # disable methods that rely on image
+            print("Without image_fullres, [plot.spatial,analysis.smooth, analysis.compute_distances] will be disabled")
+            def _disabled_method(*args, **kwargs):
+                raise RuntimeError("This method is disabled in combined HiVis")
+            self.plot.spatial = _disabled_method
+            self.analysis.smooth = _disabled_method
+            self.analysis.compute_distances = _disabled_method
+            disable = ["add_agg", "add_mask", "add_annotations","agg_stardist", "agg_from_annotations","export_images", "remove_pixels", "recolor"]
+            for method_name in disable:
+                setattr(self, method_name, _disabled_method)
+        if plot_qc and hasattr(self.plot, "spatial"):
+            self.analysis.qc(save=True)
             plt.show()
     
     def recolor(self, fluorescence=None, normalization_method="percentile"):
@@ -205,22 +213,6 @@ class HiVis:
                                                                 normalization_method)
         self.plot._init_img()
 
-
-    def qc(self, save=False,figsize=(8, 8)):
-        '''
-        Plots basic QC (spatial, nUMI, mitochondrial %)
-        
-        Parameters:
-            * save (bool) - save the plot in HiVis.path_output
-        '''
-        fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(ncols=2,nrows=2, figsize=figsize)
-        ax0 = self.plot.spatial(title=self.name, ax=ax0)
-        ax1 = self.plot.hist("mito_percent_log10", title="Mitochondrial content per spot", xlab="log10(Mito %)",ax=ax1)
-        ax2 = self.plot.hist("nUMI_log10", title="Number of UMIs per spot", xlab="log10(UMIs)",ax=ax2)
-        ax3 = self.plot.hist("nUMI_gene_log10", title="Number of UMIs per gene", xlab="log10(UMIs)",ax=ax3)
-        plt.tight_layout()
-        if save:
-            self.plot.save(figname="QC", fig=fig)
     
     def add_mask(self, mask_path:str, name:str, plot=True, cmap="Paired", downscale=10):
         '''
@@ -339,62 +331,6 @@ class HiVis:
         
         self.adata.obs = self.adata.obs.join(pd.DataFrame(merged_obs[cols]),how="left")
         self.plot._init_img()
-    
-        
-    def dge(self, column, group1, group2=None, method="fisher_exact", two_sided=False,
-            umi_thresh=0, inplace=False, layer=None):
-        '''
-        Runs differential gene expression analysis between two groups.
-        
-        Parameters:
-            * column (str) - which column in obs has the groups classification
-            * group1 (str) - specific value in the "column"
-            * group2 (str) - specific value in the "column". \
-                       if None, will run against all other values, and will be called "rest"
-            * method (str)- one of ["fisher_exact", "wilcox", "t_test"]. \
-                Since the gene expression in bins is sparse, it's recomended to use "fisher_exact".
-            * two_sided (bool) - if one sided, will give the pval for each group, \
-                          and the minimal of both groups (which will also be FDR adjusted)
-            * umi_thresh (int) - use only spots with more UMIs than this number
-            * inplace (bool) - modify the adata.var with log2fc, pval and expression columns
-            * layer (str) - which layer in adata to use.
-            
-        **Returns** the DGE results (pd.DataFrame)
-        '''
-        alternative = "two-sided" if two_sided else "greater"
-        df = HiVis_utils.dge(self.adata, column, group1, group2, umi_thresh,layer=layer,
-                     method=method, alternative=alternative)
-        if group2 is None:
-            group2 = "rest"
-        df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
-        df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
-        if not two_sided:
-            df[f"pval_{group1}"] = 1 - df[f"pval_{column}"]
-            df[f"pval_{group2}"] = df[f"pval_{column}"]
-            df["pval"] = df[[f"pval_{group1}",f"pval_{group2}"]].min(axis=1)
-        else:
-            df["pval"] = df[f"pval_{column}"]
-        del df[f"pval_{column}"]
-        df["qval"] = HiVis_utils.p_adjust(df["pval"])
-        df["expression_mean"] = df[[group1, group2]].mean(axis=1)
-        df["expression_min"] = df[[group1, group2]].min(axis=1)
-        df["expression_max"] = df[[group1, group2]].max(axis=1)
-        df["gene"] = df.index
-        if inplace:
-            var = df.copy()
-            var.rename(columns={
-                "qval":f"qval_{column}",
-                "pval":f"pval_{column}",
-                "log2fc":f"log2fc_{column}",
-                "expression_mean":f"expression_mean_{column}",
-                "expression_min":f"expression_min_{column}",
-                "expression_max":f"expression_max_{column}",
-                },inplace=True)
-            del var["gene"]
-            cols_to_drop = [col for col in var.columns if col in self.adata.var.columns]
-            self.adata.var.drop(columns=cols_to_drop,inplace=True)
-            self.adata.var = self.adata.var.join(var, how="left")
-        return df
     
     
     def add_agg(self, adata_agg, name):
@@ -524,209 +460,6 @@ class HiVis:
             raise ValueError("type_ must be either 'obs' or 'var'")
         self.plot._init_img()
         
-    
-    def pseudobulk(self, by=None, layer=None):
-        '''
-        Sums the gene expression for each group in a single obs.
-        
-        Parameters:
-            
-            * by (str) - return a dataframe, each column is a value in "by" (for example cluster), rows are genes. \
-            If None, will return the mean expression of every gene. 
-            * layer (str) - which layer in adata to use.
-            
-        **Returns** the gene expression for each group (pd.DataFrame)
-        '''
-        if layer is None:
-            x = self.adata.X
-        else:
-            if layer not in self.adata.layers:
-                raise KeyError(f"Layer '{layer}' not found in self.adata.layers. Available layers: {list(self.adata.layers.keys())}")
-            x = self.adata.layers[layer]
-        if by is None:
-            pb = x.mean(axis=0).A1
-            return pd.Series(pb, index=self.adata.var_names)
-        
-        unique_groups = self.adata.obs[by].unique()
-        unique_groups = unique_groups[pd.notna(unique_groups)]
-
-        n_groups = len(unique_groups)
-        n_genes = self.adata.n_vars  
-        result = np.zeros((n_groups, n_genes))
-        for i, group in enumerate(unique_groups):
-            mask = (self.adata.obs[by] == group).values
-            if mask.sum() == 0: 
-                continue
-            group_sum = x[mask].sum(axis=0)  
-            group_mean = group_sum / mask.sum() 
-            result[i, :] = group_mean.A1     
-        return pd.DataFrame(result.T, index=self.adata.var_names, columns=unique_groups)
-    
-    def noise_mean_curve(self, layer=None, inplace=False):
-        '''
-        Generates a noise-mean curve of the data and calculates residuals.
-        
-        Parameters:
-            * layer - which layer in the AnnData to use
-            * inplace (bool) - add the mean_expression, cv and residuals to VAR
-            
-        **Returns** dataframe with expression, CV and residuals of each gene (pd.DataFrame). 
-        '''
-        return HiVis_utils.noise_mean_curve(self.adata,layer=layer,inplace=inplace)
-    
-    def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
-        '''
-        Calculates gene(s) correlation.
-        
-        Parameters:
-            * what (str or list) - if str, computes Spearman correlation of a given gene with all genes. \
-                                    if list, will compute correlation between all genes in the list
-            * self_corr_value - replace the correlation of the gene with itself by this value
-            * normalize (bool) - normilize expression before computing correlation
-            * layer (str) - which layer in the AnnData to use
-            * inplace (bool) - add the correlation to VAR
-            
-        **Returns** dataframe of spearman correlation between genes (pd.DataFrame)
-        '''
-        if isinstance(what, str):
-            x = self[what]
-            return HiVis_utils.cor_gene(self.adata, x, what, self_corr_value, normilize, layer, inplace)
-        return HiVis_utils.cor_genes(self.adata, what, self_corr_value, normilize, layer)
-    
-
-    def score_genes(self, gene_list:list, score_name:str, z_normilize=False):
-        '''
-        Assigns score for each bin, based on a list of genes.
-        
-        Parameters:
-            * gene_list (list) - list of genes
-            * score_name (str) - name of column that will store the score in self.adata.obs
-            * z_normilize (bool) - Z transform the score values
-        
-        **returns** score values (pd.Series)
-        '''
-        sc.tl.score_genes(self.adata, gene_list=gene_list, score_name=score_name)
-        if z_normilize:
-            self.adata.obs[score_name] = zscore(self.adata.obs[score_name])
-        return self.adata.obs[score_name]
-
-
-    def smooth(self, what, radius, method="mean", new_col_name=None, layer=None, **kwargs):
-        r'''
-        Applies median smoothing to the specified column in adata.obs using spatial neighbors.
-        
-        Parameters:
-            * what (str) - what to smooth. either a gene name or column name from self.adata.obs
-            * radius (float) - in microns
-            * method - ["mode", "median", "mean", "gaussian", "log"]
-            * new_col_name (str) - Optional custom name for the output column
-            * layer (str) - which layer in the AnnData to use
-            * \**kwargs - Additional Parameters for specific methods (e.g., sigma for gaussian, offset for log).
-            
-        **returns** smoothed values (pd.Series)
-        '''
-        coords = self.adata.obs[['um_x', 'um_y']].values
-
-        if self.tree is None:
-            # Build a KDTree for fast neighbor look-up.
-            print("Building coordinate tree")
-            self.tree = cKDTree(coords)
-        
-        values = self.get(what,layer=layer)
-        if len(values) != self.adata.shape[0]:
-            raise ValueError(f"{what} not in adata.obs or a gene name")
-            
-        if isinstance(values[0], str):
-            if method != "mode":
-                raise ValueError("Smoothing on string columns is only supported using the 'mode' method.")
-    
-        smoothed_values = []
-        
-        if method == "log":
-            offset = kwargs.get("offset", 1.0)
-            if np.min(values) < -offset:
-                raise ValueError(f"Negative values detected in '{what}'. Log smoothing requires all values >= {-offset}.")
-        elif method == "gaussian":
-            sigma = kwargs.get("sigma", radius / 2)
-    
-        # Iterate through each object's coordinates, find neighbors, and compute the median.
-        for i, point in enumerate(tqdm(coords, desc=f"{method} filtering '{what}' in radius {radius}")):
-            # Find all neighbors within the given radius.
-            indices = self.tree.query_ball_point(point, radius)
-            if not indices:
-                # Assign the original value or np.nan if no neighbor is found.
-                new_val = values[i]
-            neighbor_values = values[indices]
-            
-            if method == "median":
-                new_val = np.median(neighbor_values)
-            elif method == "mean":
-                new_val = np.mean(neighbor_values)
-            elif method == "mode":
-                if isinstance(neighbor_values[0], str):
-                    unique_vals, counts = np.unique(neighbor_values, return_counts=True)
-                    new_val = unique_vals[np.argmax(counts)] 
-                else:
-                    new_val = mode(neighbor_values).mode
-            elif method == "gaussian":
-                # Calculate distances to neighbors.
-                distances = np.linalg.norm(coords[indices] - point, axis=1)
-                
-                # Compute Gaussian weights.
-                weights = np.exp(- (distances**2) / (2 * sigma**2))
-                new_val = np.sum(neighbor_values * weights) / np.sum(weights)
-            elif method == "log":
-                # Apply a log1p transform to handle zero values; add an offset if necessary.
-                offset = kwargs.get("offset", 1.0)
-                # It is assumed that neighbor_values + offset > 0.
-                new_val = np.expm1(np.median(np.log1p(neighbor_values + offset))) - offset
-            else:
-                raise ValueError(f"Unknown smoothing method: {method}")
-
-            smoothed_values.append(new_val)
-
-        if not new_col_name:
-            new_col_name = f'{what}_smooth_r{radius}'
-        self.adata.obs[new_col_name] = smoothed_values
-        return smoothed_values
-
-        
-    def compute_distances(self, agg_name, dist_col_name=None, nearest_col_name=None):
-        '''
-        Compute distances of each bin too the nearest aggregation.
-
-        Parameters:
-            * agg_name (str) - name of agg
-            * dist_col_name (str) - Name of column to save distance to. default is dist_to_{agg_name}
-            * nearest_col_name (str) -  Name of column to save the closest aggregation name
-        '''
-        
-        if agg_name not in self.agg:
-            raise ValueError(f"{agg_name} is not a valid aggregation in {self.name}")
-
-        dist_col_name = dist_col_name if dist_col_name is not None else f"dist_to_{agg_name}"
-        nearest_col_name = nearest_col_name if nearest_col_name is not None else f"nearest_{agg_name}"
-
-        target_geoms = self.agg[agg_name].adata.obs.geometry.apply(wkt.loads).tolist()
-        tree = STRtree(target_geoms)
-
-        x_coords = self["um_x"]
-        y_coords = self["um_y"]
-        n_pts = len(x_coords)
-        distances = [0.0] * n_pts
-        nearest_obs_ids = [None] * n_pts
-
-        for i, (x, y) in enumerate(tqdm(zip(x_coords, y_coords), total=n_pts, desc=f"Computing distance to {agg_name}")):
-            pt = Point(x, y)
-            nearest_index = tree.nearest(pt)
-            nearest_geom = target_geoms[nearest_index] 
-            distances[i] = pt.distance(nearest_geom)
-            nearest_obs_ids[i] = self.agg[agg_name].adata.obs.index[nearest_index]
-
-        self.adata.obs[dist_col_name] = distances
-        self.adata.obs[nearest_col_name] = nearest_obs_ids
-
-    
 
     def export_h5(self, path=None, force=False):
         '''
@@ -885,6 +618,24 @@ class HiVis:
                     print(f"Aggregation [{agg}] is empty")
         return new_obj
    
+
+    def __add__(self, other):
+        '''Combines two Aggregation objects into a single adata'''
+        if not isinstance(other, type(self)):
+            raise ValueError("Addition supported only for HiVis class")
+        self.adata.obs["source_"] = self.name
+        other.adata.obs["source_"] = other.name if other.name != self.name else f"{self.name}_1"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            adata = ad.concat([self.adata, other.adata], join='outer')
+        adata.obs_names_make_unique()
+        
+        name = "combined"
+        new_obj = HiVis(adata, image_fullres=None, image_highres=None, image_lowres=None,
+                        scalefactor_json=None, name=name, 
+                        path_output=self.path_output,agg=None,plot_qc=False,
+                        properties=None,fluorescence=None)    
+        return new_obj    
 
     def __crop_images(self, adata, remove_empty_pixels=False):
         '''
