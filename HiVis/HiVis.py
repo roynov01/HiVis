@@ -30,6 +30,7 @@ from . import HiVis_utils
 from .Aggregation import Aggregation
 from . import HiVis_plot
 from . import HiVis_analysis
+from . import other_utils
 from . import Aggregation_utils
 
 Image.MAX_IMAGE_PIXELS = 1063425001 # Enable large images loading
@@ -146,8 +147,6 @@ class HiVis:
         
         self.image_fullres, self.image_highres, self.image_lowres = image_fullres, image_highres, image_lowres
         
-        
-        
         self.fluorescence = fluorescence
         
         if isinstance(scalefactor_json, str):
@@ -158,23 +157,34 @@ class HiVis:
         HiVis_utils.add_spatial_keys(self, adata, name) # add obsm["spatial"] and uns["spatial"]
             
         self.adata = adata
-        
-        adata.obs["pxl_col_in_lowres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
-        adata.obs["pxl_row_in_lowres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
-        adata.obs["pxl_col_in_highres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
-        adata.obs["pxl_row_in_highres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
-        adata.obs["um_x"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["microns_per_pixel"]
-        adata.obs["um_y"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["microns_per_pixel"]
+        if self.json is not None:
+            adata.obs["pxl_col_in_lowres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
+            adata.obs["pxl_row_in_lowres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_lowres_scalef"]
+            adata.obs["pxl_col_in_highres"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
+            adata.obs["pxl_row_in_highres"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["tissue_hires_scalef"]
+            adata.obs["um_x"] = adata.obs["pxl_col_in_fullres"] * scalefactor_json["microns_per_pixel"]
+            adata.obs["um_y"] = adata.obs["pxl_row_in_fullres"] * scalefactor_json["microns_per_pixel"]
         
         self.plot = HiVis_plot.PlotVisium(self)
         self.analysis = HiVis_analysis.AnalysisVisium(self)
-        if fluorescence:
-            self.image_fullres_orig = self.image_fullres.copy()
-            self.recolor(fluorescence)
-        else:
+        
+        if image_fullres is not None:
+            if fluorescence:
+                self.image_fullres_orig = self.image_fullres.copy()
+                self.recolor(fluorescence)
             self.plot._init_img()
-        if plot_qc:
-            self.qc(save=True)
+        else: # disable methods that rely on image
+            print("Without image_fullres, [plot.spatial,analysis.smooth, analysis.compute_distances] will be disabled")
+            def _disabled_method(*args, **kwargs):
+                raise RuntimeError("This method is disabled in combined HiVis")
+            self.plot.spatial = _disabled_method
+            self.analysis.smooth = _disabled_method
+            self.analysis.compute_distances = _disabled_method
+            disable = ["add_agg", "add_mask", "add_annotations","agg_stardist", "agg_from_annotations","export_images", "remove_pixels", "recolor"]
+            for method_name in disable:
+                setattr(self, method_name, _disabled_method)
+        if plot_qc and hasattr(self.plot, "spatial"):
+            self.analysis.qc(save=True)
             plt.show()
     
     def recolor(self, fluorescence=None, normalization_method="percentile"):
@@ -608,6 +618,24 @@ class HiVis:
                     print(f"Aggregation [{agg}] is empty")
         return new_obj
    
+
+    def __add__(self, other):
+        '''Combines two Aggregation objects into a single adata'''
+        if not isinstance(other, type(self)):
+            raise ValueError("Addition supported only for HiVis class")
+        self.adata.obs["source_"] = self.name
+        other.adata.obs["source_"] = other.name if other.name != self.name else f"{self.name}_1"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            adata = ad.concat([self.adata, other.adata], join='outer')
+        adata.obs_names_make_unique()
+        
+        name = "combined"
+        new_obj = HiVis(adata, image_fullres=None, image_highres=None, image_lowres=None,
+                        scalefactor_json=None, name=name, 
+                        path_output=self.path_output,agg=None,plot_qc=False,
+                        properties=None,fluorescence=None)    
+        return new_obj    
 
     def __crop_images(self, adata, remove_empty_pixels=False):
         '''

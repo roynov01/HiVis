@@ -22,8 +22,8 @@ from . import HiVis_utils
 
 class AnalysisVisium:
     '''Handles all analysis functions for HiVis object'''
-    def __init__(self1, viz_instance):
-        self1.main = viz_instance
+    def __init__(self, viz_instance):
+        self.main = viz_instance
     
     def qc(self, save=False,figsize=(8, 8)):
         '''
@@ -33,7 +33,8 @@ class AnalysisVisium:
             * save (bool) - save the plot in HiVis.path_output
         '''
         fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(ncols=2,nrows=2, figsize=figsize)
-        ax0 = self.main.plot.spatial(title=self.name, ax=ax0)
+        if self.json:
+            ax0 = self.main.plot.spatial(title=self.main.name, ax=ax0)
         ax1 = self.main.plot.hist("mito_percent_log10", title="Mitochondrial content per spot", xlab="log10(Mito %)",ax=ax1)
         ax2 = self.main.plot.hist("nUMI_log10", title="Number of UMIs per spot", xlab="log10(UMIs)",ax=ax2)
         ax3 = self.main.plot.hist("nUMI_gene_log10", title="Number of UMIs per gene", xlab="log10(UMIs)",ax=ax3)
@@ -216,9 +217,8 @@ class AnalysisVisium:
             * dist_col_name (str) - Name of column to save distance to. default is dist_to_{agg_name}
             * nearest_col_name (str) -  Name of column to save the closest aggregation name
         '''
-        
         if agg_name not in self.main.agg:
-            raise ValueError(f"{agg_name} is not a valid aggregation in {self.name}")
+            raise ValueError(f"{agg_name} is not a valid aggregation in {self.main.name}")
 
         dist_col_name = dist_col_name if dist_col_name is not None else f"dist_to_{agg_name}"
         nearest_col_name = nearest_col_name if nearest_col_name is not None else f"nearest_{agg_name}"
@@ -226,8 +226,8 @@ class AnalysisVisium:
         target_geoms = self.main.agg[agg_name].adata.obs.geometry.apply(wkt.loads).tolist()
         tree = STRtree(target_geoms)
 
-        x_coords = self["um_x"]
-        y_coords = self["um_y"]
+        x_coords = self.main["um_x"]
+        y_coords = self.main["um_y"]
         n_pts = len(x_coords)
         distances = [0.0] * n_pts
         nearest_obs_ids = [None] * n_pts
@@ -246,8 +246,8 @@ class AnalysisVisium:
 
 class AnalysisAgg:
     '''Handles all analysis functions for Aggregation object'''
-    def __init__(self1, agg_instance):
-        self1.main = agg_instance
+    def __init__(self, agg_instance):
+        self.main = agg_instance
 
     def pseudobulk(self, by=None,layer=None):
         '''
@@ -402,7 +402,7 @@ class AnalysisAgg:
         **Returns** dataframe of spearman correlation between genes (pd.DataFrame)
         '''
         if isinstance(what, str):
-            x = self[what]
+            x = self.main[what]
             return HiVis_utils.cor_gene(self.main.adata, x, what, self_corr_value, normilize, layer, inplace)
         return HiVis_utils.cor_genes(self.main.adata, what, self_corr_value, normilize, layer)
 
@@ -468,7 +468,7 @@ class AnalysisAgg:
         Compute distances of each object to the nearest object of another Aggregation.
         
         Parameters:
-            * target_agg - either Aggregation object, or a name (str) that is the key in self.viz.agg
+            * target_agg - either Aggregation object, or a name (str) that is the key in self.main.viz.agg
             * dist_col_name (str) - Name of column to save distance to. default is dist_to_{agg_name}
             * nearest_col_name (str) -  Name of column to save the closest aggregation name
         '''

@@ -15,6 +15,7 @@ import scipy.io
 import geopandas as gpd
 
 from . import HiVis_plot
+from . import HiVis_analysis
 from . import HiVis_utils
 
 class Aggregation:
@@ -59,6 +60,7 @@ class Aggregation:
         if not os.path.exists(self.path_output):
             os.makedirs(self.path_output)
         self.plot = HiVis_plot.PlotAgg(self)
+        self.analysis = HiVis_analysis.AnalysisAgg(self)
         self.adata_cropped = None
         self.tree = None
         
@@ -316,6 +318,7 @@ class Aggregation:
         self.adata.obs["source_"] = self.name
         other.adata.obs["source_"] = other.name if other.name != self.name else f"{self.name}_1"
         adata = ad.concat([self.adata, other.adata], join='outer')
+        print("To add the combined anndata to HiVis object, use HiVis.add_agg(adata_agg, name)")
         return adata
     
     def __delitem__(self, key):
