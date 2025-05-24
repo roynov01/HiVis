@@ -318,8 +318,16 @@ class Aggregation:
         self.adata.obs["source_"] = self.name
         other.adata.obs["source_"] = other.name if other.name != self.name else f"{self.name}_1"
         adata = ad.concat([self.adata, other.adata], join='outer')
-        print("To add the combined anndata to HiVis object, use HiVis.add_agg(adata_agg, name)")
-        return adata
+        new_obj = Aggregation(self.viz, adata, f"combined_{self.name}_{other.name}")
+        if not self.viz is other.viz:
+            def _disabled_method(*args, **kwargs):
+                raise RuntimeError("This method is disabled in combined Aggregation")
+            new_obj.plot.spatial = _disabled_method
+            new_obj.analysis.smooth = _disabled_method
+            new_obj.analysis.compute_distances = _disabled_method
+            new_obj.import_geometry = _disabled_method
+            new_obj.sync = _disabled_method
+        return new_obj
     
     def __delitem__(self, key):
         '''Deletes metadata'''
