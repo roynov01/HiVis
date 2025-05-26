@@ -312,7 +312,7 @@ class Aggregation:
         return self + other
     
     def __add__(self, other):
-        '''Combines two Aggregation objects into a single adata'''
+        '''Combines two Aggregation objects into a single Aggregation. Some methods will be disabled'''
         if not isinstance(other, type(self)):
             raise ValueError("Addition supported only for Aggregation class")
         self.adata.obs["source_"] = self.name

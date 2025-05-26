@@ -620,7 +620,7 @@ class HiVis:
    
 
     def __add__(self, other):
-        '''Combines two Aggregation objects into a single adata'''
+        '''Combines two HiVis objects into a single HiVis object. Some methods will be disabled.'''
         if not isinstance(other, type(self)):
             raise ValueError("Addition supported only for HiVis class")
         self.adata.obs["source_"] = self.name

@@ -256,7 +256,7 @@ class PlotVisium:
         
         # Add legend to fluorescence image
         if self.main.fluorescence and legend and image:
-            legend_elements = [Patch(facecolor=stain, label=c) for c, stain in self.main.fluorescence.items()]
+            legend_elements = [Patch(facecolor=stain, label=c) for c, stain in self.main.fluorescence.items() if stain is not None]
             ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.98, 0.98), frameon=True, title=None)
 
         if axis_labels:
@@ -592,7 +592,7 @@ class PlotAgg:
             fig, ax = plt.subplots(figsize=figsize)
         ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,
                             contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution,
-                            axis_labels=axis_labels)
+                            axis_labels=axis_labels,legend=False)
         
         if what: 
             if ax is None:
@@ -702,7 +702,7 @@ class PlotAgg:
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
         ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,axis_labels=axis_labels,
-                            contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution)
+                            contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution,legend=False)
         
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
