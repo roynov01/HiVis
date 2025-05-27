@@ -33,7 +33,7 @@ class AnalysisVisium:
             * save (bool) - save the plot in HiVis.path_output
         '''
         fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(ncols=2,nrows=2, figsize=figsize)
-        if self.json is not None:
+        if self.main.json is not None:
             ax0 = self.main.plot.spatial(title=self.main.name, ax=ax0)
         ax1 = self.main.plot.hist("mito_percent_log10", title="Mitochondrial content per spot", xlab="log10(Mito %)",ax=ax1)
         ax2 = self.main.plot.hist("nUMI_log10", title="Number of UMIs per spot", xlab="log10(UMIs)",ax=ax2)
@@ -168,7 +168,7 @@ class AnalysisVisium:
             sigma = kwargs.get("sigma", radius / 2)
     
         # Iterate through each object's coordinates, find neighbors, and compute the median.
-        for i, point in enumerate(tqdm(coords, desc=f"{method} filtering '{what}' in radius {radius}")):
+        for i, point in enumerate(tqdm(coords, desc=f"'{method}' smoothing '{what}' in radius {radius}")):
             # Find all neighbors within the given radius.
             indices = self.main.tree.query_ball_point(point, radius)
             if not indices:

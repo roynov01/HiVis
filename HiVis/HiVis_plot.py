@@ -255,7 +255,7 @@ class PlotVisium:
                               legend_title=legend_title)
         
         # Add legend to fluorescence image
-        if self.main.fluorescence and legend and image:
+        if self.main.fluorescence and legend and not what:
             legend_elements = [Patch(facecolor=stain, label=c) for c, stain in self.main.fluorescence.items() if stain is not None]
             ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.98, 0.98), frameon=True, title=None)
 
