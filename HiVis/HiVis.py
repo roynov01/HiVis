@@ -888,6 +888,7 @@ class HiVis:
         '''Updates the methods in the instance. Should be used after modifying the source code in the class'''
         HiVis_utils.update_instance_methods(self)
         HiVis_utils.update_instance_methods(self.plot)
+        HiVis_utils.update_instance_methods(self.analysis)
         self.plot._init_img()
         if agg and self.agg:
             for agg in self.agg:

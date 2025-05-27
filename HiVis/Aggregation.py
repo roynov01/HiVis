@@ -233,6 +233,8 @@ class Aggregation:
         what = tuple(idx.to_numpy() if hasattr(idx, "to_numpy") else idx for idx in what)
         adata = self.adata[what].copy()
         adata.var = adata.var.loc[:,~adata.var.columns.str.startswith(("cor_","exp_"))]
+        adata.var = adata.var.drop(columns=[col for col in ["residual","cv","expression_mean"] if col in adata.var.columns])
+
         for layer in self.adata.layers.keys():
             adata.layers[layer] = self.adata.layers[layer][what].copy()
         return Aggregation(self.viz, adata, name=self.name)
@@ -356,6 +358,7 @@ class Aggregation:
         '''
         HiVis_utils.update_instance_methods(self)
         HiVis_utils.update_instance_methods(self.plot)
+        HiVis_utils.update_instance_methods(self.analysis)
         _ = gc.collect()
     
     def head(self, n=5):

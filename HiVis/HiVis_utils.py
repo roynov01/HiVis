@@ -19,6 +19,8 @@ from scipy.spatial.distance import squareform, pdist
 from scipy.cluster.hierarchy import linkage, dendrogram
 from statsmodels.stats.multitest import multipletests
 import statsmodels.api as sm
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
 # import squidpy
 
 
@@ -555,7 +557,7 @@ def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_o
     return adata
 
 
-def noise_mean_curve(adata,layer=None,inplace=False):
+def noise_mean_curve(adata,layer=None,inplace=False,poly_deg=4):
     if layer is None:
         X = adata.X
     else:
@@ -581,28 +583,37 @@ def noise_mean_curve(adata,layer=None,inplace=False):
     cv_pn = cv[cv > 0].min()
     cv_log = np.log10(cv[valid_genes] + cv_pn)
     exp_log = np.log10(mean_expression[valid_genes])
-    
+
     # Fit an Ordinary Least Squares regression model
-    X = sm.add_constant(exp_log)
-    model = sm.OLS(cv_log, X).fit()
-    residuals = cv_log - model.predict(X)
+    poly_feat = PolynomialFeatures(poly_deg, include_bias=False)
+    X_poly = poly_feat.fit_transform(exp_log.reshape(-1, 1))
+    
+    poly_model = LinearRegression()
+    poly_model.fit(X_poly, cv_log)
+    cv_log_pred = poly_model.predict(X_poly)
+    residuals = cv_log - cv_log_pred
     
     df = pd.DataFrame({
         "gene": np.array(adata.var_names)[valid_genes],
         "expression_mean": mean_expression[valid_genes],
         "mean_log": exp_log,
         "cv": cv[valid_genes],
-        "cv_log": cv_log,
+        "cv_log10": cv_log,
         "residual": residuals
     })
     
+    adata.uns["noise_mean_curve"] = { # save the model
+        "poly_deg"   : poly_deg,
+        "coef"       : poly_model.coef_.tolist(), 
+        "intercept"  : float(poly_model.intercept_)
+    }
+    
+    
     if inplace:
-        adata.var.loc[df["gene"], "cv"] = df["cv"].values
-        adata.var.loc[df["gene"], "expression_mean"] = df["expression_mean"].values
-        adata.var.loc[df["gene"], "residual"] = df["residual"].values
+        cols = ["cv", "expression_mean", "residual", "cv_log10", "mean_log"]
+        adata.var.loc[df["gene"], cols] = df[cols].values
     
     return df
-
 
 def cor_gene(adata, vec, gene_name, self_corr_value=None, normalize=True,  layer: str = None, inplace=False):
     '''

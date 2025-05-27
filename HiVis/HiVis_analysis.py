@@ -79,17 +79,18 @@ class AnalysisVisium:
             result[i, :] = group_mean.A1     
         return pd.DataFrame(result.T, index=self.main.adata.var_names, columns=unique_groups)
     
-    def noise_mean_curve(self, layer=None, inplace=False):
+    def noise_mean_curve(self, layer=None, inplace=False, poly_deg=4):
         '''
         Generates a noise-mean curve of the data and calculates residuals.
         
         Parameters:
             * layer - which layer in the AnnData to use
             * inplace (bool) - add the mean_expression, cv and residuals to VAR
+            * poly_deg (int) - degree of polynomial fit. if 1, will be a linear model
             
         **Returns** dataframe with expression, CV and residuals of each gene (pd.DataFrame). 
         '''
-        return HiVis_utils.noise_mean_curve(self.main.adata,layer=layer,inplace=inplace)
+        return HiVis_utils.noise_mean_curve(self.main.adata,layer=layer,inplace=inplace, poly_deg=poly_deg)
     
     def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
         '''
@@ -374,17 +375,18 @@ class AnalysisAgg:
             self.main.adata.obs[score_name] = zscore(self.main.adata.obs[score_name])
         return self.main.adata.obs[score_name]
         
-    def noise_mean_curve(self, layer=None,inplace=False):
+    def noise_mean_curve(self, layer=None,inplace=False,poly_deg=4):
         '''
         Generates a noise-mean curve of the data.
         
         Parameters:
             * layer (str) - which layer in the AnnData to use
             * inplace (bool) - add the mean_expression, cv and residuals to VAR
+            * poly_deg (int) - degree of polynomial fit. if 1, will be a linear model.
             
         **Returns** dataframe with expression, CV and residuals of each gene (pd.DataFrame).
         '''
-        return HiVis_utils.noise_mean_curve(self.main.adata,layer=layer,inplace=inplace)
+        return HiVis_utils.noise_mean_curve(self.main.adata,layer=layer,inplace=inplace,poly_deg=poly_deg)
         
     
     def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
