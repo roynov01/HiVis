@@ -315,8 +315,9 @@ class Aggregation:
     
     def __add__(self, other):
         '''Combines two Aggregation objects into a single Aggregation. Some methods will be disabled'''
+
         if not isinstance(other, type(self)):
-            raise ValueError("Addition supported only for Aggregation class")
+            raise ValueError(f"Addition supported only for Aggregation class, not for {type(self)} + {type(other)}")
         self.adata.obs["source_"] = self.name
         other.adata.obs["source_"] = other.name if other.name != self.name else f"{self.name}_1"
         adata = ad.concat([self.adata, other.adata], join='outer')

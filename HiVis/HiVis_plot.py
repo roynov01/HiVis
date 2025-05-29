@@ -550,7 +550,7 @@ class PlotAgg:
             
         **Returns** path of daved file
         '''
-        path = f"{self.main.path_output}/{self.main.viz.name}_{figname}.{format_}"
+        path = f"{self.main.path_output}/{self.main.name}_{figname}.{format_}"
         if fig is None:
             if ax is None:
                 if self.current_ax is None:

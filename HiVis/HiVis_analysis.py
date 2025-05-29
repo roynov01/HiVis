@@ -168,7 +168,7 @@ class AnalysisVisium:
             sigma = kwargs.get("sigma", radius / 2)
     
         # Iterate through each object's coordinates, find neighbors, and compute the median.
-        for i, point in enumerate(tqdm(coords, desc=f"'{method}' smoothing '{what}' in radius {radius}")):
+        for i, point in enumerate(tqdm(coords, desc=f"'{method} smoothing '{what}' in radius {radius}")):
             # Find all neighbors within the given radius.
             indices = self.main.tree.query_ball_point(point, radius)
             if not indices:
@@ -177,9 +177,9 @@ class AnalysisVisium:
             neighbor_values = values[indices]
             
             if method == "median":
-                new_val = np.median(neighbor_values)
+                new_val = np.nanmedian(neighbor_values)
             elif method == "mean":
-                new_val = np.mean(neighbor_values)
+                new_val = np.nanmean(neighbor_values)
             elif method == "mode":
                 if isinstance(neighbor_values[0], str):
                     unique_vals, counts = np.unique(neighbor_values, return_counts=True)
@@ -319,7 +319,7 @@ class AnalysisAgg:
             sigma = kwargs.get("sigma", radius / 2)
     
         # Iterate through each object's coordinates, find neighbors, and compute the median.
-        for i, point in enumerate(tqdm(coords, desc=f"{method} filtering '{what}' in radius {radius}")):
+        for i, point in enumerate(tqdm(coords, desc=f"'{method}' smoothing '{what}' in radius {radius}")):
             # Find all neighbors within the given radius.
             indices = self.main.tree.query_ball_point(point, radius)
             if not indices:
@@ -328,9 +328,9 @@ class AnalysisAgg:
             neighbor_values = values[indices]
             
             if method == "median":
-                new_val = np.median(neighbor_values)
+                new_val = np.nanmedian(neighbor_values)
             elif method == "mean":
-                new_val = np.mean(neighbor_values)
+                new_val = np.nanmean(neighbor_values)
             elif method == "mode":
                 if isinstance(neighbor_values[0], str):
                     unique_vals, counts = np.unique(neighbor_values, return_counts=True)
