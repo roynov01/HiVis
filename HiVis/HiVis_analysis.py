@@ -207,7 +207,63 @@ class AnalysisVisium:
             new_col_name = f'{what}_smooth_r{radius}'
         self.main.adata.obs[new_col_name] = smoothed_values
         return smoothed_values
-
+    
+    
+    def dge(self, column, group1, group2=None, method="fisher_exact", two_sided=False,
+            umi_thresh=0, inplace=False, layer=None):
+        '''
+        Runs differential gene expression analysis between two groups.
+        Values will be saved in self.main.var: expression_mean, log2fc, pval
+        
+        Parameters:
+            * column (str) - which column in obs has the groups classification
+            * group1 (str) - specific value in the "column"
+            * group2 (str) - specific value in the "column". \
+                       if None, will run against all other values, and will be called "rest"
+            * method (str) - one of ["fisher_exact", "wilcox", "t_test"]
+            * two_sided (bool) - if one sided, will give the pval for each group, \
+                          and the minimal of both groups (which will also be FDR adjusted)
+            * umi_thresh (int) - use only spots with more UMIs than this number
+            * inplace (bool) - modify the adata.var with log2fc, pval and expression columns
+            * layer (str) - which layer in the AnnData to use
+            
+        **Returns** the DGE results (pd.DataFrame)
+        '''
+        alternative = "two-sided" if two_sided else "greater"
+        df = HiVis_utils.dge(self.main.adata, column, group1, group2, umi_thresh,layer=layer,
+                     method=method, alternative=alternative, inplace=inplace)
+        if group2 is None:
+            group2 = "rest"
+        df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
+        df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
+        if not two_sided:
+            df[f"pval_{group1}"] = 1 - df[f"pval_{column}"]
+            df[f"pval_{group2}"] = df[f"pval_{column}"]
+            df["pval"] = df[[f"pval_{group1}",f"pval_{group2}"]].min(axis=1)
+        else:
+            df["pval"] = df[f"pval_{column}"]
+        del df[f"pval_{column}"]
+        df["qval"] = HiVis_utils.p_adjust(df["pval"])
+        df["expression_mean"] = df[[group1, group2]].mean(axis=1)
+        df["expression_min"] = df[[group1, group2]].min(axis=1)
+        df["expression_max"] = df[[group1, group2]].max(axis=1)
+        df["gene"] = df.index
+        if inplace:
+            var = df.copy()
+            var.rename(columns={
+                "qval":f"qval_{column}",
+                "pval":f"pval_{column}",
+                "log2fc":f"log2fc_{column}",
+                "expression_mean":f"expression_mean_{column}",
+                "expression_min":f"expression_min_{column}",
+                "expression_max":f"expression_max_{column}",
+                },inplace=True)
+            del var["gene"]
+            cols_to_drop = [col for col in var.columns if col in self.main.adata.var.columns]
+            self.main.adata.var.drop(columns=cols_to_drop,inplace=True)
+            self.main.adata.var = self.main.adata.var.join(var, how="left")
+        return df
+    
         
     def compute_distances(self, agg_name, dist_col_name=None, nearest_col_name=None):
         '''

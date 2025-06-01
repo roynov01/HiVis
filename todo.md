@@ -3,11 +3,9 @@
 # Todo
 
 * Run all tutorials
-* Docs - subsections in HiVis and Agg
+* Docs - reorder by ABC
 
-
-* fix import cells geometry from stardist
-* Add cor, smooth, score to image in readme
+* Update methods in image
 
 * Update links in:
 	* readme

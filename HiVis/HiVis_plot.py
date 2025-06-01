@@ -352,7 +352,7 @@ class PlotVisium:
                 if self_corr_value is not None:
                     df.loc[df["gene"] == what,"r"] = self_corr_value
             else:
-                df = self.main.cor(what,normilize=normilize,layer=layer,
+                df = self.main.analysis.cor(what,normilize=normilize,layer=layer,
                                         inplace=True,self_corr_value=self_corr_value)
                 df.rename(columns={f"exp_{what}":"expression_mean"},inplace=True)
                 df.rename(columns={f"cor_qval_{what}":"qval"},inplace=True)
@@ -375,7 +375,7 @@ class PlotVisium:
             if print_:
                 print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
         else:
-            df = self.main.cor(what,normilize=normilize,layer=layer)
+            df = self.main.analysis.cor(what,normilize=normilize,layer=layer)
             if cluster:
                 df = HiVis_utils.cluster_df(df,correlation=True)
             df[np.isclose(df, 1)] = np.nan
@@ -881,7 +881,7 @@ class PlotAgg:
                 if self_corr_value is not None:
                     df.loc[df["gene"] == what,"r"] = self_corr_value
             else:
-                df = self.main.cor(what,normilize=normilize,layer=layer,
+                df = self.main.analysis.cor(what,normilize=normilize,layer=layer,
                                         inplace=True,self_corr_value=self_corr_value)
                 df.rename(columns={f"exp_{what}":"expression_mean"},inplace=True)
                 df.rename(columns={f"cor_qval_{what}":"qval"},inplace=True)
@@ -904,7 +904,7 @@ class PlotAgg:
             if print_:
                 print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
         else:
-            df = self.main.cor(what,normilize=normilize,layer=layer)
+            df = self.main.analysis.cor(what,normilize=normilize,layer=layer)
             if cluster:
                 df = HiVis_utils.cluster_df(df,correlation=True)
             df[np.isclose(df, 1)] = np.nan
