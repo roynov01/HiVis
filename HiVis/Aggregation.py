@@ -233,7 +233,7 @@ class Aggregation:
         what = tuple(idx.to_numpy() if hasattr(idx, "to_numpy") else idx for idx in what)
         adata = self.adata[what].copy()
         adata.var = adata.var.loc[:,~adata.var.columns.str.startswith(("cor_","exp_"))]
-        adata.var = adata.var.drop(columns=[col for col in ["residual","cv","expression_mean"] if col in adata.var.columns])
+        adata.var = adata.var.drop(columns=[col for col in["residual","cv","expression_mean","cv_log10","mean_log"] if col in adata.var.columns])
 
         for layer in self.adata.layers.keys():
             adata.layers[layer] = self.adata.layers[layer][what].copy()

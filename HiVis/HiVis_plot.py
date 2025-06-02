@@ -388,20 +388,21 @@ class PlotVisium:
             self.save(f"{what}_COR")
         return ax 
     
-    def noise_mean_curve(self,signif_thresh=0.95,layer=None,save=False,ax=None,text=True, figsize=(8,8), color="black",
-    size=10,cmap="viridis",repel=False, title=None,legend=True,poly_deg=4,fit_color=None):
+    def noise_mean_curve(self,poly_deg=4,signif_thresh=0.999,layer=None,save=False,ax=None,text=True, figsize=(8,8), color="black",
+    size=10,cmap="cool",repel=False, title=None,legend=True,fit_color=None):
         '''
         Generates a noise-mean curve of the data.
         
         Parameters:
+            * poly_deg (int > 0) - degree of polynomial to fit the data.
             * signif_thresh (float) - add text for genes in this residual percentile
             * layer (str) - which layer in the AnnData to use
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * cmap - colormap for scatterplot. can be name of colormap, or list of colors
-            * size (int) - size of spots in scatterplot
+            * size (int) - size of dots in scatterplot
             * save (bool) - svae the plot
-            * xlab,ylab (str) - axis labels
             * repel (bool) - repel text
+            * fit_color (str) - color to plot the fitted curve
             * title, color, legend - cosmetic parameters
             
         **returns** ax
@@ -411,24 +412,35 @@ class PlotVisium:
         if isinstance(cmap, list):
             cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap)
         
-        if "cv" in self.main.adata.var:
-            df = pd.DataFrame({"cv_log10":np.log10(self.main.adata.var["cv"]),
+        if ("cv" in self.main.adata.var) and (poly_deg == self.main.adata.uns["noise_mean_curve"]["poly_deg"]):
+            df = pd.DataFrame({"cv_log10": self.main.adata.var["cv_log10"],
                                "expression_mean_log10":np.log10(self.main.adata.var["expression_mean"]),
                                "residual":self.main.adata.var["residual"],
-                               "gene":self.main.adata.var.index.values}).dropna()
+                               "gene":self.main.adata.var.index.values})
         else:
             df = HiVis_utils.noise_mean_curve(self.main.adata,layer=layer,inplace=True,poly_deg=poly_deg)
             df["expression_mean_log10"] = np.log10(df["expression_mean"])
-            df["cv_log10"] = np.log10(df["cv"])
-            
+        df.dropna(inplace=True)    
         thresh = np.quantile(np.abs(df["residual"]), signif_thresh)
         signif_genes = list(df.loc[np.abs(df["residual"]) > thresh, "gene"])
         
         ax = plot_scatter_signif(df, "expression_mean_log10", "cv_log10",genes=signif_genes,
                                    title=title,text=text,color="residual",ax=ax,
                                    xlab="log10(mean expression)",size=size,cmap=cmap,
-                                   ylab="log10(CV)",legend=legend,color_genes=color)     
-  
+                                   ylab="log10(CV)",legend=legend,color_genes=color,repel=repel)     
+        if fit_color is not None:
+            from sklearn.preprocessing import PolynomialFeatures
+
+            info = self.main.adata.uns.get("noise_mean_curve", {})
+            deg  = info.get("poly_deg", 3)        # fallback if missing
+            coef = np.array(info.get("coef", []))
+            b0 = info.get("intercept", 0.0)
+            pf = PolynomialFeatures(deg, include_bias=False)
+            xg = np.linspace(df["expression_mean_log10"].min(),
+                               df["expression_mean_log10"].max(), 200).reshape(-1, 1)
+            yg = b0 + pf.fit_transform(xg) @ coef
+            ax.plot(xg, yg, color=fit_color, lw=2)
+            
         self.current_ax = ax
         if save:
             self.save("noise_mean_curve")
@@ -917,12 +929,13 @@ class PlotAgg:
             self.save(f"{what}_COR")
         return ax 
     
-    def noise_mean_curve(self,signif_thresh=0.999,layer=None,save=False,ax=None,text=True, figsize=(8,8), color="black",
-    size=10,cmap="cool",repel=False, title=None,legend=True,fit_color=None,poly_deg=4):
+    def noise_mean_curve(self, poly_deg=4,signif_thresh=0.999,layer=None,save=False,ax=None,text=True, figsize=(8,8), color="black",
+    size=10,cmap="cool",repel=False, title=None,legend=True,fit_color=None):
         '''
         Generates a noise-mean curve of the data.
         
         Parameters:
+            * poly_deg (int > 0) - degree of polynomial to fit the data.
             * signif_thresh (float) - add text for genes in this residual percentile
             * layer (str) - which layer in the AnnData to use
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
@@ -930,6 +943,7 @@ class PlotAgg:
             * size (int) - size of dots in scatterplot
             * save (bool) - svae the plot
             * repel (bool) - repel text
+            * fit_color (str) - color to plot the fitted curve
             * title, color, legend - cosmetic parameters
             
         **returns** ax
@@ -955,7 +969,7 @@ class PlotAgg:
         ax = plot_scatter_signif(df, "expression_mean_log10", "cv_log10",genes=signif_genes,
                                    title=title,text=text,color="residual",ax=ax,
                                    xlab="log10(mean expression)",size=size,cmap=cmap,
-                                   ylab="log10(CV)",legend=legend,color_genes=color,repel=True)     
+                                   ylab="log10(CV)",legend=legend,color_genes=color,repel=repel)     
         
         if fit_color is not None:
             from sklearn.preprocessing import PolynomialFeatures
@@ -963,11 +977,11 @@ class PlotAgg:
             info = self.main.adata.uns.get("noise_mean_curve", {})
             deg  = info.get("poly_deg", 3)        # fallback if missing
             coef = np.array(info.get("coef", []))
-            b0   = info.get("intercept", 0.0)
-            pf   = PolynomialFeatures(deg, include_bias=False)
-            xg   = np.linspace(df["expression_mean_log10"].min(),
+            b0 = info.get("intercept", 0.0)
+            pf = PolynomialFeatures(deg, include_bias=False)
+            xg = np.linspace(df["expression_mean_log10"].min(),
                                df["expression_mean_log10"].max(), 200).reshape(-1, 1)
-            yg   = b0 + pf.fit_transform(xg) @ coef
+            yg = b0 + pf.fit_transform(xg) @ coef
             ax.plot(xg, yg, color=fit_color, lw=2)
         
         self.current_ax = ax

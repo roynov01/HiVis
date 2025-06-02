@@ -589,8 +589,7 @@ class HiVis:
         adata_shifted = self.__shift_adata(adata, xlim_pixels_fullres, ylim_pixels_fullres)
         # remove columns from previous analyses
         adata_shifted.var = adata_shifted.var.loc[:,~adata_shifted.var.columns.str.startswith(("cor_","exp_"))]
-        adata_shifted.var = adata_shifted.var.drop(columns=[col for col in ["residual","cv","expression_mean"] if col in adata_shifted.var.columns])
-        
+        adata_shifted.var = adata_shifted.var.drop(columns=[col for col in ["residual","cv","expression_mean","cv_log10","mean_log"] if col in adata_shifted.var.columns])
         
         new_obj = HiVis(adata_shifted, image_fullres_crop, image_highres_crop, 
                            image_lowres_crop, self.json, name, self.path_output,agg=None,plot_qc=False,
@@ -607,7 +606,7 @@ class HiVis:
                     adata_agg_shifted = adata_agg[obs_mask, common_genes]
                     # remove columns from previous analyses
                     adata_agg_shifted.var = adata_agg_shifted.var.loc[:,~adata_agg_shifted.var.columns.str.startswith(("cor_","exp_"))]
-                    adata_agg_shifted.var = adata_agg_shifted.var.drop(columns=[col for col in ["residual","cv","expression_mean"] if col in adata_agg_shifted.var.columns])
+                    adata_agg_shifted.var = adata_agg_shifted.var.drop(columns=[col for col in ["residual","cv","expression_mean","cv_log10","mean_log"] if col in adata_agg_shifted.var.columns])
 
                     adata_agg_shifted = self.__shift_adata(adata_agg_shifted, xlim_pixels_fullres, ylim_pixels_fullres)
                 else:
