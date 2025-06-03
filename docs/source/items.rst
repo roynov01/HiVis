@@ -14,6 +14,7 @@ General methods
 .. automethod:: HiVis.HiVis.HiVis.copy
 .. automethod:: HiVis.HiVis.HiVis.recolor
 .. automethod:: HiVis.HiVis.HiVis.rename
+.. automethod:: HiVis.HiVis.HiVis.combine
 .. automethod:: HiVis.HiVis.HiVis.update_meta
 .. automethod:: HiVis.HiVis.HiVis.head
 .. automethod:: HiVis.HiVis.HiVis.update
@@ -27,6 +28,9 @@ Segmentations, annotations, masks
 
 Analyses
 **********************************
+
+Methods are called by HiVis.analysis.
+
 .. automethod:: HiVis.HiVis_analysis.AnalysisVisium.qc
 .. automethod:: HiVis.HiVis_analysis.AnalysisVisium.dge
 .. automethod:: HiVis.HiVis_analysis.AnalysisVisium.pseudobulk
@@ -96,6 +100,9 @@ General methods
 
 Analyses
 **********************************
+
+Methods are called by Aggregation.analysis.
+
 .. automethod:: HiVis.HiVis_analysis.AnalysisAgg.dge
 .. automethod:: HiVis.HiVis_analysis.AnalysisAgg.pseudobulk
 .. automethod:: HiVis.HiVis_analysis.AnalysisAgg.noise_mean_curve
