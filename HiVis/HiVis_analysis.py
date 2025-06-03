@@ -531,7 +531,7 @@ class AnalysisAgg:
             * nearest_col_name (str) -  Name of column to save the closest aggregation name
         '''
         if isinstance(target_agg, str):
-            target_agg = self.main.agg[target_agg]
+            target_agg = self.main.viz.agg[target_agg]
         if target_agg is self:
             raise ValueError("target_agg should be either another Agg object or key in HiVis.agg")
 
@@ -550,14 +550,25 @@ class AnalysisAgg:
         # build STRtree for fast nearest-neighbour look-ups 
         target_list = target_geoms.tolist()
         tree  = STRtree(target_list)
-        id2idx = {id(g): i for i, g in enumerate(target_list)}  # map geom → row index
-
         distances = [0.0]  * len(cur_geoms)
         nearest_ids = [None] * len(cur_geoms)
+        
+        
+        # id2idx = {id(g): i for i, g in enumerate(target_list)}  # map geom → row index
+        # for i, poly in enumerate(tqdm(cur_geoms, desc=f"Distances → {target_name}")):
+        #     nearest_geom = tree.nearest(poly)
+        #     distances[i] = poly.distance(nearest_geom)
+        #     nearest_ids[i] = target_agg.adata.obs.index[id2idx[id(nearest_geom)]]
+
+
         for i, poly in enumerate(tqdm(cur_geoms, desc=f"Distances → {target_name}")):
-            nearest_geom = tree.nearest(poly)
-            distances[i] = poly.distance(nearest_geom)
-            nearest_ids[i] = target_agg.adata.obs.index[id2idx[id(nearest_geom)]]
+            nearest_idx   = int(tree.nearest(poly))    
+            nearest_geom  = target_list[nearest_idx]    
+            distances[i]  = poly.distance(nearest_geom)
+            nearest_ids[i]= target_agg.adata.obs.index[nearest_idx]
+
+
+
 
         self.main.adata.obs[dist_col_name] = distances
         self.main.adata.obs[nearest_col_name] = nearest_ids

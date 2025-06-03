@@ -1406,8 +1406,8 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
 
 
 def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True, 
-                 sort_method="sum",ax=None, xlab=None, ylab=None, title=None,
-                 cmap="coolwarm",figsize=(8,16),legend=True, legend_title=None):
+                 sort_method="sum",ax=None, xlab=None, ylab=None, title=None,grid_x=False,grid_y=False,
+                 cmap="coolwarm",figsize=(8,16),legend=True, legend_title=None,colnames=True,rownames=True):
     '''
     Plots a heatmap.
     Parameters:
@@ -1445,11 +1445,22 @@ def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True,
         cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap)
         
     img = ax.imshow(heatmap_data, aspect='auto',cmap=cmap)
-    ax.set_xticks(range(len(heatmap_data.columns)))
-    ax.set_yticks(range(len(heatmap_data.index)))
-    ax.set_xticklabels(heatmap_data.columns)
-    ax.set_yticklabels(heatmap_data.index)
-    
+    if rownames:
+        ax.set_yticks(range(len(heatmap_data.index)))
+        ax.set_yticklabels(heatmap_data.index)
+    else:
+        ax.set_yticklabels([])
+    if colnames:
+        ax.set_xticks(range(len(heatmap_data.columns))) 
+        ax.set_xticklabels(heatmap_data.columns)
+    else:
+        ax.set_xticklabels([])
+    if grid_x:
+        for x in range(1, heatmap_data.shape[1]):
+            ax.axvline(x - 0.5, color="black", linewidth=0.5)
+    if grid_y:
+        for y in range(1, heatmap_data.shape[0]):
+            ax.axhline(y - 0.5, color="black", linewidth=0.5)
     if xlab is not None:
         ax.set_xlabel(xlab)
     if ylab is not None:
