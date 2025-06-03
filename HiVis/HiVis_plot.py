@@ -448,9 +448,9 @@ class PlotVisium:
     
     
     def __repr__(self):
-        s = f"Plots available for [{self.main.name}]:\n\tsave(), spatial(), hist()"
+        s = f"Plots available for [{self.main.name}]:\n\tsave(), spatial(), hist(), cor(), noise_mean_curve()"
         if self.main.agg:
-            s += "\n\nand for agg:\n\t, spatial(), hist(), cells(), umap()"
+            s += "\n\nand for agg:\n\t, spatial(), hist(), cells(), umap(), cor(), noise_mean_curve()"
         return s
     
     
@@ -991,7 +991,7 @@ class PlotAgg:
         
     
     def __repr__(self):
-        s = f"Plots available for [{self.main.name}]:\n\t spatial(), hist(), cells(), umap(), cor()"
+        s = f"Plots available for [{self.main.name}]:\n\t spatial(), hist(), cells(), umap(), cor(), noise_mean_curve()"
         return s
 
 

@@ -515,6 +515,13 @@ class HiVis:
         return images
 
     
+    def combine(self, other):
+        '''
+        Combines two HiVis objects into a single HiVis. Spatial plots and analysis will be disabled.
+        '''
+        return self + other
+
+
     def get(self, what, cropped=False, layer=None):
         '''
         Get a vector from data (a gene) or metadata (from obs or var). or subset the object.

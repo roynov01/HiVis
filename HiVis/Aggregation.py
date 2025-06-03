@@ -309,7 +309,7 @@ class Aggregation:
     
     def combine(self, other):
         '''
-        Combines two Aggregation objects into a single adata.
+        Combines two Aggregation objects into a single adata. Spatial plots and analysis will be disabled.
         '''
         return self + other
     
