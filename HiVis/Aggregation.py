@@ -316,13 +316,14 @@ class Aggregation:
     def __add__(self, other):
         '''Combines two Aggregation objects into a single Aggregation. Some methods will be disabled'''
 
-        if not isinstance(other, type(self)):
+        if not ((self.__class__.__name__ == other.__class__.__name__) or (self.__class__.__module__ != other.__class__.__module__)):
             raise ValueError(f"Addition supported only for Aggregation class, not for {type(self)} + {type(other)}")
         self.adata.obs["source_"] = self.name
         other.adata.obs["source_"] = other.name if other.name != self.name else f"{self.name}_1"
         adata = ad.concat([self.adata, other.adata], join='outer')
+        del self.adata.obs["source_"]
         new_obj = Aggregation(self.viz, adata, f"combined_{self.name}_{other.name}")
-        if not self.viz is other.viz:
+        if not (self.viz is other.viz):
             def _disabled_method(*args, **kwargs):
                 raise RuntimeError("This method is disabled in combined Aggregation")
             new_obj.plot.spatial = _disabled_method

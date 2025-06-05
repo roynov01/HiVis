@@ -634,6 +634,7 @@ class HiVis:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             adata = ad.concat([self.adata, other.adata], join='outer')
+        del self.adata.obs["source_"]
         adata.obs_names_make_unique()
         
         name = "combined"

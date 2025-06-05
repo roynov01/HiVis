@@ -92,7 +92,7 @@ class AnalysisVisium:
         '''
         return HiVis_utils.noise_mean_curve(self.main.adata,layer=layer,inplace=inplace, poly_deg=poly_deg)
     
-    def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
+    def cor(self, what, self_corr_value=None, normalize=True, layer: str = None, inplace=False):
         '''
         Calculates gene(s) correlation.
         
@@ -100,7 +100,7 @@ class AnalysisVisium:
             * what (str or list) - if str, computes Spearman correlation of a given gene with all genes. \
                                     if list, will compute correlation between all genes in the list
             * self_corr_value - replace the correlation of the gene with itself by this value
-            * normalize (bool) - normilize expression before computing correlation
+            * normalize (bool) - normalize expression before computing correlation
             * layer (str) - which layer in the AnnData to use
             * inplace (bool) - add the correlation to VAR
             
@@ -108,23 +108,23 @@ class AnalysisVisium:
         '''
         if isinstance(what, str):
             x = self.main[what]
-            return HiVis_utils.cor_gene(self.main.adata, x, what, self_corr_value, normilize, layer, inplace)
-        return HiVis_utils.cor_genes(self.main.adata, what, self_corr_value, normilize, layer)
+            return HiVis_utils.cor_gene(self.main.adata, x, what, self_corr_value, normalize, layer, inplace)
+        return HiVis_utils.cor_genes(self.main.adata, what, self_corr_value, normalize, layer)
     
 
-    def score_genes(self, gene_list:list, score_name:str, z_normilize=False):
+    def score_genes(self, gene_list:list, score_name:str, z_normalize=False):
         '''
         Assigns score for each bin, based on a list of genes.
         
         Parameters:
             * gene_list (list) - list of genes
             * score_name (str) - name of column that will store the score in self.main.adata.obs
-            * z_normilize (bool) - Z transform the score values
+            * z_normalize (bool) - Z transform the score values
         
         **returns** score values (pd.Series)
         '''
         sc.tl.score_genes(self.main.adata, gene_list=gene_list, score_name=score_name)
-        if z_normilize:
+        if z_normalize:
             self.main.adata.obs[score_name] = zscore(self.main.adata.obs[score_name])
         return self.main.adata.obs[score_name]
 
@@ -415,19 +415,19 @@ class AnalysisAgg:
         self.main.adata.obs[new_col_name] = smoothed_values
         return smoothed_values
     
-    def score_genes(self, gene_list:list, score_name:str, z_normilize=False):
+    def score_genes(self, gene_list:list, score_name:str, z_normalize=False):
         '''
         Assigns score for each object, based on a list of genes.
         
         Parameters:
             * gene_list (list) - list of genes
             * score_name (str) - name of column that will store the score in self.main.adata.obs
-            * z_normilize (bool) - Z transform the score values
+            * z_normalize (bool) - Z transform the score values
         
         **returns** score values (pd.Series)
         '''
         sc.tl.score_genes(self.main.adata, gene_list=gene_list, score_name=score_name)
-        if z_normilize:
+        if z_normalize:
             self.main.adata.obs[score_name] = zscore(self.main.adata.obs[score_name])
         return self.main.adata.obs[score_name]
         
@@ -445,7 +445,7 @@ class AnalysisAgg:
         return HiVis_utils.noise_mean_curve(self.main.adata,layer=layer,inplace=inplace,poly_deg=poly_deg)
         
     
-    def cor(self, what, self_corr_value=None, normilize=True, layer: str = None, inplace=False):
+    def cor(self, what, self_corr_value=None, normalize=True, layer: str = None, inplace=False):
         '''
         Calculates gene(s) correlation.
         
@@ -453,7 +453,7 @@ class AnalysisAgg:
             * what (str or list) - if str, computes Spearman correlation of a given gene with all genes. \
                                     if list, will compute correlation between all genes in the list
             * self_corr_value - replace the correlation of the gene with itself by this value
-            * normalize (bool) - normilize expression before computing correlation
+            * normalize (bool) - normalize expression before computing correlation
             * layer (str) - which layer in the AnnData to use
             * inplace (bool) - add the correlation to VAR
             
@@ -461,8 +461,8 @@ class AnalysisAgg:
         '''
         if isinstance(what, str):
             x = self.main[what]
-            return HiVis_utils.cor_gene(self.main.adata, x, what, self_corr_value, normilize, layer, inplace)
-        return HiVis_utils.cor_genes(self.main.adata, what, self_corr_value, normilize, layer)
+            return HiVis_utils.cor_gene(self.main.adata, x, what, self_corr_value, normalize, layer, inplace)
+        return HiVis_utils.cor_genes(self.main.adata, what, self_corr_value, normalize, layer)
 
 
     def dge(self, column, group1, group2=None, method="wilcox", two_sided=False,

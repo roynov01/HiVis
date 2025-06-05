@@ -18,7 +18,6 @@ from scipy.stats import mannwhitneyu, ttest_ind, spearmanr, fisher_exact
 from scipy.spatial.distance import squareform, pdist
 from scipy.cluster.hierarchy import linkage, dendrogram
 from statsmodels.stats.multitest import multipletests
-import statsmodels.api as sm
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 # import squidpy
@@ -644,8 +643,8 @@ def cor_gene(adata, vec, gene_name, self_corr_value=None, normalize=True,  layer
         matrix = adata.X
 
     # Normalize
+    matrix = matnorm(matrix, "row")
     if normalize:
-        matrix = matnorm(matrix, "row")
         vec = vec / vec.sum()
 
     # Calculate mean expression of each gene 
