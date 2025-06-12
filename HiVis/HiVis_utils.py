@@ -252,7 +252,8 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
 
     # Add the results to adata.Var
     if inplace:
-        adata.var.drop(columns=df.columns, inplace=True)
+        columns_to_drop = [col for col in df.columns if col in adata.var.columns]
+        adata.var.drop(columns=columns_to_drop, inplace=True)
         adata.var = adata.var.join(df, how="left")
 
     return df
