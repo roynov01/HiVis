@@ -170,8 +170,7 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
     print(f'Normalizing "{group1}" spots')
     if layer is None:
         group1_adata.X = matnorm(group1_data, axis="row")
-    else:
-        group1_adata.layers[layer] = matnorm(group1_data, axis="row")
+
 
     # Group2 prep 
     if group2 is None:
@@ -190,8 +189,7 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
     print(f'Normalizing "{group2}" spots')
     if layer is None:
         group2_adata.X = matnorm(group2_data, axis="row")
-    else:
-        group2_adata.layers[layer] = matnorm(group2_data, axis="row")
+
     if layer is None:
         group1_norm = group1_adata.X
         group2_norm = group2_adata.X

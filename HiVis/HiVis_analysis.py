@@ -10,6 +10,7 @@ import pandas as pd
 import scanpy as sc
 from scipy.stats import mode, zscore
 from scipy.spatial import cKDTree
+from scipy import sparse
 from tqdm import tqdm
 from shapely.strtree import STRtree
 from shapely import wkt, from_wkt
@@ -42,7 +43,7 @@ class AnalysisVisium:
         if save:
             self.main.plot.save(figname="QC", fig=fig)
     
-    def pseudobulk(self, by=None, layer=None):
+    def pseudobulk(self, by=None, layer=None, normalize=True):
         '''
         Sums the gene expression for each group in a single obs.
         
@@ -51,6 +52,7 @@ class AnalysisVisium:
             * by (str) - return a dataframe, each column is a value in "by" (for example cluster), rows are genes. \
             If None, will return the mean expression of every gene. 
             * layer (str) - which layer in adata to use.
+            * normilize (bool) - normilize the values to the sum of each group. if False, values will be the sum of each category.
             
         **Returns** the gene expression for each group (pd.DataFrame)
         '''
@@ -75,9 +77,13 @@ class AnalysisVisium:
             if mask.sum() == 0: 
                 continue
             group_sum = x[mask].sum(axis=0)  
-            group_mean = group_sum / mask.sum() 
-            result[i, :] = group_mean.A1     
-        return pd.DataFrame(result.T, index=self.main.adata.var_names, columns=unique_groups)
+            # group_mean = group_sum / mask.sum() 
+            # result[i, :] = group_mean.A1
+            result[i, :] = group_sum.A1  
+        ret = pd.DataFrame(result.T, index=self.main.adata.var_names, columns=unique_groups)
+        if normalize:
+            ret = HiVis_utils.matnorm(ret)
+        return ret
     
     def noise_mean_curve(self, layer=None, inplace=False, poly_deg=4):
         '''
@@ -306,7 +312,7 @@ class AnalysisAgg:
     def __init__(self, agg_instance):
         self.main = agg_instance
 
-    def pseudobulk(self, by=None,layer=None):
+    def pseudobulk(self, by=None,layer=None, normalize=True):
         '''
         Sums the gene expression for each group in a single obs.
         
@@ -314,6 +320,7 @@ class AnalysisAgg:
             * by (str) - return a dataframe, each column is a value in "by" (for example cluster), rows are genes. \
             If None, will return the mean expression of every gene. 
             * layer (str) - which layer in adata to use.
+            * normilize (bool) - normilize the values to the sum of each group. if False, values will be the sum of each category.
             
         **Returns** the gene expression for each group (pd.DataFrame)
         '''
@@ -323,17 +330,29 @@ class AnalysisAgg:
             if layer not in self.main.adata.layers:
                 raise KeyError(f"Layer '{layer}' not found in self.main.adata.layers. Available layers: {list(self.main.adata.layers.keys())}")
             x = self.main.adata.layers[layer]
-        
         if by is None:
             pb = x.mean(axis=0).A1
             return pd.Series(pb, index=self.main.adata.var_names)
-    
-        expr_df = pd.DataFrame(x.toarray(),
-                               index=self.main.adata.obs_names,
-                               columns=self.main.adata.var_names)
         
-        group_key = self.main.adata.obs[by]
-        return expr_df.groupby(group_key, observed=True).mean().T
+        unique_groups = self.main.adata.obs[by].unique()
+        unique_groups = unique_groups[pd.notna(unique_groups)]
+
+        n_groups = len(unique_groups)
+        n_genes = self.main.adata.n_vars  
+        result = np.zeros((n_groups, n_genes))
+        for i, group in enumerate(unique_groups):
+            mask = (self.main.adata.obs[by] == group).values
+            if mask.sum() == 0: 
+                continue
+            group_sum = x[mask].sum(axis=0)  
+            # group_mean = group_sum / mask.sum() 
+            # result[i, :] = group_mean.A1
+            result[i, :] = group_sum.A1  
+        ret = pd.DataFrame(result.T, index=self.main.adata.var_names, columns=unique_groups)
+        if normalize:
+            ret = HiVis_utils.matnorm(ret)
+        return ret
+        
     
     
     def smooth(self, what, radius, method="mean", new_col_name=None, layer=None, **kwargs):
