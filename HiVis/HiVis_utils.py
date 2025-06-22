@@ -203,9 +203,11 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
     df[f"log2fc_{column}"] = np.nan
     df[f"pval_{column}"] = np.nan
 
-    # compute mean vectors via sparse sums
-    mean1 = np.asarray(group1_norm.sum(axis=0)).ravel() / group1_norm.shape[0]
-    mean2 = np.asarray(group2_norm.sum(axis=0)).ravel() / group2_norm.shape[0]
+    sum1 = np.asarray(group1_data.sum(axis=0)).ravel()
+    sum2 = np.asarray(group2_data.sum(axis=0)).ravel()
+    mean1 = sum1 / sum1.sum()
+    mean2 = sum2 / sum2.sum()
+    
     
     df[group1] = mean1
     df[group2] = mean2
