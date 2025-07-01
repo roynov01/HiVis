@@ -223,6 +223,13 @@ class PlotVisium:
 
         if what: 
             values = self.main.get(what, cropped=True, layer=layer)
+            
+            # Get categorical order
+            cat_order = None
+            col = self.main.adata.obs[what]
+            if col.dtype.name == "category" and col.dtype.ordered:
+                cat_order = list(col.dtype.categories)
+        
             if values is None:
                 raise ValueError(f"{what} not found in adata")
             if values.dtype == np.bool_:
@@ -236,6 +243,12 @@ class PlotVisium:
             values = values[mask]
             x = self.pixel_x[mask]
             y = self.pixel_y[mask]
+            
+            if cat_order is not None:
+                rank_lookup = {cat: i for i, cat in enumerate(cat_order)}
+                ranks = np.array([rank_lookup.get(str(v), len(cat_order)) for v in values])
+                order = np.argsort(ranks)        
+                x, y, values = x.iloc[order], y.iloc[order], values[order]
             
             if np.issubdtype(values.dtype, np.number): 
                 argsort_values = np.argsort(values)
@@ -611,7 +624,13 @@ class PlotAgg:
                 fig, ax = plt.subplots(figsize=figsize)
             
             values = self.main.get(what, cropped=True,layer=layer)
-
+            
+            # Get categorical order
+            cat_order = None
+            col = self.main.adata.obs[what]
+            if col.dtype.name == "category" and col.dtype.ordered:
+                cat_order = list(col.dtype.categories)
+                
             if values is None:
                 raise ValueError(f"{what} not found in adata")
             if values.dtype == np.bool_:
@@ -628,6 +647,12 @@ class PlotAgg:
             y = self.pixel_y[mask]
             # height = self.main.viz.plot.image_cropped.shape[0]
             # self.pixel_y = height - self.pixel_y # Flip Y axis
+            
+            if cat_order is not None:
+                rank_lookup = {cat: i for i, cat in enumerate(cat_order)}
+                ranks = np.array([rank_lookup.get(str(v), len(cat_order)) for v in values])
+                order = np.argsort(ranks)        
+                x, y, values = x[order], y[order], values[order]
             
             if np.issubdtype(values.dtype, np.number): 
                 argsort_values = np.argsort(values)
@@ -916,7 +941,7 @@ class PlotAgg:
             if print_:
                 print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
         else:
-            df = self.main.analysis.cor(what,normilize=normilize,layer=layer)
+            df = self.main.analysis.cor(what,normalize=normalize,layer=layer)
             if cluster:
                 df = HiVis_utils.cluster_df(df,correlation=True)
             df[np.isclose(df, 1)] = np.nan
@@ -1039,7 +1064,8 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
             cbar = plt.colorbar(scatter, ax=ax, shrink=0.6)
             cbar.set_label(legend_title)
     else: # Categorical case: Use legend 
-        unique_values = np.unique(values.astype(str))
+        unique_values, idx = np.unique(values.astype(str), return_index=True)
+        unique_values = unique_values[np.argsort(idx)]
         unique_values = unique_values[unique_values != 'nan']
         if isinstance(cmap, (str,list)):
             colors = get_colors(unique_values, cmap)
