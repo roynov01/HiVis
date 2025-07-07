@@ -1138,14 +1138,19 @@ def plot_scatter_signif(df, x_col, y_col,
     # Mark genes for group 2 if provided.
     if genes2:
         df.loc[df["gene"].isin(genes2), "group"] = "group2"
+        
+    if isinstance(size, str) and size in df.columns:   
+        size_kwargs = dict(size=size, sizes=(10, 250))      
+    else:                                                
+        size_kwargs = dict(s=size)
     
     # Plot background points (those not in any group)
     if color in df.columns:
         ax = sns.scatterplot(data=df, x=x_col, y=y_col,palette=cmap,
-                        s=size, legend=legend,ax=ax, hue=color, edgecolor=edgecolor)
+                        legend=legend,ax=ax, hue=color,**size_kwargs, edgecolor=edgecolor)
     else:
         ax = sns.scatterplot(data=df[df["group"] == ""], x=x_col, y=y_col,
-                        s=size, legend=legend,ax=ax, color=color, edgecolor=edgecolor)
+                        legend=legend,**size_kwargs,ax=ax, color=color, edgecolor=edgecolor)
     
     # Add reference lines if specified.
     if y_line is not None:
@@ -1164,7 +1169,7 @@ def plot_scatter_signif(df, x_col, y_col,
             sns.scatterplot(data=group1_df,
                             x=x_col, y=y_col,
                             color=color_genes,
-                            s=size, legend=False, ax=ax, edgecolor="k")
+                            legend=False, ax=ax, edgecolor="k",**size_kwargs)
         if text:
             for _, row in group1_df.iterrows():
                 texts.append(ax.text(row[x_col], row[y_col], row["gene"],
@@ -1176,7 +1181,7 @@ def plot_scatter_signif(df, x_col, y_col,
         sns.scatterplot(data=group2_df,
                         x=x_col, y=y_col,
                         color=color_genes2,
-                        s=size, legend=False, ax=ax, edgecolor="k")
+                        legend=False, ax=ax, edgecolor="k",**size_kwargs)
         if text:
             for _, row in group2_df.iterrows():
                 texts.append(ax.text(row[x_col], row[y_col], row["gene"],
