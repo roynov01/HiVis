@@ -357,7 +357,7 @@ class HiVis:
         self.agg[name] = agg
         
     
-    def agg_stardist(self, input_df, name="SC", obs2add=None, obs2agg=None, nuc_only=False, geojson_path=None):
+    def agg_stardist(self, input_df, name="SC", obs2add=None, obs2agg=None, geojson_path=None):
         '''
         Adds Aggregation object to self.agg[name], based on CSV output of Stardist pipeline.
         
@@ -372,19 +372,25 @@ class HiVis:
             * nuc_only (bool) - aggregate only spots in nuclei
             * geojson_path (str) - path to geojson file that was exported from Qupath
         '''
+        id_col = f"Cell_ID_{name}"
         spots_only, cells_only = Aggregation_utils.split_stardist(input_df)
         
-        self.adata.obs = self.adata.obs.drop(columns=['in_nucleus', 'in_cell', 'Cell_ID'], errors='ignore')
+        spots_only = spots_only.rename(columns={"Cell_ID": id_col})
+        cells_only.index.name = id_col
+        
+        # self.adata.obs = self.adata.obs.drop(columns=['in_nucleus', 'in_cell', 'Cell_ID'], errors='ignore')
+        self.adata.obs = self.adata.obs.drop(columns=[id_col], errors='ignore')
         self.adata.obs = self.adata.obs.join(spots_only,how="left")
         
         aggregation_func = Aggregation_utils._aggregate_data_stardist
-
-        adata_agg, _ = Aggregation_utils.new_adata(self.adata, "Cell_ID", aggregation_func,
-                                       obs2agg=obs2agg,in_cell_col="in_cell",nuc_col="in_nucleus", nuc_only=nuc_only)
+        
+        adata_agg, _ = Aggregation_utils.new_adata(self.adata, id_col, aggregation_func,obs2agg=obs2agg)
+        
+        # adata_agg.obs[id_col] = adata_agg.obs.index
         
         if obs2add:
             obs2add = [col for col in cells_only.columns if col in obs2add]
-            Aggregation_utils.merge_cells(cells_only, adata_agg, obs2add)
+            Aggregation_utils.merge_cells(cells_only, adata_agg, obs2add, id_col=id_col)
         
         # adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
         

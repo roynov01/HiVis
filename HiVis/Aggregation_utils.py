@@ -61,7 +61,7 @@ def split_stardist(input_df):
     )
     
     df[['Spot_ID', 'Cell_ID']] = split_names
-    cols = ['in_nucleus', 'in_cell', 'Cell_ID', 'Spot_ID']
+    cols = ['Cell_ID', 'Spot_ID']
     spots_only = df.loc[input_df['Classification']=='Spot',cols]
     spots_only = spots_only.set_index("Spot_ID")
         
@@ -125,29 +125,24 @@ def _aggregate_meta(adata, aggregate_by, custom_agg):
     return updated_obs, group_order
 
 
-def _aggregate_data_stardist(adata, group_col="Cell_ID", in_cell_col="in_cell", nuc_only=False, nuc_col="in_nucleus"):
+def _aggregate_data_stardist(adata, group_col="Cell_ID"):
     '''
     Aggregates expression data for all spots inside each cell,
     disregarding whether a spot is in the nucleus or cytoplasm.
     '''
-    # Filter to include only spots that are inside a cell (or a nuc)
-    if nuc_only:
-        adata_filtered = adata[adata.obs[nuc_col] == 1].copy()
-    else:
-        adata_filtered = adata[adata.obs[in_cell_col] == 1].copy()
-    
+
     # Group the spots by cell id
-    ind_dict = adata_filtered.obs.groupby(by=[group_col]).indices
+    ind_dict = adata.obs.groupby(by=[group_col]).indices
     cells_ids = list(ind_dict.keys())
     num_cells = len(cells_ids)
-    num_genes = adata_filtered.shape[1]
+    num_genes = adata.shape[1]
     
     # Preallocate a sparse matrix for the aggregated cell data
     cell_data = lil_matrix((num_cells, num_genes), dtype=np.float32)
     
     # Sum all spots for each cell
     for i, cell in enumerate(tqdm(cells_ids, desc='Aggregating spots expression')):
-        cell_data[i, :] = adata_filtered[ind_dict[cell], :].X.sum(axis=0)
+        cell_data[i, :] = adata[ind_dict[cell], :].X.sum(axis=0)
     
     cell_data = cell_data.tocsr()
     
@@ -182,11 +177,13 @@ def _aggregate_data_annotations(adata, group_col):
 
 
 
-def merge_cells(cells_only,  adata, additional_obs)    :
-    additional_obs += ["Cell_ID"]
-    additional_obs = list(set(additional_obs))
-    additional_obs = cells_only.columns[cells_only.columns.isin(additional_obs)]
-    adata.obs = adata.obs.join(cells_only[additional_obs],how="left", on="Cell_ID")
+def merge_cells(cells_only,  adata, additional_obs, id_col="Cell_ID"):
+    # additional_obs = list(set(additional_obs + [id_col]))
+    
+    additional_obs = [c for c in additional_obs if c in cells_only.columns]
+    if id_col in cells_only.columns:
+        cells_only = cells_only.set_index(id_col)
+    adata.obs = adata.obs.join(cells_only[additional_obs],how="left", on=id_col)
     
 
 # def add_spatial_keys(hivis_obj, adata, name):

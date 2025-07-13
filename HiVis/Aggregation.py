@@ -121,7 +121,9 @@ class Aggregation:
             obs = []
         elif isinstance(obs, str):
             obs = [obs]
-        if isinstance(var, str):
+        if not var:
+            var = []
+        elif isinstance(var, str):
             var = [var]
         if umap and "X_umap" in adata.obsm:
             if self.adata.shape[0] == adata.shape[0]:
@@ -138,7 +140,7 @@ class Aggregation:
                 self.adata.obsm['X_pca'] = adata.obsm['X_pca'].copy()
         if hvg and 'highly_variable' in adata.var.columns:
             if not var:
-                var = 'highly_variable'
+                var = ['highly_variable']
             else:
                 if 'highly_variable' not in var:
                     var += ['highly_variable']
@@ -157,7 +159,6 @@ class Aggregation:
             self.adata.obs = self.adata.obs.join(adata.obs[obs], how="left")
             
             HiVis_utils._convert_bool_columns_to_float(self.adata.obs)
-                        
         if var:
             existing_columns = [col for col in var if col in self.adata.var.columns]
             if existing_columns:
