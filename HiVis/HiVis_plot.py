@@ -226,9 +226,11 @@ class PlotVisium:
             
             # Get categorical order
             cat_order = None
-            col = self.main.adata.obs[what]
-            if col.dtype.name == "category" and col.dtype.ordered:
-                cat_order = list(col.dtype.categories)
+            if (what in self.main.adata.obs.columns 
+                and isinstance(self.main.adata.obs[what].dtype, pd.api.types.CategoricalDtype)):
+                orig_dtype = self.main.adata.obs[what].dtype
+                if orig_dtype.ordered:
+                    cat_order = list(orig_dtype.categories)
         
             if values is None:
                 raise ValueError(f"{what} not found in adata")
@@ -627,9 +629,11 @@ class PlotAgg:
             
             # Get categorical order
             cat_order = None
-            col = self.main.adata.obs[what]
-            if col.dtype.name == "category" and col.dtype.ordered:
-                cat_order = list(col.dtype.categories)
+            if (what in self.main.adata.obs.columns 
+                and isinstance(self.main.adata.obs[what].dtype, pd.api.types.CategoricalDtype)):
+                orig_dtype = self.main.adata.obs[what].dtype
+                if orig_dtype.ordered:
+                    cat_order = list(orig_dtype.categories)
                 
             if values is None:
                 raise ValueError(f"{what} not found in adata")
