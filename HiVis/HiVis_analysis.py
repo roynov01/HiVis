@@ -63,7 +63,9 @@ class AnalysisVisium:
                 raise KeyError(f"Layer '{layer}' not found in self.main.adata.layers. Available layers: {list(self.main.adata.layers.keys())}")
             x = self.main.adata.layers[layer]
         if by is None:
-            pb = x.mean(axis=0).A1
+            pb = x.sum(axis=0).A1
+            if normalize:
+                pb = HiVis_utils.matnorm(pb)
             return pd.Series(pb, index=self.main.adata.var_names)
         
         unique_groups = self.main.adata.obs[by].unique()
@@ -331,7 +333,9 @@ class AnalysisAgg:
                 raise KeyError(f"Layer '{layer}' not found in self.main.adata.layers. Available layers: {list(self.main.adata.layers.keys())}")
             x = self.main.adata.layers[layer]
         if by is None:
-            pb = x.mean(axis=0).A1
+            pb = x.sum(axis=0).A1
+            if normalize:
+                pb = HiVis_utils.matnorm(pb)
             return pd.Series(pb, index=self.main.adata.var_names)
         
         unique_groups = self.main.adata.obs[by].unique()
