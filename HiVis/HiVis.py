@@ -597,9 +597,13 @@ class HiVis:
         **Returns** new HiVis instance
         '''
         adata = self.adata[what].copy()
-        image_fullres_crop, image_highres_crop, image_lowres_crop, xlim_pixels_fullres, ylim_pixels_fullres = self.__crop_images(adata, remove_empty_pixels)
         name = self.name + "_subset" if not self.name.endswith("_subset") else ""
-        adata_shifted = self.__shift_adata(adata, xlim_pixels_fullres, ylim_pixels_fullres)
+        if self.image_fullres is not None:
+            image_fullres_crop, image_highres_crop, image_lowres_crop, xlim_pixels_fullres, ylim_pixels_fullres = self.__crop_images(adata, remove_empty_pixels)
+            adata_shifted = self.__shift_adata(adata, xlim_pixels_fullres, ylim_pixels_fullres)
+        else:
+            image_fullres_crop, image_highres_crop, image_lowres_crop = None, None, None
+            adata_shifted = adata
         # remove columns from previous analyses
         adata_shifted.var = adata_shifted.var.loc[:,~adata_shifted.var.columns.str.startswith(("cor_","exp_"))]
         adata_shifted.var = adata_shifted.var.drop(columns=[col for col in ["residual","cv","expression_mean","cv_log10","mean_log"] if col in adata_shifted.var.columns])
@@ -633,7 +637,7 @@ class HiVis:
 
     def __add__(self, other):
         '''Combines two HiVis objects into a single HiVis object. Some methods will be disabled.'''
-        if not isinstance(other, type(self)):
+        if not str(type(other)) == str(type(self)):
             raise ValueError("Addition supported only for HiVis class")
         self.adata.obs["source_"] = self.name
         other.adata.obs["source_"] = other.name if other.name != self.name else f"{self.name}_1"
@@ -644,10 +648,11 @@ class HiVis:
         adata.obs_names_make_unique()
         
         name = "combined"
+        properties = {**self.properties, **other.properties}
         new_obj = HiVis(adata, image_fullres=None, image_highres=None, image_lowres=None,
                         scalefactor_json=None, name=name, 
                         path_output=self.path_output,agg=None,plot_qc=False,
-                        properties=None,fluorescence=None)    
+                        properties=properties,fluorescence=None)    
         return new_obj    
 
     def __crop_images(self, adata, remove_empty_pixels=False):
