@@ -373,12 +373,12 @@ class HiVis:
             * geojson_path (str) - path to geojson file that was exported from Qupath
         '''
         id_col = f"Cell_ID_{name}"
+        input_df.rename(columns={"Object ID":"Cell_ID"}, inplace=True)
         spots_only, cells_only = Aggregation_utils.split_stardist(input_df)
         
         spots_only = spots_only.rename(columns={"Cell_ID": id_col})
         cells_only.index.name = id_col
         
-        # self.adata.obs = self.adata.obs.drop(columns=['in_nucleus', 'in_cell', 'Cell_ID'], errors='ignore')
         self.adata.obs = self.adata.obs.drop(columns=[id_col], errors='ignore')
         self.adata.obs = self.adata.obs.join(spots_only,how="left")
         
