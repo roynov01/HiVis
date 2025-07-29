@@ -275,7 +275,7 @@ class AnalysisVisium:
         
     def compute_distances(self, agg_name, dist_col_name=None, nearest_col_name=None):
         '''
-        Compute distances of each bin too the nearest aggregation.
+        Compute distances of each bin to the nearest aggregation.
 
         Parameters:
             * agg_name (str) - name of agg

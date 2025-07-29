@@ -106,7 +106,7 @@ class Aggregation:
             self.adata.obs = self.adata.obs.join(gdf,how="left")
         
     
-    def merge(self, adata, obs=None, var=None, layer=None ,umap=True, pca=True, hvg=True):
+    def merge(self, adata, obs=None, var=None, layer=None ,umap=True, pca=True, hvg=True, obsm=None, uns=None):
         '''
         Merge info from an anndata to self.adata, in case genes have been filtered.
         
@@ -128,6 +128,11 @@ class Aggregation:
             var = []
         elif isinstance(var, str):
             var = [var]
+        if isinstance(obsm, str):
+            obsm = [obsm]
+        if isinstance(uns, str):
+            uns = [uns]   
+            
         if umap and "X_umap" in adata.obsm:
             if self.adata.shape[0] == adata.shape[0]:
                 self.adata.obsm['X_umap'] = adata.obsm['X_umap'].copy()
@@ -169,6 +174,13 @@ class Aggregation:
             self.adata.var = self.adata.var.join(adata.var[var], how="left")
             
             HiVis_utils._convert_bool_columns_to_float(self.adata.var)
+        
+        if uns:
+            for u in uns:
+                self.adata.uns[u] = adata.uns[u].copy()
+        if obsm:
+            for o in obsm:
+                self.adata.obsm[o] = adata.obsm[o].copy()
         
             
     def get(self, what, cropped=False, geometry=False, layer=None):

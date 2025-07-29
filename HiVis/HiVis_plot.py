@@ -806,13 +806,14 @@ class PlotAgg:
         return ax
 
         
-    def umap(self, features=None, title=None, size=None,layer=None,legend=True,texts=False,
+    def umap(self, features=None, basis="X_umap", title=None, size=None,layer=None,legend=True,texts=False,
               legend_loc='right margin', save=False, ax=None, figsize=(8,8),cmap="viridis", axis_labels=True):
         '''
         Plot a UMAP of self.adata, if present
         
         Parameters:
             * features - if None, won't color. can be a string or list of strings, passed to scanpy.pl.umap
+            * basis - passed to sc.pl.embedding. where from obsm take the results
             * layer (str) - which layer to use from the self.adata. If None, will use X
             * texts (bool) - add text in the center of mass of categorical case
             * cmap - can be string (name of pellate), list of colors, or in categorical values case, a dict {"value":"color"}
@@ -822,7 +823,7 @@ class PlotAgg:
             
         **Returns** ax
         '''
-        if 'X_umap' not in self.main.adata.obsm:
+        if basis not in self.main.adata.obsm:
             raise ValueError("UMAP embedding is missing. Run `sc.tl.umap()` after PCA.")
         if ax:
             if not isinstance(features, str):
@@ -836,18 +837,17 @@ class PlotAgg:
             legend_loc="none"
             
         if features is not None:
-            color_values = self.main[features[0] if isinstance(features, list) else features] 
             if f'{features[0]}_colors' in self.main.adata.uns:
                 del self.main.adata.uns[f'{features[0]}_colors']
             if isinstance(cmap, (str, list, dict)):
-                if pd.api.types.is_categorical_dtype(color_values):
+                if (features[0] in self.main.columns) and pd.api.types.is_categorical_dtype(features[0]):
                     # Use the defined categorical ordering
-                    categories = color_values.cat.categories.astype(str)
+                    categories = self.main[features[0]].cat.categories.astype(str)
                     colors = get_colors(categories, cmap)
                     unique_values = categories
                 else:
                     # For non-categorical data, filter out NaNs
-                    filtered_color_values = color_values[~pd.isna(color_values)]
+                    filtered_color_values = self.main[features[0]][~pd.isna(self.main[features[0]])]
                     colors = get_colors(filtered_color_values, cmap)
                     unique_values = np.unique(filtered_color_values.astype(str))
             else:
@@ -859,13 +859,13 @@ class PlotAgg:
                 raise ValueError("Mismatch between number of unique values and generated colors.")  
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)        
-            ax = sc.pl.umap(self.main.adata, color=features,use_raw=False,size=size,ax=ax,
+            ax = sc.pl.embedding(self.main.adata, basis=basis, color=features,use_raw=False,size=size,ax=ax,
                         title=title,show=False,legend_loc=legend_loc,layer=layer)
 
         if (texts and len(features) == 1) and (features[0] in self.main.adata.obs):
             values = self.main.adata.obs[features[0]]
             if isinstance(values.dtype, pd.CategoricalDtype) or values.dtype.name == 'category':
-                cluster_coords = self.main.adata.obsm['X_umap']
+                cluster_coords = self.main.adata.obsm[basis]
                 unique_clusters = values.unique()
                 for cluster in unique_clusters:
                     mask = values == cluster
