@@ -76,17 +76,17 @@ class PlotVisium:
             image = self.main.image_fullres
             scalef = 1  # No scaling needed for full-resolution
             pxl_col, pxl_row = 'pxl_col_in_fullres', 'pxl_row_in_fullres'
-            # print("Full-res image selected")
+            resolution = "full"
         elif lim_size <= HIGHRES_THRESH: # Use high-resolution image
             image = self.main.image_highres
             scalef = self.main.json['tissue_hires_scalef']  
             pxl_col, pxl_row = 'pxl_col_in_highres', 'pxl_row_in_highres'
-            # print("High-res image selected")
+            resolution = "high"
         else: # Use low-resolution image
             image = self.main.image_lowres
             scalef = self.main.json['tissue_lowres_scalef']  
             pxl_col, pxl_row = 'pxl_col_in_lowres', 'pxl_row_in_lowres'
-            # print("Low-res image selected")
+            resolution = "low"
     
         adjusted_microns_per_pixel = microns_per_pixel / scalef
         # refresh the adata_cropped
@@ -115,7 +115,7 @@ class PlotVisium:
         self.pixel_x = self.main.adata_cropped.obs[pxl_col] - xlim_pxl[0]
         self.pixel_y = self.main.adata_cropped.obs[pxl_row] - ylim_pxl[0]
     
-        return xlim, ylim, adjusted_microns_per_pixel 
+        return xlim, ylim, adjusted_microns_per_pixel, resolution
     
     def _init_img(self):
         '''resets the cropped image and updates the cropped adata'''
@@ -185,7 +185,7 @@ class PlotVisium:
         title = what if title is None else title
         if legend_title is None:
             legend_title = what.capitalize() if what and what==what.lower else what
-        xlim, ylim, adjusted_microns_per_pixel = self._crop(xlim, ylim, resolution=img_resolution)
+        xlim, ylim, adjusted_microns_per_pixel, img_resolution = self._crop(xlim, ylim, resolution=img_resolution)
         if exact is None:
             if (xlim[1] - xlim[0] + ylim[1] - ylim[0]) <= MAX_SQUARES_TO_DRAW_EXACT:
                 exact = True
@@ -270,7 +270,7 @@ class PlotVisium:
                               legend_title=legend_title)
         
         # Add legend to fluorescence image
-        if self.main.fluorescence and legend and not what:
+        if self.main.fluorescence and legend and not what and img_resolution=="full":
             legend_elements = [Patch(facecolor=stain, label=c) for c, stain in self.main.fluorescence.items() if stain is not None]
             ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.98, 0.98), frameon=True, title=None)
 
