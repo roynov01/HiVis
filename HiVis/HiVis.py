@@ -186,33 +186,87 @@ class HiVis:
         if plot_qc and hasattr(self.plot, "spatial"):
             self.analysis.qc(save=True)
             plt.show()
-    
-    def recolor(self, fluorescence=None, normalization_method="percentile"):
+            
+    def add_agg(self, adata_agg, name):
         '''
-        Recolors a flurescence image
+        Creates and adds Aggregation to the HiVis instance. Can be accessed by self.agg[name].
+        For example single-cells, tissue structures.
         
         Parameters:
-            * fluorescence is either list of colors or dict {channel: color...}. color can be None.
-            * normalization_method - {"percentile", "histogram","clahe","sqrt" or None for minmax}
+            * adata_agg (ad.AnnData) - anndata containing aggregations
+            * name (str) - name of the aggregation object
         '''
-        if not self.fluorescence:
-            raise ValueError("recolor() works for fluorescence visium only")
-        if not fluorescence:
-            fluorescence = self.fluorescence
-        channels = list(self.fluorescence.keys())    
-        if isinstance(fluorescence, list):
-            if len(fluorescence) != len(channels):
-                raise ValueError(f"Flurescence should include all channels: {channels}")
-            self.fluorescence = {channels[i]:fluorescence[i] for i in range(len(channels))}
-        elif isinstance(fluorescence, dict):
-            if list(fluorescence.keys()) != channels:
-                raise ValueError(f"Flurescence should include all channels: {channels}")
-            self.fluorescence = fluorescence
-        self.image_fullres = HiVis_utils.fluorescence_to_RGB(self.image_fullres_orig, 
-                                                                self.fluorescence.values(), 
-                                                                normalization_method)
+        
+        if not isinstance(adata_agg, ad.AnnData):
+            raise TypeError("adata_agg must be anndata")
+        if self.agg:
+            if name in self.agg:
+                print(f"{name} allready in {self.name}. Renamed previous Agg to 'temp'.")
+                self.agg["temp"] = self.agg[name]
+                del self.agg[name]
+        else:
+            self.agg = {}
+        agg_name = f"{self.name}_{name}"
+        agg = Aggregation(self, adata_agg, name=agg_name)
+        self.agg[name] = agg
+    
+    
+    def add_annotations(self, path:str, name:str, measurements=True):
+        '''
+        Adds annotations made in Qupath (geojson)
+        
+        Parameters:
+            * path (str) - path to geojson file
+            * name (str) - name of the annotation (that will be called in the obs)
+            * measurements (bool) - include measurements columns 
+        '''
+        HiVis_utils.validate_exists(path)
+        annotations = gpd.read_file(path)
+        if "classification" in annotations.columns:
+            annotations["classification"] = annotations["classification"].apply(
+                lambda x: json.loads(x) if isinstance(x, str) else x
+            )
+            # annotations["classification"] = annotations["classification"].apply(json.loads)
+            # annotations[name] = [x["name"] for x in annotations["classification"] if isinstance(x, dict) else x]
+            annotations[name] = [
+                x["name"] if isinstance(x, dict) else np.nan
+                for x in annotations["classification"]
+            ]
+        else:
+            annotations[name] = annotations.index
+        annotations[f"{name}_id"] = annotations["id"]
+        del annotations["id"]
+        del annotations["objectType"]
+        if "isLocked" in annotations.columns:
+            del annotations["isLocked"]
+        
+        if "measurements" in annotations.columns and measurements:
+            measurements_df = pd.json_normalize(annotations["measurements"])
+            annotations = gpd.GeoDataFrame(pd.concat([annotations.drop(columns=["measurements"]), measurements_df], axis=1))
+            perimeter = annotations.geometry.length
+            area = annotations.geometry.area
+            annotations["circularity"] = (4 * np.pi * area) / (perimeter ** 2)
+            annotations.loc[perimeter == 0, "circularity"] = np.nan
+            cols = list(measurements_df.columns) + ["circularity",name,f"{name}_id"]
+        else:
+            if measurements:
+                print("No measurements found")
+            cols = [name,f"{name}_id"]
+        for col in cols:
+            if col in self.adata.obs.columns:
+                del self.adata.obs[col]
+        obs = gpd.GeoDataFrame(self.adata.obs, 
+              geometry=gpd.points_from_xy(self.adata.obs["pxl_col_in_fullres"],
+                                          self.adata.obs["pxl_row_in_fullres"]))        
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
+            merged_obs = gpd.sjoin(obs,annotations,how="left",predicate="within")
+        merged_obs = merged_obs[~merged_obs.index.duplicated(keep="first")]
+        
+        self.adata.obs = self.adata.obs.join(pd.DataFrame(merged_obs[cols]),how="left")
         self.plot._init_img()
-
+        
     
     def add_mask(self, mask_path:str, name:str, plot=True, cmap="Paired", downscale=10):
         '''
@@ -276,85 +330,39 @@ class HiVis:
         return mask_array
     
 
-    def add_annotations(self, path:str, name:str, measurements=True):
+    def agg_from_annotations(self, annotation_id_col, name="SC", obs2agg=None, geojson_path=None):
         '''
-        Adds annotations made in Qupath (geojson)
+        Adds Aggregation object to self.agg[name], based on annotation column.
         
         Parameters:
-            * path (str) - path to geojson file
-            * name (str) - name of the annotation (that will be called in the obs)
-            * measurements (bool) - include measurements columns 
-        '''
-        HiVis_utils.validate_exists(path)
-        annotations = gpd.read_file(path)
-        if "classification" in annotations.columns:
-            annotations["classification"] = annotations["classification"].apply(
-                lambda x: json.loads(x) if isinstance(x, str) else x
-            )
-            # annotations["classification"] = annotations["classification"].apply(json.loads)
-            # annotations[name] = [x["name"] for x in annotations["classification"] if isinstance(x, dict) else x]
-            annotations[name] = [
-                x["name"] if isinstance(x, dict) else np.nan
-                for x in annotations["classification"]
-            ]
-        else:
-            annotations[name] = annotations.index
-        annotations[f"{name}_id"] = annotations["id"]
-        del annotations["id"]
-        del annotations["objectType"]
-        if "isLocked" in annotations.columns:
-            del annotations["isLocked"]
+            * annotation_id_col (str) - column name that the aggregation will be based on
+            * name (str) - name to store the Aggregation in. Can be accessed via HiVis.agg[name]
+            * obs2agg - what obs to aggregate from the HiVis. \
+                        Can be a list of column names. numeric columns will be summed, categorical will be the mode. \
+                        Can be a dictionary specifying the aggregation function. \
+                        examples: {"value_along_axis":np.median} or {"value_along_axis":[np.median,np.mean]}
+            * geojson_path (str) - path to geojson file that was used to create the annotations
+        '''        
+        aggregation_func = Aggregation_utils._aggregate_data_annotations
         
-        if "measurements" in annotations.columns and measurements:
-            measurements_df = pd.json_normalize(annotations["measurements"])
-            annotations = gpd.GeoDataFrame(pd.concat([annotations.drop(columns=["measurements"]), measurements_df], axis=1))
-            perimeter = annotations.geometry.length
-            area = annotations.geometry.area
-            annotations["circularity"] = (4 * np.pi * area) / (perimeter ** 2)
-            annotations.loc[perimeter == 0, "circularity"] = np.nan
-            cols = list(measurements_df.columns) + ["circularity",name,f"{name}_id"]
-        else:
-            if measurements:
-                print("No measurements found")
-            cols = [name,f"{name}_id"]
-        for col in cols:
-            if col in self.adata.obs.columns:
-                del self.adata.obs[col]
-        obs = gpd.GeoDataFrame(self.adata.obs, 
-              geometry=gpd.points_from_xy(self.adata.obs["pxl_col_in_fullres"],
-                                          self.adata.obs["pxl_row_in_fullres"]))        
+        annotation_col = annotation_id_col.replace("_id","")
+        if annotation_col != annotation_id_col and annotation_col in self.adata.obs.columns: # Add annotation class to each object
+            if obs2agg is not None:
+                if annotation_col not in obs2agg:
+                    if isinstance(obs2agg, list):
+                        obs2agg += [annotation_col]
+                    else:
+                        obs2agg[annotation_col] = None
+            else:
+                obs2agg = [annotation_col]
         
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=UserWarning)
-            merged_obs = gpd.sjoin(obs,annotations,how="left",predicate="within")
-        merged_obs = merged_obs[~merged_obs.index.duplicated(keep="first")]
+        adata_agg, _ = Aggregation_utils.new_adata(self.adata, annotation_id_col, aggregation_func,obs2agg=obs2agg)
         
-        self.adata.obs = self.adata.obs.join(pd.DataFrame(merged_obs[cols]),how="left")
-        self.plot._init_img()
-    
-    
-    def add_agg(self, adata_agg, name):
-        '''
-        Creates and adds Aggregation to the HiVis instance. Can be accessed by self.agg[name].
-        For example single-cells, tissue structures.
-        
-        Parameters:
-            * adata_agg (ad.AnnData) - anndata containing aggregations
-            * name (str) - name of the aggregation object
-        '''
-        
-        if not isinstance(adata_agg, ad.AnnData):
-            raise TypeError("adata_agg must be anndata")
-        if self.agg:
-            if name in self.agg:
-                print(f"{name} allready in {self.name}. Renamed previous Agg to 'temp'.")
-                self.agg["temp"] = self.agg[name]
-                del self.agg[name]
-        else:
-            self.agg = {}
-        agg_name = f"{self.name}_{name}"
-        agg = Aggregation(self, adata_agg, name=agg_name)
-        self.agg[name] = agg
+        # adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
+        self.add_agg(adata_agg, name=name)
+        self.agg[name].adata.obs[f"{annotation_col}_col"] = self.agg[name].adata.obs.index
+        if geojson_path:
+            self.agg[name].import_geometry(geojson_path, object_type="annotation")            
         
     
     def agg_stardist(self, input_df, name="SC", obs2add=None, obs2agg=None, geojson_path=None):
@@ -397,76 +405,33 @@ class HiVis:
         self.add_agg(adata_agg, name=name)
         if geojson_path:
             self.agg[name].import_geometry(geojson_path)
-            
-            
-    def agg_from_annotations(self, annotation_id_col, name="SC", obs2agg=None, geojson_path=None):
-        '''
-        Adds Aggregation object to self.agg[name], based on annotation column.
+     
         
-        Parameters:
-            * annotation_id_col (str) - column name that the aggregation will be based on
-            * name (str) - name to store the Aggregation in. Can be accessed via HiVis.agg[name]
-            * obs2agg - what obs to aggregate from the HiVis. \
-                        Can be a list of column names. numeric columns will be summed, categorical will be the mode. \
-                        Can be a dictionary specifying the aggregation function. \
-                        examples: {"value_along_axis":np.median} or {"value_along_axis":[np.median,np.mean]}
-            * geojson_path (str) - path to geojson file that was used to create the annotations
-        '''        
-        aggregation_func = Aggregation_utils._aggregate_data_annotations
-        
-        annotation_col = annotation_id_col.replace("_id","")
-        if annotation_col != annotation_id_col and annotation_col in self.adata.obs.columns: # Add annotation class to each object
-            if obs2agg is not None:
-                if annotation_col not in obs2agg:
-                    if isinstance(obs2agg, list):
-                        obs2agg += [annotation_col]
-                    else:
-                        obs2agg[annotation_col] = None
-            else:
-                obs2agg = [annotation_col]
-        
-        adata_agg, _ = Aggregation_utils.new_adata(self.adata, annotation_id_col, aggregation_func,obs2agg=obs2agg)
-        
-        # adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
-        self.add_agg(adata_agg, name=name)
-        self.agg[name].adata.obs[f"{annotation_col}_col"] = self.agg[name].adata.obs.index
-        if geojson_path:
-            self.agg[name].import_geometry(geojson_path, object_type="annotation")            
- 
+    @property
+    def columns(self):
+        return self.adata.obs.columns.copy()
     
     
-    def update_meta(self, name:str, values:dict, type_="obs"):
-        r'''
-        Updates values in metadata (obs or var)
-        
-        Parameters:
-            * name (str) - name of metadata
-            * values (dict) -{old_value:new_value}
-            * type\_ - either "obs" or "var"
+    def combine(self, other):
         '''
-        if type_ == "obs":
-            if name not in self.adata.obs.columns:
-                raise ValueError(f"No metadata called [{name}] in obs")
-            original_dtype = self.adata.obs[name].dtype
-            self.adata.obs[name] = self.adata.obs[name].apply(lambda x: values.get(x, x) if pd.notna(x) else x)
+        Combines two HiVis objects into a single HiVis. Spatial plots and analysis will be disabled.
+        '''
+        return self + other 
             
-            # Convert back to original dtype if it was categorical
-            if pd.api.types.is_categorical_dtype(original_dtype):
-                self.adata.obs[name] = self.adata.obs[name].astype('category') 
-        elif type_ == "var":
-            if name not in self.adata.var.columns:
-                raise ValueError(f"No metadata called [{name}] in var")
-            original_dtype = self.adata.var[name].dtype
-            self.adata.var[name] = self.adata.var[name].apply(lambda x: values.get(x, x) if pd.notna(x) else x)
-            
-            # Convert back to original dtype if it was categorical
-            if pd.api.types.is_categorical_dtype(original_dtype):
-                self.adata.var[name] = self.adata.var[name].astype('category')    
-        else:
-            raise ValueError("type_ must be either 'obs' or 'var'")
-        self.plot._init_img()
+    def copy(self, new_name=None, new_out_path=False, full=False):
+        '''
+        Creates a deep copy of the instance.
+        if new_name is specified, renames the object and changes the path_output.
+        If full is False, the name will be added to the current (previous) name.
         
-
+        **Returns** new HiVis instance
+        '''
+        new = deepcopy(self)
+        if new_name:
+            new.rename(new_name, new_out_path=new_out_path, full=full)
+        return new
+    
+    
     def export_h5(self, path=None, force=False):
         '''
         Exports the adata as h5ad.
@@ -519,15 +484,8 @@ class HiVis:
         images.append(self.json)
         
         return images
-
     
-    def combine(self, other):
-        '''
-        Combines two HiVis objects into a single HiVis. Spatial plots and analysis will be disabled.
-        '''
-        return self + other
-
-
+    
     def get(self, what, cropped=False, layer=None):
         '''
         Get a vector from data (a gene) or metadata (from obs or var). or subset the object.
@@ -580,6 +538,158 @@ class HiVis:
             # Create a new HiVis object based on adata subsetting
             return self.subset(what, remove_empty_pixels=False)
             
+    
+    def head(self, n=5):
+        '''**Returns** HiVis.adata.obs.head(n), where n is number of rows'''
+        return self.adata.obs.head(n)
+    
+    
+    def recolor(self, fluorescence=None, normalization_method="percentile"):
+        '''
+        Recolors a flurescence image
+        
+        Parameters:
+            * fluorescence is either list of colors or dict {channel: color...}. color can be None.
+            * normalization_method - {"percentile", "histogram","clahe","sqrt" or None for minmax}
+        '''
+        if not self.fluorescence:
+            raise ValueError("recolor() works for fluorescence visium only")
+        if not fluorescence:
+            fluorescence = self.fluorescence
+        channels = list(self.fluorescence.keys())    
+        if isinstance(fluorescence, list):
+            if len(fluorescence) != len(channels):
+                raise ValueError(f"Flurescence should include all channels: {channels}")
+            self.fluorescence = {channels[i]:fluorescence[i] for i in range(len(channels))}
+        elif isinstance(fluorescence, dict):
+            if list(fluorescence.keys()) != channels:
+                raise ValueError(f"Flurescence should include all channels: {channels}")
+            self.fluorescence = fluorescence
+        self.image_fullres = HiVis_utils.fluorescence_to_RGB(self.image_fullres_orig, 
+                                                                self.fluorescence.values(), 
+                                                                normalization_method)
+        self.plot._init_img()
+    
+    
+    def remove_pixels(self, column: str, values: list, marging=1):
+        '''
+        Removes pixels in images, based on adata.obs[column].isin(values).
+        
+        Parameters:
+            * marging (int) - how many pixels to extend the removed pixels.
+            
+        **Returns** new HiVis instance.
+        '''
+        
+        # Identify which pixels to remove based on the given condition
+        obs_values = self.adata.obs[column]
+        remove_mask = obs_values.isin([v for v in values if not pd.isna(v)])
+        if any(pd.isna(v) for v in values): # Handle NaNs
+            remove_mask |= obs_values.isna()
+    
+        # Determine the background color: Black (0) if fluorescence images, white (255) otherwise
+        if self.fluorescence:
+            img_fullres_new = self.image_fullres_orig.copy() if self.image_fullres_orig is not None else None
+            background_value = 0
+        else:
+            img_fullres_new = self.image_fullres.copy() if self.image_fullres is not None else None
+            background_value = 255
+        img_highres_new = self.image_highres.copy() if self.image_highres is not None else None
+        img_lowres_new = self.image_lowres.copy() if self.image_lowres is not None else None
+    
+        # Extract spot diameter and compute corresponding sizes for each resolution
+        spot_diameter_fullres = self.json['spot_diameter_fullres']
+        # For indexing, we need integer sizes
+        
+        from math import ceil
+        spot_size_fullres = int(ceil(spot_diameter_fullres))
+        spot_size_hires = int(ceil(spot_diameter_fullres * self.json['tissue_hires_scalef']))
+        spot_size_lowres = int(ceil(spot_diameter_fullres * self.json['tissue_lowres_scalef']))
+        # Ensure sizes are at least 1
+        spot_size_fullres = max(spot_size_fullres, 1)
+        spot_size_hires = max(spot_size_hires, 1)
+        spot_size_lowres = max(spot_size_lowres, 1)
+        
+    
+        # The image info tuples as before
+        img_info = [
+            (img_fullres_new, "pxl_col_in_fullres", "pxl_row_in_fullres", spot_size_fullres),
+            (img_highres_new, "pxl_col_in_highres", "pxl_row_in_highres", spot_size_hires),
+            (img_lowres_new, "pxl_col_in_lowres", "pxl_row_in_lowres", spot_size_lowres)
+        ]
+    
+        images = []
+        for i, (img_new, col_name, row_name, spot_size) in enumerate(img_info):
+            if img_new is not None:
+                pxl_cols = self.adata.obs[col_name].values.astype(int)
+                pxl_rows = self.adata.obs[row_name].values.astype(int)
+                half_spot = spot_size // 2 + marging # +1 is marging
+    
+                # Instead of removing one pixel, remove a square region
+                for idx, to_remove in enumerate(remove_mask):
+                    if to_remove:
+                        r = pxl_rows[idx]
+                        c = pxl_cols[idx]
+    
+                        # Compute the boundaries of the square, clamped within image bounds
+                        top = max(r - half_spot, 0)
+                        bottom = min(r + half_spot + 1, img_new.shape[0])  # +1 to include the boundary
+                        left = max(c - half_spot, 0)
+                        right = min(c + half_spot + 1, img_new.shape[1])
+    
+                        # Set the entire block to background_value
+                        img_new[top:bottom, left:right, :] = background_value
+            images.append(img_new)
+        
+        # Create a new object with the modified images
+        name = self.name + "_edited" if not self.name.endswith("_edited") else self.name
+        new_obj = HiVis(self.adata.copy(),images[0],images[1],
+                           images[2],self.json,name,self.path_output,
+                           properties=self.properties.copy(),
+                           fluorescence=self.fluorescence.copy() if self.fluorescence else None)        
+        return new_obj
+    
+    def rename(self, new_name: str, new_out_path=False, full=False):
+        '''
+        Renames the object and changes the path_output.
+        If full is False, the name will be added to the current (previous) name
+        '''
+        if full:
+            self.name = new_name
+        else:
+            self.name = self.name.replace("_subset","")
+            self.name = f"{self.name}_{new_name}"
+        if new_out_path:
+            self.path_output = self.path_output + f"/{new_name}"
+    
+    
+    def save(self, path=None):
+        '''
+        Saves the instance in pickle format.
+        If no path specified, will save in the path_output as the name of the instance.
+        
+        **Returns** the path of the file (str)
+        '''
+        print(f"SAVING [{self.name}]")
+        if not path:
+            path = f"{self.path_output}/{self.name}.pkl"
+        else:
+            if not path.endswith(".pkl"):
+                path += ".pkl"
+        self.plot.current_ax = None
+        if self.agg:
+            for agg in self.agg:
+                self.agg[agg].plot.current_ax = None
+
+        with open(path, "wb") as f:
+            dill.dump(self, f)            
+        return path
+    
+    @property
+    def shape(self):
+        return self.adata.shape
+    
+    
     def subset(self, what=(slice(None), slice(None)), remove_empty_pixels=False, crop_agg=True):
         '''
         Create a new HiVis objects based on adata subsetting.
@@ -633,7 +743,52 @@ class HiVis:
                 else:
                     print(f"Aggregation [{agg}] is empty")
         return new_obj
-   
+    
+    
+    def update(self, agg=False):
+        '''Updates the methods in the instance. Should be used after modifying the source code in the class'''
+        HiVis_utils.update_instance_methods(self)
+        HiVis_utils.update_instance_methods(self.plot)
+        HiVis_utils.update_instance_methods(self.analysis)
+        self.plot._init_img()
+        if agg and self.agg:
+            for agg in self.agg:
+                self.agg[agg].update()
+        else:
+            _ = gc.collect()
+    
+    
+    def update_meta(self, name:str, values:dict, type_="obs"):
+        r'''
+        Updates values in metadata (obs or var)
+        
+        Parameters:
+            * name (str) - name of metadata
+            * values (dict) -{old_value:new_value}
+            * type\_ - either "obs" or "var"
+        '''
+        if type_ == "obs":
+            if name not in self.adata.obs.columns:
+                raise ValueError(f"No metadata called [{name}] in obs")
+            original_dtype = self.adata.obs[name].dtype
+            self.adata.obs[name] = self.adata.obs[name].apply(lambda x: values.get(x, x) if pd.notna(x) else x)
+            
+            # Convert back to original dtype if it was categorical
+            if pd.api.types.is_categorical_dtype(original_dtype):
+                self.adata.obs[name] = self.adata.obs[name].astype('category') 
+        elif type_ == "var":
+            if name not in self.adata.var.columns:
+                raise ValueError(f"No metadata called [{name}] in var")
+            original_dtype = self.adata.var[name].dtype
+            self.adata.var[name] = self.adata.var[name].apply(lambda x: values.get(x, x) if pd.notna(x) else x)
+            
+            # Convert back to original dtype if it was categorical
+            if pd.api.types.is_categorical_dtype(original_dtype):
+                self.adata.var[name] = self.adata.var[name].astype('category')    
+        else:
+            raise ValueError("type_ must be either 'obs' or 'var'")
+        self.plot._init_img()
+        
 
     def __add__(self, other):
         '''Combines two HiVis objects into a single HiVis object. Some methods will be disabled.'''
@@ -751,85 +906,6 @@ class HiVis:
         
         return False
     
-    def remove_pixels(self, column: str, values: list, marging=1):
-        '''
-        Removes pixels in images, based on adata.obs[column].isin(values).
-        
-        Parameters:
-            * marging (int) - how many pixels to extend the removed pixels.
-            
-        **Returns** new HiVis instance.
-        '''
-        
-        # Identify which pixels to remove based on the given condition
-        obs_values = self.adata.obs[column]
-        remove_mask = obs_values.isin([v for v in values if not pd.isna(v)])
-        if any(pd.isna(v) for v in values): # Handle NaNs
-            remove_mask |= obs_values.isna()
-    
-        # Determine the background color: Black (0) if fluorescence images, white (255) otherwise
-        if self.fluorescence:
-            img_fullres_new = self.image_fullres_orig.copy() if self.image_fullres_orig is not None else None
-            background_value = 0
-        else:
-            img_fullres_new = self.image_fullres.copy() if self.image_fullres is not None else None
-            background_value = 255
-        img_highres_new = self.image_highres.copy() if self.image_highres is not None else None
-        img_lowres_new = self.image_lowres.copy() if self.image_lowres is not None else None
-    
-        # Extract spot diameter and compute corresponding sizes for each resolution
-        spot_diameter_fullres = self.json['spot_diameter_fullres']
-        # For indexing, we need integer sizes
-        
-        from math import ceil
-        spot_size_fullres = int(ceil(spot_diameter_fullres))
-        spot_size_hires = int(ceil(spot_diameter_fullres * self.json['tissue_hires_scalef']))
-        spot_size_lowres = int(ceil(spot_diameter_fullres * self.json['tissue_lowres_scalef']))
-        # Ensure sizes are at least 1
-        spot_size_fullres = max(spot_size_fullres, 1)
-        spot_size_hires = max(spot_size_hires, 1)
-        spot_size_lowres = max(spot_size_lowres, 1)
-        
-    
-        # The image info tuples as before
-        img_info = [
-            (img_fullres_new, "pxl_col_in_fullres", "pxl_row_in_fullres", spot_size_fullres),
-            (img_highres_new, "pxl_col_in_highres", "pxl_row_in_highres", spot_size_hires),
-            (img_lowres_new, "pxl_col_in_lowres", "pxl_row_in_lowres", spot_size_lowres)
-        ]
-    
-        images = []
-        for i, (img_new, col_name, row_name, spot_size) in enumerate(img_info):
-            if img_new is not None:
-                pxl_cols = self.adata.obs[col_name].values.astype(int)
-                pxl_rows = self.adata.obs[row_name].values.astype(int)
-                half_spot = spot_size // 2 + marging # +1 is marging
-    
-                # Instead of removing one pixel, remove a square region
-                for idx, to_remove in enumerate(remove_mask):
-                    if to_remove:
-                        r = pxl_rows[idx]
-                        c = pxl_cols[idx]
-    
-                        # Compute the boundaries of the square, clamped within image bounds
-                        top = max(r - half_spot, 0)
-                        bottom = min(r + half_spot + 1, img_new.shape[0])  # +1 to include the boundary
-                        left = max(c - half_spot, 0)
-                        right = min(c + half_spot + 1, img_new.shape[1])
-    
-                        # Set the entire block to background_value
-                        img_new[top:bottom, left:right, :] = background_value
-            images.append(img_new)
-        
-        # Create a new object with the modified images
-        name = self.name + "_edited" if not self.name.endswith("_edited") else self.name
-        new_obj = HiVis(self.adata.copy(),images[0],images[1],
-                           images[2],self.json,name,self.path_output,
-                           properties=self.properties.copy(),
-                           fluorescence=self.fluorescence.copy() if self.fluorescence else None)        
-        return new_obj
-
-        
     def __str__(self):
         s = f"# {self.name} #\n"
         if hasattr(self, "organism"): s += f"\tOrganism: {self.organism}\n"
@@ -850,7 +926,6 @@ class HiVis:
         # s = f"HiVis[{self.name}]"
         s = self.__str__()
         return s
-    
     
     def __setitem__(self, key, value):
         if not hasattr(value, '__len__'):
@@ -876,76 +951,4 @@ class HiVis:
         else:
             raise TypeError(f"Key must be a string, not {type(key).__name__}")
     
-    def head(self, n=5):
-        '''**Returns** HiVis.adata.obs.head(n), where n is number of rows'''
-        return self.adata.obs.head(n)
     
-    @property
-    def shape(self):
-        return self.adata.shape
-    
-    @property
-    def columns(self):
-        return self.adata.obs.columns.copy()
-    
-    def rename(self, new_name: str, new_out_path=False, full=False):
-        '''
-        Renames the object and changes the path_output.
-        If full is False, the name will be added to the current (previous) name
-        '''
-        if full:
-            self.name = new_name
-        else:
-            self.name = self.name.replace("_subset","")
-            self.name = f"{self.name}_{new_name}"
-        if new_out_path:
-            self.path_output = self.path_output + f"/{new_name}"
-        
-    
-    def update(self, agg=False):
-        '''Updates the methods in the instance. Should be used after modifying the source code in the class'''
-        HiVis_utils.update_instance_methods(self)
-        HiVis_utils.update_instance_methods(self.plot)
-        HiVis_utils.update_instance_methods(self.analysis)
-        self.plot._init_img()
-        if agg and self.agg:
-            for agg in self.agg:
-                self.agg[agg].update()
-        else:
-            _ = gc.collect()
-
-    def copy(self, new_name=None, new_out_path=False, full=False):
-        '''
-        Creates a deep copy of the instance.
-        if new_name is specified, renames the object and changes the path_output.
-        If full is False, the name will be added to the current (previous) name.
-        
-        **Returns** new HiVis instance
-        '''
-        new = deepcopy(self)
-        if new_name:
-            new.rename(new_name, new_out_path=new_out_path, full=full)
-        return new
-    
-    def save(self, path=None):
-        '''
-        Saves the instance in pickle format.
-        If no path specified, will save in the path_output as the name of the instance.
-        
-        **Returns** the path of the file (str)
-        '''
-        print(f"SAVING [{self.name}]")
-        if not path:
-            path = f"{self.path_output}/{self.name}.pkl"
-        else:
-            if not path.endswith(".pkl"):
-                path += ".pkl"
-        self.plot.current_ax = None
-        if self.agg:
-            for agg in self.agg:
-                self.agg[agg].plot.current_ax = None
-
-        with open(path, "wb") as f:
-            dill.dump(self, f)            
-        return path
-
