@@ -810,6 +810,16 @@ class HiVis:
                         properties=properties,fluorescence=None)    
         return new_obj    
 
+
+    def __contains__(self, what):
+        if (what in self.adata.obs) or (what in self.adata.var) or (what in self.adata.var_names):
+            return True
+        if self.agg:
+            if what in self.agg:
+                return True
+        return False
+
+
     def __crop_images(self, adata, remove_empty_pixels=False):
         '''
         Helper function for get().
@@ -855,6 +865,49 @@ class HiVis:
         return image_fullres_crop, image_highres_crop, image_lowres_crop,xlim_pixels_fullres, ylim_pixels_fullres
     
     
+    def __delitem__(self, key):
+        '''deletes metadata'''
+        if isinstance(key, str):
+            if key in self.adata.obs:
+                del self.adata.obs[key]
+            elif key in self.adata.var.columns:
+                del self.adata.var[key]
+            else:
+                raise KeyError(f"'{key}' not found in adata.obs")
+            self.plot._init_img()
+        else:
+            raise TypeError(f"Key must be a string, not {type(key).__name__}")
+            
+            
+
+        
+    
+    def __getitem__(self, what):
+        '''Get a vector from data (a gene) or metadata (from obs or var). or subset the object.'''
+        item = self.get(what, cropped=False)
+        if item is None:
+            raise KeyError(f"[{what}] isn't in data or metadatas")
+        return item
+    
+
+    def __repr__(self):
+        # s = f"HiVis[{self.name}]"
+        s = self.__str__()
+        return s
+    
+    
+    def __setitem__(self, key, value):
+        if not hasattr(value, '__len__'):
+            raise ValueError("Assigned value must be iterable or array-like")
+        if len(value) == self.adata.shape[0]:
+            self.adata.obs[key] = value
+        elif len(value) == self.adata.shape[1]:
+            self.adata.var[key] = value
+        else:
+            raise ValueError("Values must be in the length of OBS or VAR")
+        self.plot._init_img()
+        
+        
     def __shift_adata(self, adata, xlim_pixels_fullres, ylim_pixels_fullres):
         """
         Shifts the coordinates in an adata, based on xlim, ylim (in pixel space). \
@@ -888,24 +941,9 @@ class HiVis:
                 .apply(_shift_wkt_geometry)
             )
     
-        return adata_shifted
+        return adata_shifted   
+
         
-    def __getitem__(self, what):
-        '''Get a vector from data (a gene) or metadata (from obs or var). or subset the object.'''
-        item = self.get(what, cropped=False)
-        if item is None:
-            raise KeyError(f"[{what}] isn't in data or metadatas")
-        return item
-    
-    def __contains__(self, what):
-        if (what in self.adata.obs) or (what in self.adata.var) or (what in self.adata.var_names):
-            return True
-        if self.agg:
-            if what in self.agg:
-                return True
-        
-        return False
-    
     def __str__(self):
         s = f"# {self.name} #\n"
         if hasattr(self, "organism"): s += f"\tOrganism: {self.organism}\n"
@@ -922,33 +960,6 @@ class HiVis:
                 s += f"[{agg}]\tshape: {self.agg[agg].adata.shape[0]} x {self.agg[agg].adata.shape[1]}\n"
         return s
     
-    def __repr__(self):
-        # s = f"HiVis[{self.name}]"
-        s = self.__str__()
-        return s
-    
-    def __setitem__(self, key, value):
-        if not hasattr(value, '__len__'):
-            raise ValueError("Assigned value must be iterable or array-like")
-        if len(value) == self.adata.shape[0]:
-            self.adata.obs[key] = value
-        elif len(value) == self.adata.shape[1]:
-            self.adata.var[key] = value
-        else:
-            raise ValueError("Values must be in the length of OBS or VAR")
-        self.plot._init_img()
-    
-    def __delitem__(self, key):
-        '''deletes metadata'''
-        if isinstance(key, str):
-            if key in self.adata.obs:
-                del self.adata.obs[key]
-            elif key in self.adata.var.columns:
-                del self.adata.var[key]
-            else:
-                raise KeyError(f"'{key}' not found in adata.obs")
-            self.plot._init_img()
-        else:
-            raise TypeError(f"Key must be a string, not {type(key).__name__}")
+
     
     
