@@ -7,12 +7,12 @@ Good segmentation is important for achieving high quality aggregation of transcr
 
 ## Baseline workflow 
 
-1. **Detect the Whole tissue or Anatomical Regions** automatically (or manually)
+1. **Detect the Whole tissue or Anatomical regions** automatically (or manually)
 2. **Segment Cells** within each anatomical region 
 3. **Load the VisiumHD bins position and associate bins to cells**  
 4. **Save results in HiVis compatible formats:**  
    - Export the **cell borders** as '.geoJson' file
-   - Export **Anatomical Regions** borders as '.geoJson' file
+   - Export **Anatomical regions** borders as '.geoJson' file
    - Save '.csv' file with both **cells** and **bins** information
 
 ## Input Data 
