@@ -296,7 +296,7 @@ class PlotVisium:
         if scalebar is True:
             scalebar = None
         if scalebar is None or isinstance(scalebar, (int,float)):
-            add_scalebar(ax=ax,microns_per_pixel=adjusted_microns_per_pixel,length_microns=scalebar)
+            add_scalebar(ax=ax,microns_per_pixel=adjusted_microns_per_pixel,length=scalebar)
         elif isinstance(scalebar, dict):
             add_scalebar(ax=ax, microns_per_pixel=adjusted_microns_per_pixel, **scalebar)
         
@@ -1338,7 +1338,7 @@ def set_axis_ticks(ax, length_in_pixels, adjusted_microns_per_pixel, axis='x', n
     total_microns = length_in_pixels * adjusted_microns_per_pixel
 
     # Define candidate step sizes in microns
-    candidate_steps = [10, 20, 25, 50, 100, 200, 250, 500, 1000, 1500, 2000]
+    candidate_steps = [1,5,10, 20, 25, 50, 100, 200, 250, 500, 1000, 1500, 2000]
 
     # Choose a step size that results in 5-7 ticks with round numbers
     for step in candidate_steps:
@@ -1348,7 +1348,7 @@ def set_axis_ticks(ax, length_in_pixels, adjusted_microns_per_pixel, axis='x', n
     else:
         # If none of the candidate steps fit, calculate an approximate step size
         step = total_microns / num_ticks_desired
-        step = round(step / 10) * 10  # Round to the nearest multiple of 10
+        step = max(round(step / 10) * 10, 1)  # Minimum step of 1 micron  # Round to the nearest multiple of 10
 
     # Generate tick positions and labels
     tick_labels_microns = np.arange(0, total_microns + step, step)
@@ -1591,7 +1591,7 @@ def plot_spatial_3d(agg, what, color=None, cmap="hot", axis_labels=True, ax=None
     return ax
 
 
-def add_scalebar(ax, microns_per_pixel, length_microns=None, text=True,
+def add_scalebar(ax, microns_per_pixel, length=None, text=True,
                  line_width=4, color='white', text_offset=0.035, fontsize=10):
         
     xlim = ax.get_xlim()
@@ -1602,11 +1602,12 @@ def add_scalebar(ax, microns_per_pixel, length_microns=None, text=True,
     y_range = y1 - y0
 
     # If no scale provided, default to 1/5 of visible x-range in microns
-    if length_microns is None:
+    if length is None:
         allowed_lengths = [500, 100, 50, 20, 10]
         raw_length = (x_range * microns_per_pixel) / 5
-        length_microns = min(allowed_lengths, key=lambda x: abs(x - raw_length))
-    length = length_microns / microns_per_pixel
+        length = min(allowed_lengths, key=lambda x: abs(x - raw_length))
+    length_um = length
+    length = length / microns_per_pixel
 
     # Position (bottom-right)
     x_start = x1 - length - 0.02 * x_range
@@ -1619,6 +1620,6 @@ def add_scalebar(ax, microns_per_pixel, length_microns=None, text=True,
     if text:
         ax.text(x_start + length / 2,
                 y_start - text_offset * y_range,
-                f"{length_microns:.0f} µm",zorder=1000,
+                f"{length_um:.0f} µm",zorder=1000,
                 ha='center', va='top', fontsize=fontsize, color=color)
         
