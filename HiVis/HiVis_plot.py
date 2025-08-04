@@ -175,6 +175,7 @@ class PlotVisium:
             * legend (bool)- show legend
             * xlim, ylim - two values each, in microns, example [50,100]
             * scalebar - either the length in microns (or None for 0.2 of xlim length), or False to not show the scalebar, or a dict with arguments for add_scalebar(), such as:
+                
                 {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035, fontsize=10}
             * pad (float) - scale the size of dots
             * alpha (float) - transparency of scatterplot. value between 0 and 1
@@ -611,6 +612,7 @@ class PlotAgg:
             * cmap - can be string (name of pellate), list of colors, or in categorical values case, a dict {"value":"color"}
             * xlim, ylim - two values each, in microns. example: xlim=[50,100]
             * scalebar - either the length in microns (or None for 0.2 of xlim length), or False to not show the scalebar, or a dict with arguments for add_scalebar(), such as:
+                
                 {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035, fontsize=10}
             * save (bool) - save the plot
             * layer (str) - which layer in adata to use
@@ -733,6 +735,7 @@ class PlotAgg:
             * cmap - can be string (name of pellate), list of colors, or in categorical values case, a dict {"value":"color"}
             * xlim, ylim - two values each, in microns [50,100]
             * scalebar - either the length in microns (or None for 0.2 of xlim length), or False to not show the scalebar, or a dict with arguments for add_scalebar(), such as:
+                
                 {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035, fontsize=10}
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * layer (str) - which layer in adata to use.
