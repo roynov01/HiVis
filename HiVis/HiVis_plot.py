@@ -159,7 +159,7 @@ class PlotVisium:
     
     def spatial(self, what=None, exact=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
                   legend=True, alpha=1, figsize=(8, 8), save=False,brightness=1,contrast=1,layer=None,
-                  xlim=None, ylim=None, legend_title=None, axis_labels=True, pad=False,show_zeros=False):
+                  xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=True, pad=False,show_zeros=False):
         '''
         Plots the image, and/or data/metadata (spatial plot)
         
@@ -174,12 +174,14 @@ class PlotVisium:
             * title, legend_title, axis_labels - strings
             * legend (bool)- show legend
             * xlim, ylim - two values each, in microns, example [50,100]
+            * scalebar - either the length in microns (or None for 0.2 of xlim length), or False to not show the scalebar, or a dict with arguments for add_scalebar(), such as:
+                {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035, fontsize=10}
             * pad (float) - scale the size of dots
             * alpha (float) - transparency of scatterplot. value between 0 and 1
             * save (bool) - save the image
             * brightness (float) - increases brigtness, for example 0.2. 
             * contrast (float) - > 1 increases contrast, < 1 decreases.
-            
+
         **Returns** ax
         '''
         title = what if title is None else title
@@ -288,7 +290,15 @@ class PlotVisium:
             ax.set_title(title)    
             
         ax.set_xlim(0, width)
-        ax.set_ylim(height, 0)     
+        ax.set_ylim(height, 0)  
+        
+        # Add scalebar
+        if scalebar is True:
+            scalebar = None
+        if scalebar is None or isinstance(scalebar, (int,float)):
+            add_scalebar(ax=ax,microns_per_pixel=adjusted_microns_per_pixel,length_microns=scalebar)
+        elif isinstance(scalebar, dict):
+            add_scalebar(ax=ax, microns_per_pixel=adjusted_microns_per_pixel, **scalebar)
         
         # Save figure:
         self.current_ax = ax
@@ -589,7 +599,7 @@ class PlotAgg:
     
     def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", layer=None,
                   legend=True, alpha=1, figsize=(8, 8), save=False, size=1,brightness=1,contrast=1,
-                  xlim=None, ylim=None, legend_title=None, axis_labels=True,show_zeros=False):
+                  xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=True,show_zeros=False):
         '''
         Plot a spatial representation of self.adata.
         
@@ -600,6 +610,8 @@ class PlotAgg:
             * brightness, contrast - for image modification
             * cmap - can be string (name of pellate), list of colors, or in categorical values case, a dict {"value":"color"}
             * xlim, ylim - two values each, in microns. example: xlim=[50,100]
+            * scalebar - either the length in microns (or None for 0.2 of xlim length), or False to not show the scalebar, or a dict with arguments for add_scalebar(), such as:
+                {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035, fontsize=10}
             * save (bool) - save the plot
             * layer (str) - which layer in adata to use
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
@@ -619,7 +631,7 @@ class PlotAgg:
             fig, ax = plt.subplots(figsize=figsize)
         ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,
                             contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution,
-                            axis_labels=axis_labels,legend=False)
+                            axis_labels=axis_labels,legend=False,scalebar=scalebar)
         
         if what: 
             if ax is None:
@@ -707,7 +719,7 @@ class PlotAgg:
             self.save(f"{what}_HIST")
         return ax
     
-    def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, show_zeros=False,
+    def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, scalebar=True, show_zeros=False,
               figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,layer=None,
               legend=True, ax=None, title=None, legend_title=None, brightness=1,contrast=1,axis_labels=True):
         '''
@@ -720,6 +732,8 @@ class PlotAgg:
             * brightness, contrast - for image modification
             * cmap - can be string (name of pellate), list of colors, or in categorical values case, a dict {"value":"color"}
             * xlim, ylim - two values each, in microns [50,100]
+            * scalebar - either the length in microns (or None for 0.2 of xlim length), or False to not show the scalebar, or a dict with arguments for add_scalebar(), such as:
+                {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035, fontsize=10}
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * layer (str) - which layer in adata to use.
             * save (bool) - svae the plot
@@ -743,7 +757,7 @@ class PlotAgg:
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
         ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,axis_labels=axis_labels,
-                            contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution,legend=False)
+                            contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution,legend=False,scalebar=scalebar)
         
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
@@ -1575,3 +1589,36 @@ def plot_spatial_3d(agg, what, color=None, cmap="hot", axis_labels=True, ax=None
         ax.set_axis_off()
 
     return ax
+
+
+def add_scalebar(ax, microns_per_pixel, length_microns=None, text=True,
+                 line_width=4, color='white', text_offset=0.035, fontsize=10):
+        
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    x0, x1 = sorted(xlim)
+    y0, y1 = sorted(ylim)
+    x_range = x1 - x0
+    y_range = y1 - y0
+
+    # If no scale provided, default to 1/5 of visible x-range in microns
+    if length_microns is None:
+        allowed_lengths = [500, 100, 50, 20, 10]
+        raw_length = (x_range * microns_per_pixel) / 5
+        length_microns = min(allowed_lengths, key=lambda x: abs(x - raw_length))
+    length = length_microns / microns_per_pixel
+
+    # Position (bottom-right)
+    x_start = x1 - length - 0.02 * x_range
+    y_start = y1 - 0.02 * y_range  
+
+    # Draw the scale bar
+    ax.plot([x_start, x_start + length], [y_start, y_start],color=color, lw=line_width,zorder=1000)
+
+    # Add label above the bar
+    if text:
+        ax.text(x_start + length / 2,
+                y_start - text_offset * y_range,
+                f"{length_microns:.0f} µm",zorder=1000,
+                ha='center', va='top', fontsize=fontsize, color=color)
+        
