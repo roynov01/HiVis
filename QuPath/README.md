@@ -27,8 +27,8 @@ Convert it to '.csv' for QuPath compatibility:
 import pandas as pd 
 path = “tissue_positions.parquet”   
 metadata = pd.read_parquet(path) 
-metadata.to_csv(path.replace(".parquet",".csv"),index=False)```
-
+metadata.to_csv(path.replace(".parquet",".csv"),index=False)
+```
 - **Scaling information file**: 'scalefactors_json.json'
 - **2x2 µm filtered barcode matrix**: 'filtered_feature_bc_matrix.h5'  
   This file is NOT used by the QuPath scripts, but only by the HiVis python library.
