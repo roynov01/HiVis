@@ -294,11 +294,18 @@ class PlotVisium:
         ax.set_ylim(height, 0)  
         
         # Add scalebar
+        
         if scalebar is True:
             scalebar = None
-        if scalebar is None or isinstance(scalebar, (int,float)):
-            add_scalebar(ax=ax,microns_per_pixel=adjusted_microns_per_pixel,length=scalebar)
+        color = "white" if (self.main.fluorescence and image) else "black"
+        print(scalebar)
+        if scalebar is False:
+            pass    
+        elif scalebar is None or isinstance(scalebar, (int,float)):
+            add_scalebar(ax=ax,microns_per_pixel=adjusted_microns_per_pixel,length=scalebar,color=color)
         elif isinstance(scalebar, dict):
+            if not "color" in scalebar:
+                scalebar["color"] = color
             add_scalebar(ax=ax, microns_per_pixel=adjusted_microns_per_pixel, **scalebar)
         
         # Save figure:
@@ -1596,7 +1603,6 @@ def plot_spatial_3d(agg, what, color=None, cmap="hot", axis_labels=True, ax=None
 
 def add_scalebar(ax, microns_per_pixel, length=None, text=True,
                  line_width=4, color='white', text_offset=0.035, fontsize=10):
-        
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
     x0, x1 = sorted(xlim)
