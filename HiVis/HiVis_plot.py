@@ -159,7 +159,7 @@ class PlotVisium:
     
     def spatial(self, what=None, exact=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
                   legend=True, alpha=1, figsize=(8, 8), save=False,brightness=1,contrast=1,layer=None,
-                  xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=True, pad=False,show_zeros=False):
+                  xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=False, pad=False,show_zeros=False):
         '''
         Plots the image, and/or data/metadata (spatial plot)
         
@@ -600,7 +600,7 @@ class PlotAgg:
     
     def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", layer=None,
                   legend=True, alpha=1, figsize=(8, 8), save=False, size=1,brightness=1,contrast=1,
-                  xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=True,show_zeros=False):
+                  xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=False,show_zeros=False):
         '''
         Plot a spatial representation of self.adata.
         
@@ -723,7 +723,7 @@ class PlotAgg:
     
     def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, scalebar=True, show_zeros=False,
               figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,layer=None,
-              legend=True, ax=None, title=None, legend_title=None, brightness=1,contrast=1,axis_labels=True):
+              legend=True, ax=None, title=None, legend_title=None, brightness=1,contrast=1,axis_labels=False):
         '''
         Plot a spatial map of the objects. Can color the borders and fill
         

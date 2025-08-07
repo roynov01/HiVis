@@ -307,8 +307,6 @@ def load_images(path_image_fullres, path_image_highres, path_image_lowres):
         image_highres = _normalize_channel(image_highres)
         image_highres = np.stack((image_highres,)*3,axis=-1)
     return image_fullres, image_highres, image_lowres
-    
-
 
 
 def _crop_images_permenent(adata, image_fullres, image_highres, image_lowres, scalefactor_json):
