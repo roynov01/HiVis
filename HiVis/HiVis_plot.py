@@ -298,7 +298,6 @@ class PlotVisium:
         if scalebar is True:
             scalebar = None
         color = "white" if (self.main.fluorescence and image) else "black"
-        print(scalebar)
         if scalebar is False:
             pass    
         elif scalebar is None or isinstance(scalebar, (int,float)):
@@ -1532,6 +1531,35 @@ def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True,
             cbar.set_label(legend_title)
     
     return ax
+
+def plot_density(viz,x="dist_to_bv_um",y="DistToCell",count="apicome",gridsize=100,mincnt=0,
+              cmap="brg",figsize=(5,5),ax=None,xlab="Distance to sinusoid (µm)",
+              ylab="Distance to cell border (µm)",title="Apicome assignment"):
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
+    
+    hb = ax.hexbin(viz.adata.obs[x], viz.adata.obs[y],gridsize=gridsize,cmap=cmap,bins="log",mincnt=mincnt)
+    cb = ax.figure.colorbar(hb, ax=ax)
+    cb.set_label("log10(density)")
+    
+    # Crop axis with low density bins
+    mask = ~np.isnan(hb.get_array())          # True for “kept” hexes
+    x_kept = hb.get_offsets()[mask][:, 0]
+    y_kept = hb.get_offsets()[mask][:, 1]
+    ax.set_xlim(x_kept.min(), x_kept.max()) 
+    ax.set_ylim(y_kept.min(), y_kept.max()) 
+    
+    #
+    # vmin, vmax = hb.norm.vmin, hb.norm.vmax             # data limits in linear units
+    # cb.set_ticks([vmin, vmax])
+    # cb.set_ticklabels([f"$10^{int(np.log10(vmin))}$", f"$10^{int(np.log10(vmax))}$"])
+        
+    # Axes labels
+    ax.set_xlabel(xlab)
+    ax.set_ylabel(ylab)
+    ax.set_title(title)
+    
+    return ax, {"x_kept": x_kept, "y_kept": y_kept}
 
 
 def plot_spatial_3d(agg, what, color=None, cmap="hot", axis_labels=True, ax=None,
