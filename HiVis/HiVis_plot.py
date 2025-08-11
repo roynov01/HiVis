@@ -1539,7 +1539,7 @@ def plot_density(viz,x="dist_to_bv_um",y="DistToCell",count="apicome",gridsize=1
         fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
     
     hb = ax.hexbin(viz.adata.obs[x], viz.adata.obs[y],gridsize=gridsize,cmap=cmap,bins="log",mincnt=mincnt)
-    cb = ax.figure.colorbar(hb, ax=ax)
+    cb = ax.figure.colorbar(hb, ax=ax, shrink=0.6)
     cb.set_label("log10(density)")
     
     # Crop axis with low density bins
@@ -1559,7 +1559,7 @@ def plot_density(viz,x="dist_to_bv_um",y="DistToCell",count="apicome",gridsize=1
     ax.set_ylabel(ylab)
     ax.set_title(title)
     
-    return ax, {"x_kept": x_kept, "y_kept": y_kept}
+    return ax, {"x_kept": x_kept, "y_kept": y_kept, "cbar":cb}
 
 
 def plot_spatial_3d(agg, what, color=None, cmap="hot", axis_labels=True, ax=None,
