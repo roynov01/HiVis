@@ -1159,12 +1159,12 @@ def plot_scatter_signif(df, x_col, y_col,
         df["distance"] = np.sqrt(df[x_col]**2 + df[y_col]**2)
         top_genes = df.nlargest(100, "distance")["gene"].tolist()
         df.loc[df["gene"].isin(top_genes), "group"] = "group1"
-    elif genes:
-        df.loc[df["gene"].isin(genes), "group"] = "group1"
+    elif genes is not False and genes is not None:
+        df.loc[df["gene"].isin(pd.Index(genes)), "group"] = "group1"
     
     # Mark genes for group 2 if provided.
-    if genes2:
-        df.loc[df["gene"].isin(genes2), "group"] = "group2"
+    if genes2 is not False and genes2 is not None:
+        df.loc[df["gene"].isin(pd.Index(genes2)), "group"] = "group2"
         
     if isinstance(size, str) and size in df.columns:   
         size_kwargs = dict(size=size, sizes=(10, 250))      
