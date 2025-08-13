@@ -245,8 +245,8 @@ class AnalysisVisium:
         df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
         df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
         if not two_sided:
-            df[f"pval_{group1}"] = 1 - df[f"pval_{column}"]
-            df[f"pval_{group2}"] = df[f"pval_{column}"]
+            df[f"pval_{group1}"] = df[f"pval_{column}"]
+            df[f"pval_{group2}"] = 1 - df[f"pval_{column}"]
             df["pval"] = df[[f"pval_{group1}",f"pval_{group2}"]].min(axis=1)
         else:
             df["pval"] = df[f"pval_{column}"]
@@ -516,8 +516,8 @@ class AnalysisAgg:
         df = df[[f"pval_{column}",f"log2fc_{column}",group1,group2]]
         df.rename(columns={f"log2fc_{column}":"log2fc"},inplace=True)
         if not two_sided:
-            df[f"pval_{group1}"] = 1 - df[f"pval_{column}"]
-            df[f"pval_{group2}"] = df[f"pval_{column}"]
+            df[f"pval_{group1}"] = df[f"pval_{column}"]
+            df[f"pval_{group2}"] = 1 - df[f"pval_{column}"]
             df["pval"] = df[[f"pval_{group1}",f"pval_{group2}"]].min(axis=1)
         else:
             df["pval"] = df[f"pval_{column}"]
