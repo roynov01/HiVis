@@ -48,7 +48,7 @@ def new_adata(adata, aggregate_by, aggregation_func, obs2agg=None, **aggregation
     return adata_agg, other_results
     
 
-def split_stardist(input_df):
+def split_spots_cells(input_df):
     df = input_df.copy()
     print("[Splitting name column and merging metadata]")
     split_names = df['Name'].str.split('__', n=1, expand=True)
@@ -125,7 +125,7 @@ def _aggregate_meta(adata, aggregate_by, custom_agg):
     return updated_obs, group_order
 
 
-def _aggregate_data_stardist(adata, group_col="Cell_ID"):
+def _aggregate_data_cells(adata, group_col="Cell_ID"):
     '''
     Aggregates expression data for all spots inside each cell,
     disregarding whether a spot is in the nucleus or cytoplasm.

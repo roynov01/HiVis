@@ -180,7 +180,7 @@ class HiVis:
             self.plot.spatial = _disabled_method
             self.analysis.smooth = _disabled_method
             self.analysis.compute_distances = _disabled_method
-            disable = ["add_agg", "add_mask", "add_annotations","agg_stardist", "agg_from_annotations","export_images", "remove_pixels", "recolor"]
+            disable = ["add_agg", "add_mask", "add_annotations","agg_cells", "agg_from_annotations","export_images", "remove_pixels", "recolor"]
             for method_name in disable:
                 setattr(self, method_name, _disabled_method)
         if plot_qc and hasattr(self.plot, "spatial"):
@@ -365,12 +365,12 @@ class HiVis:
             self.agg[name].import_geometry(geojson_path, object_type="annotation")            
         
     
-    def agg_stardist(self, input_df, name="SC", obs2add=None, obs2agg=None, geojson_path=None):
+    def agg_cells(self, input_df, name="SC", obs2add=None, obs2agg=None, geojson_path=None):
         '''
-        Adds Aggregation object to self.agg[name], based on CSV output of Stardist pipeline.
+        Adds Aggregation object to self.agg[name], based on CSV output of Qupath pipeline.
         
         Parameters:
-            * input_df (pd.DataFrame) - output of Stardist pipeline 
+            * input_df (pd.DataFrame) - output of Qupath pipeline 
             * name (str) - name to store the Aggregation in. Can be accessed via HiVis.agg[name]
             * obs2agg - what obs to aggregate from the HiVis. \
                         Can be a list of column names. numeric columns will be summed, categorical will be the mode. \
@@ -382,7 +382,7 @@ class HiVis:
         '''
         id_col = f"Cell_ID_{name}"
         input_df.rename(columns={"Object ID":"Cell_ID"}, inplace=True)
-        spots_only, cells_only = Aggregation_utils.split_stardist(input_df)
+        spots_only, cells_only = Aggregation_utils.split_spots_cells(input_df)
         
         spots_only = spots_only.rename(columns={"Cell_ID": id_col})
         cells_only.index.name = id_col
@@ -390,7 +390,7 @@ class HiVis:
         self.adata.obs = self.adata.obs.drop(columns=[id_col], errors='ignore')
         self.adata.obs = self.adata.obs.join(spots_only,how="left")
         
-        aggregation_func = Aggregation_utils._aggregate_data_stardist
+        aggregation_func = Aggregation_utils._aggregate_data_cells
         
         adata_agg, _ = Aggregation_utils.new_adata(self.adata, id_col, aggregation_func,obs2agg=obs2agg)
         
