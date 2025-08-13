@@ -1629,7 +1629,7 @@ def plot_spatial_3d(agg, what, color=None, cmap="hot", axis_labels=True, ax=None
     return ax
 
 
-def add_scalebar(ax, microns_per_pixel, length=None, text=True,
+def add_scalebar(ax, microns_per_pixel, length=None, text=True,bar_offset=0.02,
                  line_width=4, color='white', text_offset=0.035, fontsize=10):
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
@@ -1640,15 +1640,15 @@ def add_scalebar(ax, microns_per_pixel, length=None, text=True,
 
     # If no scale provided, default to 1/5 of visible x-range in microns
     if length is None:
-        allowed_lengths = [500, 100, 50, 20, 10]
+        allowed_lengths = [1000,500, 100, 50, 20, 10]
         raw_length = (x_range * microns_per_pixel) / 5
         length = min(allowed_lengths, key=lambda x: abs(x - raw_length))
     length_um = length
     length = length / microns_per_pixel
 
     # Position (bottom-right)
-    x_start = x1 - length - 0.02 * x_range
-    y_start = y1 - 0.02 * y_range  
+    x_start = x1 - length - bar_offset * x_range
+    y_start = y1 - bar_offset * y_range  
 
     # Draw the scale bar
     ax.plot([x_start, x_start + length], [y_start, y_start],color=color, lw=line_width,zorder=1000)
