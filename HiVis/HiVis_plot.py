@@ -6,6 +6,7 @@
 import os
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_categorical_dtype
 import scanpy as sc
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -799,35 +800,74 @@ class PlotAgg:
                     sm.set_array([])  
                     cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
                     cbar.set_label(legend_title)
-            else: # Categorical case
+            # else: # Categorical case
+            #     self.geometry["temp"] = values
+            #     unique_values = np.unique(values.astype(str))
+            #     unique_values = unique_values[unique_values != 'nan']
+            #     if isinstance(cmap, (str,list)):
+            #         colors = get_colors(unique_values, cmap)
+            #         color_map = {val: colors[i] for i, val in enumerate(unique_values)}  
+            #     elif isinstance(cmap, dict):
+            #         color_map = {val: cmap.get(val,DEFAULT_COLOR) for val in unique_values}
+            #     else:
+            #         raise ValueError("cmap must be a string (colormap name) or a dictionary")
+            #     for val in unique_values: # Plot each category with its color
+            #         values = values.astype(str)
+            #         mask = (self.geometry["temp"].astype(str) == val)
+            #         sub_gdf = self.geometry[mask]
+            #         if sub_gdf.empty:
+            #             continue
+            #         sub_gdf.plot(ax=ax,facecolor=color_map[val],edgecolor="none",alpha=alpha,label=str(val))
+            #     if legend:
+            #         legend_elements = [Patch(facecolor=color_map[val], label=str(val)) for val in unique_values]
+            #         ax.legend(handles=legend_elements, title=legend_title, loc='center left', bbox_to_anchor=(1, 0.5))
+            else:  # Categorical case (non-numeric)
                 self.geometry["temp"] = values
-                unique_values = np.unique(values.astype(str))
-                unique_values = unique_values[unique_values != 'nan']
-                if isinstance(cmap, (str,list)):
-                    colors = get_colors(unique_values, cmap)
-                    color_map = {val: colors[i] for i, val in enumerate(unique_values)}  
-                elif isinstance(cmap, dict):
-                    color_map = {val: cmap.get(val,DEFAULT_COLOR) for val in unique_values}
+
+                cat_order = None
+                if (what in self.main.adata.obs.columns
+                    and isinstance(self.main.adata.obs[what].dtype, pd.api.types.CategoricalDtype)):
+                    dtype_obs = self.main.adata.obs[what].dtype
+                    cat_order = list(dtype_obs.categories)
+
+                vals_series = pd.Series(values).dropna()
+                present_vals = list(pd.unique(vals_series))
+
+                if cat_order is not None:
+                    present_set = set(present_vals)
+                    ordered_values = [c for c in cat_order if c in present_set]
                 else:
-                    raise ValueError("cmap must be a string (colormap name) or a dictionary")
-                for val in unique_values: # Plot each category with its color
-                    values = values.astype(str)
-                    mask = (self.geometry["temp"].astype(str) == val)
-                    sub_gdf = self.geometry[mask]
+                    ordered_values = present_vals
+
+                if isinstance(cmap, (str, list)):
+                    colors = get_colors(ordered_values, cmap)
+                    color_map = {val: colors[i] for i, val in enumerate(ordered_values)}
+                elif isinstance(cmap, dict):
+                    color_map = {}
+                    for val in ordered_values:
+                        color_map[val] = cmap.get(val, cmap.get(str(val), DEFAULT_COLOR))
+                else:
+                    raise ValueError("cmap must be a string (colormap name), a list of colors, or a dictionary")
+
+                for val in ordered_values:
+                    sub_gdf = self.geometry[self.geometry["temp"] == val]
                     if sub_gdf.empty:
                         continue
                     sub_gdf.plot(ax=ax,facecolor=color_map[val],edgecolor="none",alpha=alpha,label=str(val))
+
                 if legend:
-                    legend_elements = [Patch(facecolor=color_map[val], label=str(val)) for val in unique_values]
-                    ax.legend(handles=legend_elements, title=legend_title, loc='center left', bbox_to_anchor=(1, 0.5))
-      
+                    legend_elements = [Patch(facecolor=color_map[val], label=str(val)) for val in ordered_values]
+                    if legend is True:
+                        ax.legend(handles=legend_elements, title=legend_title, loc='center left', bbox_to_anchor=(1, 0.5))
+                    else:
+                        ax.legend(handles=legend_elements, title=legend_title, loc=legend, bbox_to_anchor=None)
+                          
             # self.geometry.plot(column="temp",ax=ax,cmap=cmap,legend=legend,alpha=alpha)
             self.geometry.drop(columns="temp", inplace=True)
         self.current_ax = ax
         if save:
             self.save(f"{what}_CELLS")
         return ax
-
         
     def umap(self, features=None, basis="X_umap", title=None, size=None,layer=None,legend=True,texts=False,
               legend_loc='right margin', save=False, ax=None, figsize=(8,8),cmap="viridis", axis_labels=True):
@@ -863,14 +903,14 @@ class PlotAgg:
             if f'{features[0]}_colors' in self.main.adata.uns:
                 del self.main.adata.uns[f'{features[0]}_colors']
             if isinstance(cmap, (str, list, dict)):
-                if (features[0] in self.main.columns) and pd.api.types.is_categorical_dtype(features[0]):
+                if (features[0] in self.main.adata.obs.columns) and pd.api.types.is_categorical_dtype(self.main.adata.obs[features[0]].dtype):
                     # Use the defined categorical ordering
-                    categories = self.main[features[0]].cat.categories.astype(str)
+                    categories = self.main.adata.obs[features[0]].cat.categories.astype(str)
                     colors = get_colors(categories, cmap)
                     unique_values = categories
                 else:
                     # For non-categorical data, filter out NaNs
-                    filtered_color_values = self.main[features[0]][~pd.isna(self.main[features[0]])]
+                    filtered_color_values = self.main.adata.obs[features[0]][~pd.isna(self.main[features[0]])]
                     colors = get_colors(filtered_color_values, cmap)
                     unique_values = np.unique(filtered_color_values.astype(str))
             else:
@@ -1109,7 +1149,10 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
                         label=str(val), marker=marker, alpha=alpha, s=size)
         if legend:
             legend_elements = [Patch(facecolor=color_map[val], label=str(val)) for val in unique_values]
-            ax.legend(handles=legend_elements, title=legend_title, loc='center left', bbox_to_anchor=(1, 0.5))
+            if legend is True:
+                ax.legend(handles=legend_elements, title=legend_title, loc='center left', bbox_to_anchor=(1, 0.5))
+            else:
+                ax.legend(handles=legend_elements, title=legend_title, loc=legend, bbox_to_anchor=None)
     if xlab:
         ax.set_xlabel(xlab)
     if ylab:
@@ -1313,32 +1356,59 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
     ax.set_xlabel(xlab)
     return ax
 
-
 def get_colors(values, cmap):
-    '''return a list of colors, in the length of the unique values, based on cmap'''
-    if isinstance(values, pd.core.series.Series):
-        unique_values = values.unique()
+    """Return a list of colors (one per unique value, in-order)."""
+    from matplotlib.colors import to_hex
+
+    # extract unique values in a stable order
+    if isinstance(values, pd.Series):
+        unique_values = values.astype(str).unique()
     else:
-        unique_values = np.unique(values.astype(str))
-    if isinstance(cmap, str):
+        unique_values = pd.unique(pd.Series(np.asarray(values, dtype=object)).astype(str))
+
+    # --- categorical dict mapping: use exact colors, no interpolation ---
+    if isinstance(cmap, dict):
+        return [to_hex(cmap.get(v, DEFAULT_COLOR)) for v in unique_values]
+
+    # --- list of colors: if lengths match, use as-is; else make a colormap and sample ---
+    if isinstance(cmap, list):
+        if len(cmap) == len(unique_values):
+            return [to_hex(c) for c in cmap]
+        cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+    else:  # string name of colormap
         cmap_obj = colormaps.get_cmap(cmap)
-    elif isinstance(cmap, list):
-        cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-    else: # dict
-        cmap = [cmap.get(val, DEFAULT_COLOR) for val in unique_values]
-        cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-    cmap_len = cmap_obj.N
-    num_unique = len(unique_values)
-    if num_unique == 1:
-        # Assign a single color (e.g., middle of the colormap)
-        colors = [cmap_obj(0.5)]
-    elif num_unique <= cmap_len:
-        # Map each unique value to a unique color in the colormap
-        colors = [cmap_obj(i / (num_unique - 1)) for i in range(num_unique)]
-    else:
-        # If there are more unique values than colors in the colormap, cycle through the colormap
-        colors = [cmap_obj(i % cmap_len / (cmap_len - 1)) for i in range(num_unique)]
-    return colors
+
+    # sample the colormap for however many categories we have
+    n = len(unique_values)
+    pts = [0.5] if n == 1 else np.linspace(0, 1, n)
+    return [to_hex(cmap_obj(p)) for p in pts]
+# def get_colors(values, cmap):
+#     '''return a list of colors, in the length of the unique values, based on cmap'''
+#     from matplotlib.colors import to_hex
+#     if isinstance(values, pd.core.series.Series):
+#         unique_values = values.unique()
+#     else:
+#         arr = np.asarray(values, dtype=object)
+#         unique_values = pd.unique(pd.Series(arr).astype(str))
+#     if isinstance(cmap, str):
+#         cmap_obj = colormaps.get_cmap(cmap)
+#     elif isinstance(cmap, list):
+#         cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+#     else: # dict
+#         cmap = [cmap.get(val, DEFAULT_COLOR) for val in unique_values]
+#         cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+#     cmap_len = cmap_obj.N
+#     num_unique = len(unique_values)
+#     if num_unique == 1:
+#         # Assign a single color (e.g., middle of the colormap)
+#         colors = [cmap_obj(0.5)]
+#     elif num_unique <= cmap_len:
+#         # Map each unique value to a unique color in the colormap
+#         colors = [cmap_obj(i / (num_unique - 1)) for i in range(num_unique)]
+#     else:
+#         # If there are more unique values than colors in the colormap, cycle through the colormap
+#         colors = [cmap_obj(i % cmap_len / (cmap_len - 1)) for i in range(num_unique)]
+#     return colors
 
 
 def set_axis_ticks(ax, length_in_pixels, adjusted_microns_per_pixel, axis='x', num_ticks_desired=6):

@@ -431,6 +431,22 @@ class HiVis:
             new.rename(new_name, new_out_path=new_out_path, full=full)
         return new
     
+    def crop(self,xlim=None,ylim=None):
+        '''
+        Creates a HiVis instance, cropped by given limits.
+        
+        Parameters:
+            * xlim, ylim - [int,int]
+            
+        **Returns** new HiVis instance
+        '''
+        if xlim is None:
+            xlim = self.plot.xlim_max
+        if ylim is None:
+            ylim = self.plot.ylim_max
+        return self[(self["um_x"] > xlim[0]) & (self["um_x"] < xlim[1]) &
+                    (self["um_y"] > ylim[0]) & (self["um_y"] < ylim[1]),:]
+    
     
     def export_h5(self, path=None, force=False):
         '''
