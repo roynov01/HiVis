@@ -13,6 +13,7 @@ import anndata as ad
 from shapely.affinity import scale
 import scipy.io
 import geopandas as gpd
+import pandas as pd
 
 from . import HiVis_plot
 from . import HiVis_analysis
@@ -401,7 +402,38 @@ class Aggregation:
         HiVis_utils.update_instance_methods(self.plot)
         HiVis_utils.update_instance_methods(self.analysis)
         _ = gc.collect()
-    
+        
+    def update_meta(self, name:str, values:dict, type_="obs"):
+        r'''
+        Updates values in metadata (obs or var)
+        
+        Parameters:
+            * name (str) - name of metadata
+            * values (dict) -{old_value:new_value}
+            * type\_ - either "obs" or "var"
+        '''
+        if type_ == "obs":
+            if name not in self.adata.obs.columns:
+                raise ValueError(f"No metadata called [{name}] in obs")
+            original_dtype = self.adata.obs[name].dtype
+            self.adata.obs[name] = self.adata.obs[name].apply(lambda x: values.get(x, x) if pd.notna(x) else x)
+            
+            # Convert back to original dtype if it was categorical
+            if pd.api.types.is_categorical_dtype(original_dtype):
+                self.adata.obs[name] = self.adata.obs[name].astype('category') 
+        elif type_ == "var":
+            if name not in self.adata.var.columns:
+                raise ValueError(f"No metadata called [{name}] in var")
+            original_dtype = self.adata.var[name].dtype
+            self.adata.var[name] = self.adata.var[name].apply(lambda x: values.get(x, x) if pd.notna(x) else x)
+            
+            # Convert back to original dtype if it was categorical
+            if pd.api.types.is_categorical_dtype(original_dtype):
+                self.adata.var[name] = self.adata.var[name].astype('category')    
+        else:
+            raise ValueError("type_ must be either 'obs' or 'var'")
+        self.plot._init_img()
+
     
     def __add__(self, other):
         '''Combines two Aggregation objects into a single Aggregation. Some methods will be disabled'''

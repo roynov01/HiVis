@@ -1520,9 +1520,12 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
                     edgecolor='none',alpha=alpha)
                 ax.add_patch(square)
 
-        if legend:
-            legend_elements = [Patch(facecolor=color_map[val], label=str(val)) for val in unique_values]
+    if legend:
+        legend_elements = [Patch(facecolor=color_map[val], label=str(val)) for val in unique_values]
+        if legend is True:
             ax.legend(handles=legend_elements, title=legend_title, loc='center left', bbox_to_anchor=(1, 0.5))
+        else:
+            ax.legend(handles=legend_elements, title=legend_title, loc=legend, bbox_to_anchor=None)
 
     if xlab:
         ax.set_xlabel(xlab)
