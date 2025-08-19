@@ -432,7 +432,6 @@ class Aggregation:
                 self.adata.var[name] = self.adata.var[name].astype('category')    
         else:
             raise ValueError("type_ must be either 'obs' or 'var'")
-        self.plot._init_img()
 
     
     def __add__(self, other):
