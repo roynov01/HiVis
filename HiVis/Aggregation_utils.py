@@ -62,6 +62,7 @@ def split_spots_cells(input_df):
     
     df[['Spot_ID', 'Cell_ID']] = split_names
     cols = ['Cell_ID', 'Spot_ID']
+    cols = ['Cell_ID', 'Spot_ID','InNuc']
     spots_only = df.loc[input_df['Classification']=='Spot',cols]
     spots_only = spots_only.set_index("Spot_ID")
         

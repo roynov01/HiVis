@@ -769,9 +769,6 @@ class PlotAgg:
         ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,axis_labels=axis_labels,
                             contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution,legend=False,scalebar=scalebar)
         
-        if ax is None:
-            fig, ax = plt.subplots(figsize=figsize)
-        
         if line_color is not None:
             self.geometry.boundary.plot(ax=ax, color=line_color, linewidth=linewidth)
         
