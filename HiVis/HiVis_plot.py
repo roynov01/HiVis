@@ -126,7 +126,7 @@ class PlotVisium:
         self.main.adata_cropped = self.main.adata
         self._crop() # creates self.main.adata_cropped & self.image_cropped
     
-    def save(self, figname:str, fig=None, ax=None, open_file=False, format_='png', dpi=300):
+    def save(self, figname:str, fig=None, ax=None, open_file=False, format_='pdf', dpi=300):
         '''
         Saves a figure or ax.
         
@@ -159,7 +159,7 @@ class PlotVisium:
     
     
     def spatial(self, what=None, exact=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
-                  legend=True, alpha=1, figsize=(8, 8), save=False,brightness=1,contrast=1,layer=None,
+                  legend=True, alpha=1, figsize=(7,7), save=False,brightness=1,contrast=1,layer=None,
                   xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=False, pad=False,show_zeros=False):
         '''
         Plots the image, and/or data/metadata (spatial plot)
@@ -315,7 +315,7 @@ class PlotVisium:
         return ax
     
     def hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,ax=None,layer=None,
-             save=False, figsize=(8,8), cmap=None, color="blue",cropped=False):
+             save=False, figsize=(7,7), cmap=None, color="blue",cropped=False):
         '''
         Plots histogram of data or metadata. if categorical, will plot barplot
         
@@ -349,7 +349,7 @@ class PlotVisium:
         return ax
     
     def cor(self, what, number_of_genes=10, normilize=True, self_corr_value=np.nan,
-            layer=None, cluster=True, ax=None,figsize=(8,8),save=False,
+            layer=None, cluster=True, ax=None,figsize=(7,7),save=False,
            size=15,text=True,cmap="copper",legend=True,legend_title=None,print_=False):
         '''
         Plots correlation of a gene with all genes, or a correlation matrix between list of genes.
@@ -421,7 +421,7 @@ class PlotVisium:
             self.save(f"{what}_COR")
         return ax 
     
-    def noise_mean_curve(self,poly_deg=4,signif_thresh=0.999,layer=None,save=False,ax=None,text=True, figsize=(8,8), color="black",
+    def noise_mean_curve(self,poly_deg=4,signif_thresh=0.999,layer=None,save=False,ax=None,text=True, figsize=(7,7), color="black",
     size=10,cmap="cool",repel=False, title=None,legend=True,fit_color=None):
         '''
         Generates a noise-mean curve of the data.
@@ -582,7 +582,7 @@ class PlotAgg:
         
         self.geometry = gdf
     
-    def save(self, figname:str, fig=None, ax=None, open_file=False, format_='png', dpi=300):
+    def save(self, figname:str, fig=None, ax=None, open_file=False, format_='pdf', dpi=300):
         r'''
         Saves a figure or ax. If no fig or ax are specified, will save the last plot.
         
@@ -606,7 +606,7 @@ class PlotAgg:
     
     
     def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", layer=None,
-                  legend=True, alpha=1, figsize=(8, 8), save=False, size=1,brightness=1,contrast=1,
+                  legend=True, alpha=1, figsize=(7,7), save=False, size=1,brightness=1,contrast=1,
                   xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=False,show_zeros=False):
         '''
         Plot a spatial representation of self.adata.
@@ -696,7 +696,7 @@ class PlotAgg:
         return ax
 
     def hist(self, what, bins=20, xlim=None, title=None, ylab=None,xlab=None,ax=None,layer=None,
-             save=False, figsize=(8,8), cmap=None, color="blue",cropped=False):
+             save=False, figsize=(7,7), cmap=None, color="blue",cropped=False):
         '''
         Plots histogram of data or metadata. if categorical, will plot barplot
         
@@ -729,7 +729,7 @@ class PlotAgg:
         return ax
     
     def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, scalebar=True, show_zeros=False,
-              figsize=(8, 8), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,layer=None,
+              figsize=(7,7), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,layer=None,
               legend=True, ax=None, title=None, legend_title=None, brightness=1,contrast=1,axis_labels=False):
         '''
         Plot a spatial map of the objects. Can color the borders and fill
@@ -867,7 +867,7 @@ class PlotAgg:
         return ax
         
     def umap(self, features=None, basis="X_umap", title=None, size=None,layer=None,legend=True,texts=False,
-              legend_loc='right margin', save=False, ax=None, figsize=(8,8),cmap="viridis", axis_labels=True):
+              legend_loc='right margin', save=False, ax=None, figsize=(7,7),cmap="viridis", axis_labels=True):
         '''
         Plot a UMAP of self.adata, if present
         
@@ -945,7 +945,7 @@ class PlotAgg:
     
     
     def cor(self, what, number_of_genes=10, normalize=True, self_corr_value=np.nan,
-            layer=None, cluster=True, ax=None,figsize=(8,8),save=False,
+            layer=None, cluster=True, ax=None,figsize=(7,7),save=False,
            size=15,text=True,cmap="copper",legend=True,legend_title=None,print_=False):
         '''
         Plots correlation of a gene with all genes, or a correlation matrix between list of genes.
@@ -1018,7 +1018,7 @@ class PlotAgg:
             self.save(f"{what}_COR")
         return ax 
     
-    def noise_mean_curve(self, poly_deg=4,signif_thresh=0.999,layer=None,save=False,ax=None,text=True, figsize=(8,8), color="black",
+    def noise_mean_curve(self, poly_deg=4,signif_thresh=0.999,layer=None,save=False,ax=None,text=True, figsize=(7,7), color="black",
     size=10,cmap="cool",repel=False, title=None,legend=True,fit_color=None):
         '''
         Generates a noise-mean curve of the data.
@@ -1096,7 +1096,7 @@ def save_fig(path, fig, open_file=False, format_='png', dpi=300):
     return path
 
 def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
-                   cmap='winter', figsize=(8, 8), alpha=1, legend_title=None, ax=None,marker='s'):
+                   cmap='winter', figsize=(7,7), alpha=1, legend_title=None, ax=None,marker='s'):
     '''
     Plots a scatterplot based on coordinates and values.
     Parameters:
@@ -1161,7 +1161,7 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
     
 def plot_scatter_signif(df, x_col, y_col,
                         genes=None, genes2=None,
-                        text=True, figsize=(8,8), size=10, legend=False, title=None,
+                        text=True, figsize=(7,7), size=10, legend=False, title=None,
                         ax=None, xlab=None, ylab=None,
                         color="black", color_genes="red", color_genes2="blue",
                         x_line=None, y_line=None,cmap="viridis",repel=False,edgecolor=None):
@@ -1271,7 +1271,7 @@ def plot_scatter_signif(df, x_col, y_col,
     return ax
 
 
-def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=None, title=None,
+def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(7,7), ax=None, title=None,
             size=10, colname_exp="expression_mean",colname_qval="qval", 
             colname_fc="log2fc", n_texts=130, ylab="log2(ratio)",repel=False):
     '''
@@ -1299,7 +1299,7 @@ def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(8,8), ax=N
     return ax
 
 
-def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, figsize=(8,8), 
+def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, figsize=(7,7), 
               cmap=None, color="blue", ylab="Count",xlab=None,ax=None):
     '''
     Plots histogram from numeric values or barplot for categorical values.
@@ -1442,7 +1442,7 @@ def set_axis_ticks(ax, length_in_pixels, adjusted_microns_per_pixel, axis='x', n
 
 
 def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
-                 cmap='winter', figsize=(8, 8), alpha=1, legend_title=None, ax=None):
+                 cmap='winter', figsize=(7,7), alpha=1, legend_title=None, ax=None):
     '''
     Plots sqares in the exact size
     Parameters:
@@ -1633,7 +1633,7 @@ def plot_density(viz,x="dist_to_bv_um",y="DistToCell",count="apicome",gridsize=1
 
 
 def plot_spatial_3d(agg, what, color=None, cmap="hot", axis_labels=True, ax=None,
-                    figsize=(8, 8), title=None, legend_title=None, grid=False,
+                    figsize=(7,7), title=None, legend_title=None, grid=False,
                     legend=True):  # New legend toggle
 
 
