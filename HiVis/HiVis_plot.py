@@ -797,6 +797,8 @@ class PlotAgg:
                     sm.set_array([])  
                     cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
                     cbar.set_label(legend_title)
+                    if np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int)):
+                        cbar.set_ticks(np.arange(int(np.nanmin(values)), int(np.nanmax(values)) + 1))
             # else: # Categorical case
             #     self.geometry["temp"] = values
             #     unique_values = np.unique(values.astype(str))
@@ -1127,6 +1129,8 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
         if legend:
             cbar = plt.colorbar(scatter, ax=ax, shrink=0.6)
             cbar.set_label(legend_title)
+            if np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int)):
+                cbar.set_ticks(np.arange(int(np.nanmin(values)), int(np.nanmax(values)) + 1))
     else: # Categorical case: Use legend 
         unique_values, idx = np.unique(values.astype(str), return_index=True)
         unique_values = unique_values[np.argsort(idx)]
@@ -1491,6 +1495,8 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
         if legend:
             cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
             cbar.set_label(legend_title)
+            if np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int)):
+                cbar.set_ticks(np.arange(int(np.nanmin(values)), int(np.nanmax(values)) + 1))
 
     else:  # Categorical case: Use legend
         unique_values = np.unique(values.astype(str))
