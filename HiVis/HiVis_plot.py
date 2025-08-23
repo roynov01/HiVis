@@ -126,7 +126,7 @@ class PlotVisium:
         self.main.adata_cropped = self.main.adata
         self._crop() # creates self.main.adata_cropped & self.image_cropped
     
-    def save(self, figname:str, fig=None, ax=None, open_file=False, format_='pdf', dpi=300):
+    def save(self, figname:str, fig=None, ax=None, open_file=False, formats=['pdf','svg','png'], dpi=300, pad_inches=0):
         '''
         Saves a figure or ax.
         
@@ -135,18 +135,20 @@ class PlotVisium:
             * fig (optional) - plt.Figure object to save, can be a dataframe for writing csv.
             * ax - ax to save. if not passed, will use self.current_ax
             * open_file (bool) - open the file
-            * format\_ (str) - format of file
+            * formats (str or list) - format(s) of file to save
+            * dpi (int) - resolution in dot per inch
+            * pad_inches (float) - amount of padding around the figure
             
         **Returns** path of saved plot
         '''
-        path = f"{self.main.path_output}/{self.main.name}_{figname}.{format_}"
+        path = f"{self.main.path_output}/{self.main.name}_{figname}"
         if fig is None:
             if ax is None:
                 if self.current_ax is None:
                     raise ValueError(f"No ax present in {self.main.name}")
                 ax = self.current_ax
             fig = ax.get_figure()
-        return save_fig(path, fig, open_file, format_, dpi)
+        return save_fig(path, fig, open_file, formats, dpi,pad_inches)
     
     def __get_dot_size(self, adjusted_microns_per_pixel:float):
         '''gets the size of spots, depending on adjusted_microns_per_pixel'''
@@ -582,7 +584,7 @@ class PlotAgg:
         
         self.geometry = gdf
     
-    def save(self, figname:str, fig=None, ax=None, open_file=False, format_='pdf', dpi=300):
+    def save(self, figname:str, fig=None, ax=None, open_file=False, formats=['pdf','svg','png'], dpi=300, pad_inches=0):
         r'''
         Saves a figure or ax. If no fig or ax are specified, will save the last plot.
         
@@ -591,18 +593,20 @@ class PlotAgg:
             * fig (optional) - plt.Figure object to save, can be a dataframe for writing csv.
             * ax - ax to save. if not passed, will use self.current_ax
             * open_file (bool) - open the file after saving
-            * format\_ (str) - format of file
+            * formats (str or list) - format(s) of file to save
+            * dpi (int) - resolution in dot per inch
+            * pad_inches (float) - amount of padding around the figure
             
         **Returns** path of daved file
         '''
-        path = f"{self.main.path_output}/{self.main.name}_{figname}.{format_}"
+        path = f"{self.main.path_output}/{self.main.name}_{figname}"
         if fig is None:
             if ax is None:
                 if self.current_ax is None:
                     raise ValueError(f"No ax present in {self.main.viz.name}")
                 ax = self.current_ax
             fig = ax.get_figure()
-        return save_fig(path, fig, open_file, format_, dpi)
+        return save_fig(path, fig, open_file, formats, dpi,pad_inches)
     
     
     def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", layer=None,
@@ -1086,15 +1090,21 @@ class PlotAgg:
         return s
 
 
-def save_fig(path, fig, open_file=False, format_='png', dpi=300): 
-    '''Save a fig object'''
+def save_fig(path, fig, open_file=False, formats='png', dpi=300,pad_inches=0): 
+    '''Save a fig object. format is either str or list'''
     if isinstance(fig, pd.DataFrame):
-        path = path.replace(f".{format_}",".csv")
+        if not path.endswith('.csv'):
+            path += ".csv"            
         fig.to_csv(path)
         return path
-    fig.savefig(path, format=format_, dpi=dpi, bbox_inches='tight')
+    if isinstance(formats, str):
+        formats = [formats]
+    for form in formats:   
+        if not path.endswith(form):
+            path_format = f"{path}.{form}"
+            fig.savefig(path_format, format=form, dpi=dpi, bbox_inches='tight',pad_inches=pad_inches)
     if open_file:
-        os.startfile(path)
+        os.startfile(path_format)
     return path
 
 def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
