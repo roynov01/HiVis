@@ -1745,4 +1745,8 @@ def add_scalebar(ax, microns_per_pixel, length=None, text=True,bar_offset=0.02,
                 y_start - text_offset * y_range,
                 f"{length_um:.0f} µm",zorder=1000,
                 ha='center', va='top', fontsize=fontsize, color=color)
-        
+
+def add_legend(legend_dict, ax, title=None, loc="upper right"):
+    import matplotlib.patches as mpatches
+    patches = [mpatches.Patch(color=c, label=l) for c,l in legend_dict.items()]
+    ax.legend(handles=patches, title=title, loc=loc)

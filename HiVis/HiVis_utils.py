@@ -792,5 +792,84 @@ def _convert_bool_columns_to_float(df):
                 df[col] = df[col].astype(float)
 
 
+def combine_dges(dges_list, group_names, pval_reducer, log2fc_reducer=np.nanmedian, expression_reducer=np.nanmean):
+    def _bh_on_concatenated_groups(pvals_by_group, p_adjust):
+        lengths = [len(x) for x in pvals_by_group]
+        concat = np.concatenate(pvals_by_group) if len(pvals_by_group) else np.array([], dtype=float)
+        q_concat = p_adjust(concat)
+        out, start = [], 0
+        for L in lengths:
+            out.append(q_concat[start:start + L])
+            start += L
+        return out
+    def _reduce_series(series, reducer):
+        arr = series.to_numpy(dtype=float)
+        if arr.size == 0:
+            return np.nan
+        arr = arr[np.isfinite(arr)]
+        if arr.size == 0:
+            return np.nan
+        return float(reducer(arr))
+    
+    if not isinstance(dges_list, (list, tuple)) or len(dges_list) == 0:
+        return pd.DataFrame()
+    df_all = pd.concat(dges_list, ignore_index=True, sort=False)
+    if 'gene' not in df_all.columns:
+        raise ValueError("All DGE DataFrames must have a 'gene' column.")
+    if 'log2fc' not in df_all.columns:
+        raise ValueError("All DGE DataFrames must have a 'log2fc' column.")
+    for g in group_names:
+        col = f"pval_{g}"
+        if col not in df_all.columns:
+            raise ValueError(f"Missing column '{col}' in DGE DataFrames.")
+    gb = df_all.groupby('gene', sort=False)
+    out = gb['log2fc'].apply(lambda s: _reduce_series(s, log2fc_reducer)).to_frame('log2fc')
+    for col in ['expression_mean', 'expression_min', 'expression_max']:
+        if col in df_all.columns:
+            out[col] = gb[col].apply(lambda s: _reduce_series(s, expression_reducer))
+    combined_group_pvals = []
+    for g in group_names:
+        col = f"pval_{g}"
+        out[col] = gb[col].apply(lambda s: _reduce_series(s, pval_reducer))
+        combined_group_pvals.append(out[col].to_numpy())
+    qvals_split = _bh_on_concatenated_groups(combined_group_pvals)
+    for g, qv in zip(group_names, qvals_split):
+        out[f"qval_{g}"] = qv
+    preferred = ['log2fc', 'expression_mean', 'expression_min', 'expression_max'] + [f"pval_{g}" for g in group_names] + [f"qval_{g}" for g in group_names]
+    cols = ['gene'] + [c for c in preferred if c in out.columns] + [c for c in out.columns if c not in preferred]
+    out = out.reset_index()
+    out = out.loc[:, [c for c in cols if c in out.columns]]
+    return out
+    
+    
+    
+    
 
+
+
+# def combine_summaries(dfs, log2fc_reducer=np.nanmedian, expr_reducer=np.nanmean,
+#                       pval_reducer=lambda arr: combine_pvalues(arr, method="pearson")[1]):
+#     all_genes = sorted(set().union(*[set(df.index) for df in dfs]))
+#     lfc_cols, p_cols, emin_cols, emax_cols, emean_cols = [], [], [], [], []
+#     for df in dfs:
+#         name = _infer_name(df); dfr = df.reindex(all_genes); get = lambda col: dfr[col] if col in dfr.columns else pd.Series(np.nan, index=all_genes)
+#         lfc_cols.append(get(f'log2fc_{name}')); p_cols.append(get(f'pval_{name}')); emin_cols.append(get(f'expression_min_{name}')); emax_cols.append(get(f'expression_max_{name}')); emean_cols.append(get(f'expression_mean_{name}'))
+#     lfc_mat = pd.concat(lfc_cols, axis=1); p_mat = pd.concat(p_cols, axis=1); emin_mat = pd.concat(emin_cols, axis=1); emax_mat = pd.concat(emax_cols, axis=1); emean_mat = pd.concat(emean_cols, axis=1)
+#     lfc_comb = lfc_mat.apply(lambda r: log2fc_reducer(r.values.astype(float)), axis=1)
+#     p_comb = p_mat.apply(lambda r: pval_reducer(r.dropna().values) if r.notna().any() else np.nan, axis=1)
+#     emin_comb = emin_mat.apply(lambda r: expr_reducer(r.values.astype(float)), axis=1); emax_comb = emax_mat.apply(lambda r: expr_reducer(r.values.astype(float)), axis=1); emean_comb = emean_mat.apply(lambda r: expr_reducer(r.values.astype(float)), axis=1)
+#     combined_df = pd.DataFrame({'log2fc': lfc_comb, 'pval': p_comb, 'expression_min': emin_comb, 'expression_max': emax_comb, 'expression_mean': emean_comb})
+#     return combined_df
+
+
+
+
+
+
+
+
+
+
+    
+    
 
