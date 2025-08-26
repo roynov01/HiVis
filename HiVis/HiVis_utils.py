@@ -54,29 +54,41 @@ def p_adjust(pvals, method="fdr_bh"):
     pvals - list / array / pd.Series
     method is passed to statsmodels.stats.multitest.multipletests
     '''
-    if isinstance(pvals, (list, np.ndarray)):
-        pvals = pd.Series(pvals)
-    elif not isinstance(pvals, pd.Series):
+    # Track original type to return in same format
+    if isinstance(pvals, pd.Series):
+        orig = "series"
+        ser = pvals.copy()
+    elif isinstance(pvals, np.ndarray):
+        orig = "ndarray"
+        ser = pd.Series(pvals)
+    elif isinstance(pvals, list):
+        orig = "list"
+        ser = pd.Series(pvals)
+    else:
         raise TypeError("Input should be a list, numpy array, or pandas Series.")
 
-    # Identify non-NaN indices and values
-    non_nan_mask = pvals.notna()
-    pvals_non_nan = pvals[non_nan_mask]
+    # Identify non-NaN positions
+    non_nan_mask = ser.notna()
+    ntests = int(non_nan_mask.sum())
 
-    # Apply BH correction on non-NaN p-values
-    _, qvals_corrected, _, _ = multipletests(pvals_non_nan, method=method)
-    
-    # Create a Series with NaNs in original places and corrected values
-    qvals = pd.Series(np.nan, index=pvals.index)
-    qvals[non_nan_mask] = qvals_corrected
+    # Prepare output series
+    qser = pd.Series(np.nan, index=ser.index)
 
-    # Return qvals in the same format as input
-    if isinstance(pvals, pd.Series):
-        return qvals
-    elif isinstance(pvals, np.ndarray):
-        return qvals.values
+    if ntests == 0:
+        # All NaNs (or empty) → return all NaNs, same shape
+        pass
     else:
-        return qvals.tolist()
+        # Apply correction only to non-NaN values
+        _, qvals_corrected, _, _ = multipletests(ser[non_nan_mask].to_numpy(), method=method)
+        qser.loc[non_nan_mask] = qvals_corrected
+
+    # Return in original type
+    if orig == "series":
+        return qser
+    elif orig == "ndarray":
+        return qser.to_numpy()
+    else:  # list
+        return qser.tolist()
     
 
 def matnorm(df, axis="col"):
@@ -237,7 +249,7 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
                 [g1_counts,                 g2_counts],
                 [total1 - g1_counts, total2 - g2_counts]
             ]
-            _, p = fisher_exact(table, alternative=alternative)
+            _, p = fisher_exact(table, alternative=alternative)                
 
         elif method == "wilcox":
             _, p = mannwhitneyu(cur_norm1, cur_norm2, alternative=alternative)
@@ -792,74 +804,65 @@ def _convert_bool_columns_to_float(df):
                 df[col] = df[col].astype(float)
 
 
-def combine_dges(dges_list, group_names, pval_reducer, log2fc_reducer=np.nanmedian, expression_reducer=np.nanmean):
-    def _bh_on_concatenated_groups(pvals_by_group, p_adjust):
-        lengths = [len(x) for x in pvals_by_group]
-        concat = np.concatenate(pvals_by_group) if len(pvals_by_group) else np.array([], dtype=float)
-        q_concat = p_adjust(concat)
-        out, start = [], 0
-        for L in lengths:
-            out.append(q_concat[start:start + L])
-            start += L
-        return out
-    def _reduce_series(series, reducer):
-        arr = series.to_numpy(dtype=float)
-        if arr.size == 0:
-            return np.nan
-        arr = arr[np.isfinite(arr)]
-        if arr.size == 0:
-            return np.nan
-        return float(reducer(arr))
-    
-    if not isinstance(dges_list, (list, tuple)) or len(dges_list) == 0:
-        return pd.DataFrame()
-    df_all = pd.concat(dges_list, ignore_index=True, sort=False)
-    if 'gene' not in df_all.columns:
-        raise ValueError("All DGE DataFrames must have a 'gene' column.")
-    if 'log2fc' not in df_all.columns:
-        raise ValueError("All DGE DataFrames must have a 'log2fc' column.")
+def combine_dges(dges_list, group_names, pval_reducer, log2fc_reducer=np.nanmedian, expression_reducer=np.nanmean, exp_thresh=0):
+    from functools import reduce
+
+    # specify reducers per column
+    reducers = {
+        "log2fc": log2fc_reducer,
+        "expression_min": expression_reducer,
+        "expression_max": expression_reducer,
+        "expression_mean": expression_reducer,
+    }
     for g in group_names:
-        col = f"pval_{g}"
-        if col not in df_all.columns:
-            raise ValueError(f"Missing column '{col}' in DGE DataFrames.")
-    gb = df_all.groupby('gene', sort=False)
-    out = gb['log2fc'].apply(lambda s: _reduce_series(s, log2fc_reducer)).to_frame('log2fc')
-    for col in ['expression_mean', 'expression_min', 'expression_max']:
-        if col in df_all.columns:
-            out[col] = gb[col].apply(lambda s: _reduce_series(s, expression_reducer))
-    combined_group_pvals = []
-    for g in group_names:
-        col = f"pval_{g}"
-        out[col] = gb[col].apply(lambda s: _reduce_series(s, pval_reducer))
-        combined_group_pvals.append(out[col].to_numpy())
-    qvals_split = _bh_on_concatenated_groups(combined_group_pvals)
-    for g, qv in zip(group_names, qvals_split):
-        out[f"qval_{g}"] = qv
-    preferred = ['log2fc', 'expression_mean', 'expression_min', 'expression_max'] + [f"pval_{g}" for g in group_names] + [f"qval_{g}" for g in group_names]
-    cols = ['gene'] + [c for c in preferred if c in out.columns] + [c for c in out.columns if c not in preferred]
-    out = out.reset_index()
-    out = out.loc[:, [c for c in cols if c in out.columns]]
-    return out
-    
-    
-    
-    
+        reducers[f"pval_{g}"] = pval_reducer
 
+    # merge all dfs on "gene"
+    needed_cols = ["gene"] + list(reducers.keys())
+    merged = reduce(
+        lambda left, right: pd.merge(left, right, on="gene", how="inner", suffixes=("", "_r")),
+        [df[[c for c in needed_cols if c in df.columns]] for df in dges_list]
+    )
 
+    final_df = merged[["gene"]].copy()
 
-# def combine_summaries(dfs, log2fc_reducer=np.nanmedian, expr_reducer=np.nanmean,
-#                       pval_reducer=lambda arr: combine_pvalues(arr, method="pearson")[1]):
-#     all_genes = sorted(set().union(*[set(df.index) for df in dfs]))
-#     lfc_cols, p_cols, emin_cols, emax_cols, emean_cols = [], [], [], [], []
-#     for df in dfs:
-#         name = _infer_name(df); dfr = df.reindex(all_genes); get = lambda col: dfr[col] if col in dfr.columns else pd.Series(np.nan, index=all_genes)
-#         lfc_cols.append(get(f'log2fc_{name}')); p_cols.append(get(f'pval_{name}')); emin_cols.append(get(f'expression_min_{name}')); emax_cols.append(get(f'expression_max_{name}')); emean_cols.append(get(f'expression_mean_{name}'))
-#     lfc_mat = pd.concat(lfc_cols, axis=1); p_mat = pd.concat(p_cols, axis=1); emin_mat = pd.concat(emin_cols, axis=1); emax_mat = pd.concat(emax_cols, axis=1); emean_mat = pd.concat(emean_cols, axis=1)
-#     lfc_comb = lfc_mat.apply(lambda r: log2fc_reducer(r.values.astype(float)), axis=1)
-#     p_comb = p_mat.apply(lambda r: pval_reducer(r.dropna().values) if r.notna().any() else np.nan, axis=1)
-#     emin_comb = emin_mat.apply(lambda r: expr_reducer(r.values.astype(float)), axis=1); emax_comb = emax_mat.apply(lambda r: expr_reducer(r.values.astype(float)), axis=1); emean_comb = emean_mat.apply(lambda r: expr_reducer(r.values.astype(float)), axis=1)
-#     combined_df = pd.DataFrame({'log2fc': lfc_comb, 'pval': p_comb, 'expression_min': emin_comb, 'expression_max': emax_comb, 'expression_mean': emean_comb})
-#     return combined_df
+    def _apply_reducer(matrix2d, func):
+        """Apply reducer, row-wise if axis not supported. Handle tuple return (combine_pvalues)."""
+        try:
+            return np.asarray(func(matrix2d, axis=1))
+        except TypeError:
+            pass
+
+        out = []
+        for row in matrix2d:
+            val = func(row)
+            if isinstance(val, (tuple, list)) and len(val) > 1 and np.isscalar(val[1]):
+                val = val[1]
+            out.append(val)
+        return np.asarray(out)
+
+    # reduce each family of columns
+    for base_col, func in reducers.items():
+        colnames = [c for c in merged.columns if c.startswith(base_col)]
+        if not colnames:
+            continue
+        values = merged[colnames].to_numpy()
+        final_df[base_col] = _apply_reducer(values, func)
+
+    # Filter NaNs        
+    final_df = final_df[final_df["expression_max"] > exp_thresh].reset_index(drop=True)
+    
+    # FDR correction
+    pval_cols = [c for c in final_df.columns if c.startswith("pval_")]
+    pvals = final_df[pval_cols].to_numpy().ravel()
+    qvals = np.array(p_adjust(pvals))
+    qvals_matrix = qvals.reshape(final_df[pval_cols].shape)
+    qval_cols = [c.replace("pval_", "qval_") for c in pval_cols]
+    final_df[qval_cols] = qvals_matrix
+    final_df["qval"] = final_df[qval_cols].min(axis=1)
+    final_df.index = final_df["gene"]
+
+    return final_df
 
 
 

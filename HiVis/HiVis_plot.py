@@ -32,6 +32,7 @@ MAX_SQUARES_TO_DRAW_EXACT = 500 # how many squares to draw in perfect positions 
 DEFAULT_COLOR ='None' # for plotting categorical
 FULLRES_THRESH = 1000 # in microns, below which, a full-res image will be plotted
 HIGHRES_THRESH = 3000 # in microns, below which, a high-res image will be plotted
+DEFAULT_SAVE_FORMATS = ['pdf','svg','png']
 
 class PlotVisium:
     '''Handles all plotting for HiVis object'''
@@ -126,7 +127,7 @@ class PlotVisium:
         self.main.adata_cropped = self.main.adata
         self._crop() # creates self.main.adata_cropped & self.image_cropped
     
-    def save(self, figname:str, fig=None, ax=None, open_file=False, formats=['pdf','svg','png'], dpi=300, pad_inches=0):
+    def save(self, figname:str, fig=None, ax=None, open_file=False, formats=DEFAULT_SAVE_FORMATS, dpi=300, pad_inches=0):
         '''
         Saves a figure or ax.
         
@@ -179,7 +180,7 @@ class PlotVisium:
             * xlim, ylim - two values each, in microns, example [50,100]
             * scalebar - either the length in microns (or None for 0.2 of xlim length), or False to not show the scalebar, or a dict with arguments for add_scalebar(), such as:
                 
-                {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035, fontsize=10}
+                {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035}
             * pad (float) - scale the size of dots
             * alpha (float) - transparency of scatterplot. value between 0 and 1
             * save (bool) - save the image
@@ -584,7 +585,7 @@ class PlotAgg:
         
         self.geometry = gdf
     
-    def save(self, figname:str, fig=None, ax=None, open_file=False, formats=['pdf','svg','png'], dpi=300, pad_inches=0):
+    def save(self, figname:str, fig=None, ax=None, open_file=False, formats=DEFAULT_SAVE_FORMATS, dpi=300, pad_inches=0):
         r'''
         Saves a figure or ax. If no fig or ax are specified, will save the last plot.
         
@@ -624,7 +625,7 @@ class PlotAgg:
             * xlim, ylim - two values each, in microns. example: xlim=[50,100]
             * scalebar - either the length in microns (or None for 0.2 of xlim length), or False to not show the scalebar, or a dict with arguments for add_scalebar(), such as:
                 
-                {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035, fontsize=10}
+                {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035}
             * save (bool) - save the plot
             * layer (str) - which layer in adata to use
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
@@ -747,7 +748,7 @@ class PlotAgg:
             * xlim, ylim - two values each, in microns [50,100]
             * scalebar - either the length in microns (or None for 0.2 of xlim length), or False to not show the scalebar, or a dict with arguments for add_scalebar(), such as:
                 
-                {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035, fontsize=10}
+                {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035}
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * layer (str) - which layer in adata to use.
             * save (bool) - svae the plot
@@ -939,7 +940,7 @@ class PlotAgg:
                     centroid_y = cluster_coords[mask, 1].mean()
             
                     plt.text(centroid_x, centroid_y, str(cluster), color='black',
-                             fontsize=10, ha='center', va='center', weight='bold')
+                             ha='center', va='center', weight='bold')
         if not axis_labels:
             ax.set_xlabel(None)
             ax.set_ylabel(None)
@@ -1100,9 +1101,8 @@ def save_fig(path, fig, open_file=False, formats='png', dpi=300,pad_inches=0):
     if isinstance(formats, str):
         formats = [formats]
     for form in formats:   
-        if not path.endswith(form):
-            path_format = f"{path}.{form}"
-            fig.savefig(path_format, format=form, dpi=dpi, bbox_inches='tight',pad_inches=pad_inches)
+        path_format = f"{path}.{form}" if not path.endswith(form) else path
+        fig.savefig(path_format, dpi=dpi, bbox_inches='tight',pad_inches=pad_inches)
     if open_file:
         os.startfile(path_format)
     return path
@@ -1254,7 +1254,7 @@ def plot_scatter_signif(df, x_col, y_col,
         if text:
             for _, row in group1_df.iterrows():
                 texts.append(ax.text(row[x_col], row[y_col], row["gene"],
-                                     color=color_genes, fontsize=14))
+                                     color=color_genes))
     
     # Plot group 2 points and (optionally) add text labels.
     group2_df = df[df["group"] == "group2"]
@@ -1266,7 +1266,7 @@ def plot_scatter_signif(df, x_col, y_col,
         if text:
             for _, row in group2_df.iterrows():
                 texts.append(ax.text(row[x_col], row[y_col], row["gene"],
-                                     color=color_genes2, fontsize=14))
+                                     color=color_genes2))
     if repel:
     # Adjust text to reduce overlap if any text labels were added.
         if text and texts:
@@ -1278,8 +1278,8 @@ def plot_scatter_signif(df, x_col, y_col,
                         ax=ax)
     
     # Set labels and title
-    ax.set_xlabel(xlab, fontsize=14)
-    ax.set_ylabel(ylab, fontsize=14)
+    ax.set_xlabel(xlab)
+    ax.set_ylabel(ylab)
     ax.set_title(title)
             
     return ax
@@ -1716,7 +1716,7 @@ def plot_spatial_3d(agg, what, color=None, cmap="hot", axis_labels=True, ax=None
 
 
 def add_scalebar(ax, microns_per_pixel, length=None, text=True,bar_offset=0.02,
-                 line_width=4, color='white', text_offset=0.035, fontsize=10):
+                 line_width=4, color='white', text_offset=0.035):
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
     x0, x1 = sorted(xlim)
@@ -1744,7 +1744,7 @@ def add_scalebar(ax, microns_per_pixel, length=None, text=True,bar_offset=0.02,
         ax.text(x_start + length / 2,
                 y_start - text_offset * y_range,
                 f"{length_um:.0f} µm",zorder=1000,
-                ha='center', va='top', fontsize=fontsize, color=color)
+                ha='center', va='top', color=color)
 
 def add_legend(legend_dict, ax, title=None, loc="upper right"):
     import matplotlib.patches as mpatches
