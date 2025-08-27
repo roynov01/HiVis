@@ -174,6 +174,8 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
     group1_data = get_data(group1_adata, layer)
     if umi_thresh:
         mask1 = group1_data.sum(axis=1) > umi_thresh
+        if sum(mask1) == 0:
+            raise ValueError(f"No cells in group '{group1}' pass umi_thresh={umi_thresh}")
         group1_adata = group1_adata[mask1].copy()
         group1_data = get_data(group1_adata, layer)
     group1_adata_raw = group1_data.copy()
@@ -193,6 +195,8 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
     group2_data = get_data(group2_adata, layer)
     if umi_thresh:
         mask2 = group2_data.sum(axis=1) > umi_thresh
+        if sum(mask2) == 0:
+            raise ValueError(f"No cells in group '{group2}' pass umi_thresh={umi_thresh}")
         group2_adata = group2_adata[mask2].copy()
         group2_data = get_data(group2_adata, layer)
     
@@ -217,13 +221,13 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
 
     sum1 = np.asarray(group1_data.sum(axis=0)).ravel()
     sum2 = np.asarray(group2_data.sum(axis=0)).ravel()
-    mean1 = sum1 / sum1.sum()
-    mean2 = sum2 / sum2.sum()
+    mean1 = sum1 / sum1.sum() if sum1.sum() > 0 else np.zeros_like(sum1, dtype=float)
+    mean2 = sum2 / sum2.sum() if sum2.sum() > 0 else np.zeros_like(sum2, dtype=float)
     
     
     df[group1] = mean1
     df[group2] = mean2
-    df[f"expression_mean_{column}"] = (mean1 + mean2) / 2
+    df[f"expression_mean_{column}"] = np.nanmean([mean1,mean2])
 
     # smallest non-zero mean for pseudocount
     pn = df.loc[df[f"expression_mean_{column}"] > 0, f"expression_mean_{column}"].min()
@@ -805,9 +809,6 @@ def _convert_bool_columns_to_float(df):
 
 
 def combine_dges(dges_list, group_names, pval_reducer, log2fc_reducer=np.nanmedian, expression_reducer=np.nanmean, exp_thresh=0):
-    from functools import reduce
-
-    # specify reducers per column
     reducers = {
         "log2fc": log2fc_reducer,
         "expression_min": expression_reducer,
@@ -819,10 +820,14 @@ def combine_dges(dges_list, group_names, pval_reducer, log2fc_reducer=np.nanmedi
 
     # merge all dfs on "gene"
     needed_cols = ["gene"] + list(reducers.keys())
-    merged = reduce(
-        lambda left, right: pd.merge(left, right, on="gene", how="inner", suffixes=("", "_r")),
-        [df[[c for c in needed_cols if c in df.columns]] for df in dges_list]
-    )
+    per = []
+    for i, df in enumerate(dges_list, start=1):
+        cols = [c for c in needed_cols if c in df.columns]
+        sub = df[cols].copy()
+        sub = sub.rename(columns={c: f"{c}_{i}" for c in cols if c != "gene"})
+        per.append(sub.set_index("gene"))
+
+    merged = pd.concat(per, axis=1, join="inner").reset_index() 
 
     final_df = merged[["gene"]].copy()
 
@@ -847,10 +852,13 @@ def combine_dges(dges_list, group_names, pval_reducer, log2fc_reducer=np.nanmedi
         if not colnames:
             continue
         values = merged[colnames].to_numpy()
+        if base_col == "log2fc":
+            final_df[f"count_{group_names[0]}"] = np.nansum(values > 0, axis=1).astype(int)
+            final_df[f"count_{group_names[1]}"] = np.nansum(values < 0, axis=1).astype(int)
         final_df[base_col] = _apply_reducer(values, func)
 
-    # Filter NaNs        
-    final_df = final_df[final_df["expression_max"] > exp_thresh].reset_index(drop=True)
+    # Filter low expressed genes        
+    final_df = final_df[final_df["expression_max"] >= exp_thresh].reset_index(drop=True)
     
     # FDR correction
     pval_cols = [c for c in final_df.columns if c.startswith("pval_")]
