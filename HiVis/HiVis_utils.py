@@ -148,7 +148,7 @@ def validate_exists(file_path):
              raise FileNotFoundError(f"No such file or directory:\n\t{file_path}")    
 
 
-def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
+def dge2(adata, column, group1, group2=None, umi_thresh=0, layer=None,
         method="fisher_exact", alternative="two-sided", inplace=False):
     '''
     Runs differential gene expression analysis between two groups.
@@ -274,6 +274,133 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
 
     return df
 
+def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
+        method="fisher_exact", alternative="two-sided", inplace=False):
+    '''
+    Runs differential gene expression analysis between two groups.
+    Values will be saved in self.var: expression_mean, log2fc, pval
+    parameters:
+        * column - which column in obs has the groups classification
+        * group1 - specific value in the "column"
+        * group2 - specific value in the "column". 
+                   if None, will run against all other values, and will be called "rest"
+        * layer - which layer to get the data from (if None will get from adata.X)
+        * method - one of ["fisher_exact", "wilcox", "t_test"]
+        * alternative - {"two-sided", "less", "greater"}
+        * umi_thresh - use only cells with more UMIs than this number
+        * inplace - modify the adata.var with log2fc, pval and expression columns?
+    '''
+
+    def get_data(ann, lyr):
+        return ann.X if lyr is None else ann.layers[lyr]
+    df = adata.var.copy()
+
+    # Group1 prep
+    group1_adata = adata[adata.obs[column] == group1].copy()
+    group1_data = get_data(group1_adata, layer)
+    if umi_thresh:
+        mask1 = group1_data.sum(axis=1) > umi_thresh
+        if sum(mask1) == 0:
+            raise ValueError(f"No cells in group '{group1}' pass umi_thresh={umi_thresh}")
+        group1_adata = group1_adata[mask1].copy()
+        group1_data = get_data(group1_adata, layer)
+    group1_adata_raw = group1_data.copy()
+    total1 = group1_adata_raw.sum()
+
+    print(f'Normalizing "{group1}" spots')
+    if layer is None:
+        group1_adata.X = matnorm(group1_data, axis="row")
+
+
+    # Group2 prep 
+    if group2 is None:
+        group2_adata = adata[(adata.obs[column] != group1) & ~adata.obs[column].isna()].copy()
+        group2 = "rest"
+    else:
+        group2_adata = adata[adata.obs[column] == group2].copy()
+    group2_data = get_data(group2_adata, layer)
+    if umi_thresh:
+        mask2 = group2_data.sum(axis=1) > umi_thresh
+        if sum(mask2) == 0:
+            raise ValueError(f"No cells in group '{group2}' pass umi_thresh={umi_thresh}")
+        group2_adata = group2_adata[mask2].copy()
+        group2_data = get_data(group2_adata, layer)
+    
+    group2_adata_raw = group2_data.copy()
+    total2 = group2_adata_raw.sum()
+    print(f'Normalizing "{group2}" spots')
+    if layer is None:
+        group2_adata.X = matnorm(group2_data, axis="row")
+
+    if layer is None:
+        group1_norm = group1_adata.X
+        group2_norm = group2_adata.X
+    else:
+        group1_norm = group1_adata.layers[layer]
+        group2_norm = group2_adata.layers[layer]
+
+    # pre-alloc result columns
+    df[group2], df[group1] = np.nan, np.nan
+    df[f"expression_mean_{column}"] = np.nan
+    df[f"log2fc_{column}"] = np.nan
+    df[f"pval_{column}"] = np.nan
+
+    sum1 = np.asarray(group1_data.sum(axis=0)).ravel()
+    sum2 = np.asarray(group2_data.sum(axis=0)).ravel()
+    mean1 = sum1 / sum1.sum() if sum1.sum() > 0 else np.zeros_like(sum1, dtype=float)
+    mean2 = sum2 / sum2.sum() if sum2.sum() > 0 else np.zeros_like(sum2, dtype=float)
+    # mean1 = sum1 / sum1.sum()
+    # mean2 = sum2 / sum2.sum()
+    
+    df[group1] = mean1
+    df[group2] = mean2
+    df[f"expression_mean_{column}"] = np.nanmean([mean1,mean2],axis=0)
+    # df[f"expression_mean_{column}"] = (mean1 + mean2) / 2
+
+    # smallest non-zero mean for pseudocount
+    pn = df.loc[df[f"expression_mean_{column}"] > 0, f"expression_mean_{column}"].min()
+
+    for j, gene in enumerate(tqdm(df.index, desc=f"Running {method} on [{column}]")):
+        if (mean1[j] == 0) and (mean2[j] == 0):
+            df.at[gene, f"log2fc_{column}"] = 0.0
+            df.at[gene, f"pval_{column}"] = np.nan
+            continue
+
+        cur_norm1 = group1_norm[:, j].toarray().ravel()
+        cur_norm2 = group2_norm[:, j].toarray().ravel()
+
+        # Calculate log2 fold-change
+        df.at[gene, f"log2fc_{column}"] = np.log2((mean1[j] + pn) / (mean2[j] + pn))
+
+        # Calculate Pval
+        if method == "fisher_exact":
+            g1_counts = group1_adata_raw[:, j].sum()
+            g2_counts = group2_adata_raw[:, j].sum()
+
+            table = [
+                [g1_counts,                 g2_counts],
+                [total1 - g1_counts, total2 - g2_counts]
+            ]
+            _, p = fisher_exact(table, alternative=alternative)                
+
+        elif method == "wilcox":
+            _, p = mannwhitneyu(cur_norm1, cur_norm2, alternative=alternative)
+
+        elif method == "t_test":
+            _, p = ttest_ind(cur_norm1, cur_norm2, alternative=alternative)
+
+        else:
+            p = np.nan
+
+        df.at[gene, f"pval_{column}"] = p
+
+    # Add the results to adata.Var
+    if inplace:
+        columns_to_drop = [col for col in df.columns if col in adata.var.columns]
+        adata.var.drop(columns=columns_to_drop, inplace=True)
+        adata.var = adata.var.join(df, how="left")
+
+    return df
 
 def add_spatial_keys(hivis_obj, adata, name):
     """
@@ -869,6 +996,7 @@ def combine_dges(dges_list, group_names, pval_reducer, log2fc_reducer=np.nanmedi
     final_df[qval_cols] = qvals_matrix
     final_df["qval"] = final_df[qval_cols].min(axis=1)
     final_df.index = final_df["gene"]
+    final_df.index.name = None
 
     return final_df
 

@@ -795,7 +795,7 @@ class PlotAgg:
                     cmap_obj = colormaps.get_cmap(cmap)
                 elif isinstance(cmap, list):
                     cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-                self.geometry.plot(column="temp", ax=ax, cmap=cmap_obj, legend=False, alpha=alpha)
+                self.geometry.plot(column="temp", ax=ax, cmap=cmap_obj, edgecolor="none",legend=False, alpha=alpha)
                 if legend:
                     norm = plt.Normalize(vmin=np.nanmin(values), vmax=np.nanmax(values))
                     sm = plt.cm.ScalarMappable(cmap=cmap_obj, norm=norm)
@@ -826,14 +826,18 @@ class PlotAgg:
             #         legend_elements = [Patch(facecolor=color_map[val], label=str(val)) for val in unique_values]
             #         ax.legend(handles=legend_elements, title=legend_title, loc='center left', bbox_to_anchor=(1, 0.5))
             else:  # Categorical case (non-numeric)
+            
+                src = None
+                if what in self.main.adata.obs.columns:
+                    src = self.main.adata.obs[what]
+                if src is not None and is_categorical_dtype(src):
+                    values = pd.Categorical(values,
+                                            categories=list(src.cat.categories),
+                                            ordered=True)
+                    cat_order = list(src.cat.categories)
+                else:
+                    cat_order = None
                 self.geometry["temp"] = values
-
-                cat_order = None
-                if (what in self.main.adata.obs.columns
-                    and isinstance(self.main.adata.obs[what].dtype, pd.api.types.CategoricalDtype)):
-                    dtype_obs = self.main.adata.obs[what].dtype
-                    cat_order = list(dtype_obs.categories)
-
                 vals_series = pd.Series(values).dropna()
                 present_vals = list(pd.unique(vals_series))
 
