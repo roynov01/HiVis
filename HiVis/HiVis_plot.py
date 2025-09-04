@@ -1624,13 +1624,13 @@ def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True,
 
 def plot_density(viz,x="dist_to_bv_um",y="DistToCell",count="apicome",gridsize=100,mincnt=0,
               cmap="brg",figsize=(5,5),ax=None,xlab="Distance to sinusoid (µm)",
-              ylab="Distance to cell border (µm)",title="Apicome assignment"):
+              ylab="Distance to cell border (µm)",title="Apicome assignment",legend_title="log10(density)"):
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
     
     hb = ax.hexbin(viz.adata.obs[x], viz.adata.obs[y],gridsize=gridsize,cmap=cmap,bins="log",mincnt=mincnt)
     cb = ax.figure.colorbar(hb, ax=ax, shrink=0.6)
-    cb.set_label("log10(density)")
+    cb.set_label(legend_title)
     
     # Crop axis with low density bins
     mask = ~np.isnan(hb.get_array())          # True for “kept” hexes
