@@ -133,11 +133,15 @@ To export the classifier result as a label image (mask), run the script
  with downsample=1.
 
 ## Train your own model 
+...
+
+## Scripts Overview
   
 | Script Filename                                      | Use Case                              |
 |------------------------------------------------------|----------------------------------------|
 | `VisiumHDAnalysis_Flourescent.groovy`                | Fluorescent images (cell + nuclei)     |
 | `VisiumHDAnalysis_StarDist_AnatomicalRegions_FilterNuc.groovy` | H&E images or DAPI only + artifact filtering |
+| `VisiumHDAnalysis_DoubleNucleatedCells_v1.groovy'    | Custom script for mouse liver Fluorescent images (segment heptocytes and their nuclei with cellpose, segment non-parenchymal cells with Stardist + expansion)     |
 
 ## Stardist
 Download and install 
