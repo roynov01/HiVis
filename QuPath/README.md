@@ -68,6 +68,7 @@ Nuclei detection options:
   - Train an object classifier to distinguish *nuclei vs artifacts* (helpful for H&E)
 **Use this script for H&E data**:
 > VisiumHDAnalysis_StarDist_AnatomicalRegions_FilterNuc.groovy
+
 **Use this script for fluorescent data**:
 > VisiumHDAnalysis_Flourescent.groovy
 
