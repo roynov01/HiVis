@@ -1,3 +1,5 @@
+**HiVis** is associated with the following manuscript: [Subcellular mRNA localization patterns across tissues resolved with spatial transcriptomics]()
+
 # HD Integrated Visium Interactive Suite (HiVis)
 * **HiVis** is a user-friendly Python tool for analyzing  
   [10X VisiumHD](https://www.10xgenomics.com/products/spatial-gene-expression) data,  
