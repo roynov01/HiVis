@@ -68,7 +68,5 @@ Function docstrings are available on [ReadTheDocs](https://hivis.readthedocs.io/
 Bug report/feature request via the [GitHub issue tracker](https://github.com/roynov01/HiVis/issues).
 
 ## Citation
-A formal publication describing this tool is in preparation. Please cite the software in the meantime:
-
-Roy Novoselsky, Ofra Golani, Shalev Itzkovitz. *HiVis: a flexible and user-friendly tool for VisiumHD image analysis, data exploration and visualization*. Version 0.6.0. https://pypi.org/project/HiVis/, 2025.
+Novoselsky R, Golani O, Barkai T, Kedmi M, Goliand I, Fine M, Kent I, Nachmany I, Itzkovitz S. *Subcellular mRNA localization patterns across tissues resolved with spatial transcriptomics*. *BioRxiv*, 2025.
 
