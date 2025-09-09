@@ -944,6 +944,7 @@ def combine_dges(dges_list, group_names, pval_reducer, log2fc_reducer=np.nanmedi
     }
     for g in group_names:
         reducers[f"pval_{g}"] = pval_reducer
+        reducers[g] = expression_reducer
 
     # merge all dfs on "gene"
     needed_cols = ["gene"] + list(reducers.keys())
