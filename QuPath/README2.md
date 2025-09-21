@@ -11,7 +11,7 @@ This tutorial includes:
 **Important!**
 
 The image that should be used in Qupath is the cropped image that is created when creating a new HiVis object in Python.
-Alternetaviely, call HiVis.export_images() - and use the exported fullres_image.tif
+Alternetaviely, and highly advisible - call HiVis.export_images() - and use the exported fullres_image.tif
 
 
 ## 1. Manual annotations
@@ -54,18 +54,68 @@ This assigns annotation for each bin.
 
 
 ## 3. Cell segmentation - based on nuclei only (H&E or fluorescence, using Stardist)
+Download and install 
+[Stardist extension for QuPath](https://github.com/qupath/qupath-extension-stardist).
+
+Use the [StarDist script](https://github.com/roynov01/HiVis/blob/main/QuPath/scripts/VisiumHDAnalysis_StarDist_AnatomicalRegions_FilterNuc.groovy).
+
+Import the segmentation into Python and aggregate gene expression with [HiVis.agg_cells()](https://hivis.readthedocs.io/en/latest/items.html#HiVis.HiVis.HiVis.agg_cells).
+
+### Control parameters (0 or 1):
+* **segmentTissue** - Segment the tissue, and not allow the detection of nuclei outside it. Also limits the expansion of cells to the tissue area.
+* **segmentAnatomicalRegions** - Segment anatomical regions to allow varying expansion  of nuclei in each region.
+* **segmentCells** - Segment cells (1) or only nuclei (0).
+* **filterNucBeforeCellExpansion** - Filter artefact nuclei prior to expansion.
+* **AddMeasurementsToCells** - Add measurements and channels intensities to cells.
+* **loadSpots** - Load VisiumHD bins.
+* **associateSpotsToCells** - Associate spots to cells.
+* **runPixelClassifierForSpot** - Give each bin an identity based on the pixel classifier.
+* **runPixelClassifierForCell** - Give each cell an identity based on the pixel classifier.
+* **exportCellsAsGeoJson** - Export geometry of cells.
+* **exportAnnotationsAsGeoJson** - 
+# <span style="color:red">**ADD**</span>
+* **saveResultTable** - Save the results as a CSV file.
+
+### General parameters:
+* **scalefactors_json** - Path of scalefactors_json.json file containing scale factors positions. exported by [HiVis.export_images()](https://hivis.readthedocs.io/en/latest/items.html#HiVis.HiVis.HiVis.export_images)
+* **csvfile** - Path of tissue_positions.csv file containing bins positions. exported by [HiVis.export_images()](https://hivis.readthedocs.io/en/latest/items.html#HiVis.HiVis.HiVis.export_images)
+* **WholeTissueClassifier** - Name of WholeTissue pixel classifier
+* **wholeTissueClass** - Name of whole-tissue class in the WholeTissue pixel classifier
+* **WholeTissue_MinSize** - Minimal WholeTissue connected-component size 
+* **WholeTissue_MinHoleSize** - Minmal hole size to keep when creating WholeTissue regions, samller holes are filled 
+* **PixelClassifier** - Name of pixel classifier, if runPixelClassifier were set to 1
 
 
+### Stardist parameters:
+* **StarDistPathModel** - path for Stardist model, such as he_heavy_augment.pb.
+* **param_threshold** - Threshold for detection. All cells segmented by StarDist will have a detection probability associated with it, where higher values indicate more certain detections. Floating point, range is 0 to 1. Default 0.5
+* **normalize_low_pct** - Lower limit for normalization. Set to 0 to disable.
+* **normalize_high_pct** - Upper limit for normalization. Set to 100 to disable.
+* **param_tilesize** - size of tile in pixels for processing. Must be a multiple of 16. Lower values may solve any memory-related errors, but can take longer to process. Default is 1024.
+* **PositiveNegativeNucClassifier** - OPTIONAL name of object classifier to filter nuclei prior to expansion.
 
-### Import into HiVis
-Cells can be imported into Python with [HiVis.agg_cells()](https://hivis.readthedocs.io/en/latest/items.html#HiVis.HiVis.HiVis.agg_cells).
+Expension parameters
+
+* **AnatomicalRegionsClassNames** - list of names of identities.
+* **AnatomicalRegionsExpansionMicrons** - list of expansion amount for each of the identities.
+
 
 ## 4. Cell segmentation - based on multiple channels (fluorescence, using Cellpose or InstanSeg)  
+Download and install 
+[Cellpose extension for QuPath](https://github.com/BIOP/qupath-extension-cellpose).
+
+Use the [fluorescence script](https://github.com/roynov01/HiVis/blob/main/QuPath/scripts/VisiumHDAnalysis_Flourescent.groovy).
+
+Import the segmentation into Python and aggregate gene expression with [HiVis.agg_cells()](https://hivis.readthedocs.io/en/latest/items.html#HiVis.HiVis.HiVis.agg_cells).
+
+### Parameters
+# <span style="color:red">**ADD**</span>
 
 
 
-### Import into HiVis
-Cells can be imported into Python with [HiVis.agg_cells()](https://hivis.readthedocs.io/en/latest/items.html#HiVis.HiVis.HiVis.agg_cells).
+### Training a custom Cellpose model
+
+# <span style="color:red">**ADD**</span>
 
 
 ## 5. Technical details of QuPath Implementation
@@ -87,5 +137,6 @@ Instead, **parent cell ID is encoded in the bin’s** `Name` **field** as:
 
 ## Referances
 
+# <span style="color:red">**ADD**</span>
 
 
