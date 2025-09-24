@@ -11,7 +11,8 @@ This tutorial includes:
 **Important!**
 
 The image that should be used in Qupath is the cropped image that is created when creating a new HiVis object in Python.
-Alternetaviely, and highly advisible - call HiVis.export_images() - and use the exported fullres_image.tif
+
+Alternetaviely, and highly advisible - call [HiVis.export_images()](https://hivis.readthedocs.io/en/latest/items.html#HiVis.HiVis.HiVis.export_images) - and use the exported fullres_image.tif
 
 
 ## 1. Manual annotations
@@ -87,17 +88,17 @@ Import the segmentation into Python and aggregate gene expression with [HiVis.ag
 
 
 ### Stardist parameters:
-* **StarDistPathModel** - path for Stardist model, such as he_heavy_augment.pb.
+* **StarDistPathModel** - Path for Stardist model, such as he_heavy_augment.pb.
 * **param_threshold** - Threshold for detection. All cells segmented by StarDist will have a detection probability associated with it, where higher values indicate more certain detections. Floating point, range is 0 to 1. Default 0.5
 * **normalize_low_pct** - Lower limit for normalization. Set to 0 to disable.
 * **normalize_high_pct** - Upper limit for normalization. Set to 100 to disable.
-* **param_tilesize** - size of tile in pixels for processing. Must be a multiple of 16. Lower values may solve any memory-related errors, but can take longer to process. Default is 1024.
+* **param_tilesize** - Size of tile in pixels for processing. Must be a multiple of 16. Lower values may solve any memory-related errors, but can take longer to process. Default is 1024.
 * **PositiveNegativeNucClassifier** - OPTIONAL name of object classifier to filter nuclei prior to expansion.
 
 Expension parameters
 
-* **AnatomicalRegionsClassNames** - list of names of identities.
-* **AnatomicalRegionsExpansionMicrons** - list of expansion amount for each of the identities.
+* **AnatomicalRegionsClassNames** - List of names of identities.
+* **AnatomicalRegionsExpansionMicrons** - List of expansion amount for each of the identities.
 
 
 ## 4. Cell segmentation - based on multiple channels (fluorescence, using Cellpose or InstanSeg)  
@@ -108,12 +109,64 @@ Use the [fluorescence script](https://github.com/roynov01/HiVis/blob/main/QuPath
 
 Import the segmentation into Python and aggregate gene expression with [HiVis.agg_cells()](https://hivis.readthedocs.io/en/latest/items.html#HiVis.HiVis.HiVis.agg_cells).
 
-### Parameters
+### Control parameters (0 or 1):
+
+* **segmentTissue** - Segment the tissue, and not allow the detection of nuclei outside it. Also limits the expansion of cells to the tissue area.
+* **segmentAnatomicalRegions** - Segment anatomical regions to allow varying expansion  of nuclei in each region.
+* **segmentCells** - Segment cells (1) or only nuclei (0).
+* **filterNucBeforeCellExpansion** - Filter artefact nuclei prior to expansion.
+* **AddMeasurementsToCells** - Add measurements and channels intensities to cells.
+* **loadSpots** - Load VisiumHD bins.
+* **associateSpotsToCells** - Associate spots to cells.
+* **runPixelClassifierForSpot** - Give each bin an identity based on the pixel classifier.
+* **runPixelClassifierForCell** - Give each cell an identity based on the pixel classifier.
+* **exportCellsAsGeoJson** - Export geometry of cells.
+* **exportAnnotationsAsGeoJson** - 
+# <span style="color:red">**ADD**</span>
+* **saveResultTable** - Save the results as a CSV file.
+
+### General parameters:
+* **scalefactors_json** - Path of scalefactors_json.json file containing scale factors positions. exported by [HiVis.export_images()](https://hivis.readthedocs.io/en/latest/items.html#HiVis.HiVis.HiVis.export_images)
+* **csvfile** - Path of tissue_positions.csv file containing bins positions. exported by [HiVis.export_images()](https://hivis.readthedocs.io/en/latest/items.html#HiVis.HiVis.HiVis.export_images)
+* **WholeTissueClassifier** - Name of WholeTissue pixel classifier
+* **wholeTissueClass** - Name of whole-tissue class in the WholeTissue pixel classifier
+* **WholeTissue_MinSize** - Minimal WholeTissue connected-component size 
+* **WholeTissue_MinHoleSize** - Minmal hole size to keep when creating WholeTissue regions, samller holes are filled 
+* **PixelClassifier** - Name of pixel classifier, if runPixelClassifier were set to 1
+
+### Stardist parameters:
+* **StarDistPathModel** - Path for Stardist model, such as he_heavy_augment.pb.
+* **param_threshold** - Threshold for detection. All cells segmented by StarDist will have a detection probability associated with it, where higher values indicate more certain detections. Floating point, range is 0 to 1. Default 0.5
+* **normalize_low_pct** - Lower limit for normalization. Set to 0 to disable.
+* **normalize_high_pct** - Upper limit for normalization. Set to 100 to disable.
+* **param_tilesize** - Size of tile in pixels for processing. Must be a multiple of 16. Lower values may solve any memory-related errors, but can take longer to process. Default is 1024.
+* **PositiveNegativeNucClassifier** - OPTIONAL name of object classifier to filter nuclei prior to expansion.
+
+Expension parameters
+
+* **AnatomicalRegionsClassNames** - List of names of identities.
+* **AnatomicalRegionsExpansionMicrons** - List of expansion amount for each of the identities.
+
+
+### Cellpose parameters:
+* **CellposeNucModel** - Path for model file, or name of buyilt-in model
+* **CellposeCellModel** - Path for model file, or name of buyilt-in model
+* **CellposeCellDiameter** - Diameter of cells (µm)
+* **CellposeNucDiameter** - Diameter of nuclei (µm)
+
+
+### InstaSeg parameters:
+* **InstaSegModel** - Path for model file
+* **InstaSeg_tileDims** - 
+* **InstaSeg_interTilePadding** - 
+
 # <span style="color:red">**ADD**</span>
 
+* **InstaSeg_nThread** - Number of threads
+* **InstaSeg_device** - "gpu" or "cpu"
 
 
-### Training a custom Cellpose model
+### Train a custom Cellpose model
 
 # <span style="color:red">**ADD**</span>
 
@@ -136,7 +189,10 @@ Instead, **parent cell ID is encoded in the bin’s** `Name` **field** as:
 > BinBarcode__ParentCellObjectID
 
 ## Referances
+**QuPath**: Bankhead P, Loughrey MB, Fernández JA, Dombrowski Y, McArt DG, Dunne PD, et al. QuPath: Open source software for digital pathology image analysis. Sci Rep. 2017 Dec 4;7(1):16878. 
 
-# <span style="color:red">**ADD**</span>
+**Stardist**: Weigert M, Schmidt U. Nuclei instance segmentation and classification in histopathology images with StarDist. 2022. Available from: http://arxiv.org/abs/2203.02284
 
+**Cellpose**: Stringer C, Wang T, Michaelos M, Pachitariu M. Cellpose: a generalist algorithm for cellular segmentation. Nat Methods. 2021 Jan;18(1):100–6. 
 
+**InstanSeg**: Goldsborough T, Philps B, O’Callaghan A, Inglis F, Leplat L, Filby A, et al. InstanSeg: an embedding-based instance segmentation algorithm optimized for accurate, efficient and portable cell segmentation. arXiv; 2024. Available from: http://arxiv.org/abs/2408.15954
