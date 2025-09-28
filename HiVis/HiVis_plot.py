@@ -1720,7 +1720,7 @@ def plot_spatial_3d(agg, what, color=None, cmap="hot", axis_labels=True, ax=None
 
 
 def add_scalebar(ax, microns_per_pixel, length=None, text=True,bar_offset=0.02,
-                 line_width=4, color='white', text_offset=0.035):
+                 line_width=4, color='white', text_offset=None):
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
     x0, x1 = sorted(xlim)
@@ -1745,10 +1745,18 @@ def add_scalebar(ax, microns_per_pixel, length=None, text=True,bar_offset=0.02,
 
     # Add label above the bar
     if text:
-        ax.text(x_start + length / 2,
-                y_start - text_offset * y_range,
-                f"{length_um:.0f} µm",zorder=1000,
-                ha='center', va='top', color=color)
+        if text_offset is None:
+            text_offset = max(2,line_width*0.75)  # points
+
+        ax.annotate(
+            f"{length_um:.0f} µm",
+            xy=(x_start + length / 2, y_start),     # anchor at the bar
+            xytext=(0, text_offset),                # move UP by N points (display coords)
+            textcoords='offset points',
+            ha='center', va='bottom',
+            color=color, zorder=1001,
+            clip_on=False                           # avoid clipping at the top edge
+        )
 
 def add_legend(legend_dict, ax, title=None, loc="upper right"):
     import matplotlib.patches as mpatches
