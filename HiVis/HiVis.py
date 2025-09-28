@@ -111,7 +111,7 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
                                       path_image_lowres_cropped,image_fullres,
                                       image_highres, image_lowres,um_per_pxl=scalefactor_json["microns_per_pixel"])
         cols = ['in_tissue', 'array_row', 'array_col', 'pxl_row_in_fullres','pxl_col_in_fullres']        
-        csv_path = Path(path_image_fullres_cropped).parent / "tissue_positions_cropped.csv"
+        csv_path = Path(path_image_fullres_cropped).parent / f"{name}_tissue_positions_cropped.csv"
         adata.obs[cols].to_csv(csv_path, index=True, index_label="barcode")
     
     if fluorescence:
