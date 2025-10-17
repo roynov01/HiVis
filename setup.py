@@ -27,7 +27,7 @@ setup(
         "dill>=0.3.9",
         "tifffile>=2025.3.13",
         "statsmodels>=0.14.4",
-        "scikit-learn==1.5.2"
+        "scikit-learn>=1.5.2"
     ],
     classifiers=[
         "Intended Audience :: Science/Research",
