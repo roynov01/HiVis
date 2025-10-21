@@ -761,27 +761,42 @@ class HiVis:
         return new_obj
     
     def to_spatialdata(self):
+        import pandas as pd, geopandas as gpd
         from shapely.geometry import Point
         from spatialdata.models import ShapesModel
         from spatialdata.models import Image2DModel
         import spatialdata as sd
-
-        img = self.image_fullres.transpose(2, 0, 1)  # now shape is (3, y, x)
+        import re
+        
+        def clean_name(s):
+            s = str(s).replace("µ", "u").replace("μ", "u")
+            return re.sub(r"[^0-9A-Za-z_.-]", "_", s)
+ 
+        
+        adata = self.adata.copy()
+        adata.obs.columns = [clean_name(c) for c in adata.obs.columns]
+        adata.obs = adata.obs.assign(**{
+            c: adata.obs[c].astype("string").fillna("")
+            for c in adata.obs.select_dtypes(include=["object", "string", "category"])
+        })
+        img = self.image_fullres_orig if self.fluorescence else self.image_fullres
+        
+        img = img.transpose(2, 0, 1)  # now shape is (3, y, x)
 
         img_model = Image2DModel.parse(data=img, scale_factors=(2, 2, 2))
-        centers = list(zip(self.adata.obs["pxl_col_in_fullres"],  # x coordinates
-                           self.adata.obs["pxl_row_in_fullres"])) # y coordinates
+        centers = list(zip(adata.obs["pxl_col_in_fullres"],  # x coordinates
+                           adata.obs["pxl_row_in_fullres"])) # y coordinates
         radius = (self.json["spot_diameter_fullres"] / 2)  
         df = pd.DataFrame([radius] * len(centers), columns=["radius"])
         gdf = gpd.GeoDataFrame(df, geometry=[Point(x, y) for x, y in centers])
         shapes = ShapesModel.parse(gdf)
 
-        if "spatial" in self.adata.uns.keys():
-            del self.adata.uns["spatial"]
-        if "spatial" in self.adata.obsm.keys():
-            del self.adata.obsm["spatial"]
+        if "spatial" in adata.uns.keys():
+            del adata.uns["spatial"]
+        if "spatial" in adata.obsm.keys():
+            del adata.obsm["spatial"]
         from spatialdata.models import TableModel
-        adata_table = TableModel.parse(self.adata)
+        adata_table = TableModel.parse(adata)
         adata_table.uns["spatialdata_attrs"] = {"region": "spots","region_key": "region","instance_key": "spot_id"}
         adata_table.obs["region"] = pd.Categorical(["spots"] * adata_table.n_obs)
         adata_table.obs["spot_id"] = shapes.index  # align each obs with the shapes GeoDataFrame index

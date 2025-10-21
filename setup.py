@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="HiVis", 
-    version="0.8.0",
+    version="0.8.1",
     author="Roy Novoselsky",
     author_email="roy.novoselsky@weizmann.ac.il",
     description="A user friendly tool for working with VisiumHD data",
@@ -18,7 +18,7 @@ setup(
         "seaborn>=0.13.2",
         "scanpy==1.11.0", # read_visium will be deprecated, if updating scanpy, change to suidpy.read_visium
         "anndata>=0.11.3",
-        "adjustText", # version 1.3.0 is broken
+        "adjustText", 
         "pyarrow>=19.0.1",
         "pillow>=11.1.0",
         "tqdm>=4.67.1",
