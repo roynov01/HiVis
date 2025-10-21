@@ -760,6 +760,34 @@ class HiVis:
                     print(f"Aggregation [{agg}] is empty")
         return new_obj
     
+    def to_spatialdata(self):
+        from shapely.geometry import Point
+        from spatialdata.models import ShapesModel
+        from spatialdata.models import Image2DModel
+        import spatialdata as sd
+
+        img = self.image_fullres.transpose(2, 0, 1)  # now shape is (3, y, x)
+
+        img_model = Image2DModel.parse(data=img, scale_factors=(2, 2, 2))
+        centers = list(zip(self.adata.obs["pxl_col_in_fullres"],  # x coordinates
+                           self.adata.obs["pxl_row_in_fullres"])) # y coordinates
+        radius = (self.json["spot_diameter_fullres"] / 2)  
+        df = pd.DataFrame([radius] * len(centers), columns=["radius"])
+        gdf = gpd.GeoDataFrame(df, geometry=[Point(x, y) for x, y in centers])
+        shapes = ShapesModel.parse(gdf)
+
+        if "spatial" in self.adata.uns.keys():
+            del self.adata.uns["spatial"]
+        if "spatial" in self.adata.obsm.keys():
+            del self.adata.obsm["spatial"]
+        from spatialdata.models import TableModel
+        adata_table = TableModel.parse(self.adata)
+        adata_table.uns["spatialdata_attrs"] = {"region": "spots","region_key": "region","instance_key": "spot_id"}
+        adata_table.obs["region"] = pd.Categorical(["spots"] * adata_table.n_obs)
+        adata_table.obs["spot_id"] = shapes.index  # align each obs with the shapes GeoDataFrame index
+        sdata = sd.SpatialData(images={self.name: img_model}, shapes={"spots": shapes},tables={"adata": adata_table},)
+        return sdata
+    
     
     def update(self, agg=False):
         '''Updates the methods in the instance. Should be used after modifying the source code in the class'''
