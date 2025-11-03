@@ -20,6 +20,11 @@ from scipy.cluster.hierarchy import linkage, dendrogram
 from statsmodels.stats.multitest import multipletests
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
+from skimage.transform import rescale
+from skimage.io import imread
+import anndata as ad
+import json
+
 # import squidpy
 
 
@@ -1002,14 +1007,62 @@ def combine_dges(dges_list, group_names, pval_reducer, log2fc_reducer=np.nanmedi
     return final_df
 
 
+def create_rescaled_images(full_res_image, high_res_scale=0.5, low_res_scale=0.1):
+    high_res_image = rescale(full_res_image, high_res_scale, anti_aliasing=True, multichannel=False)  # Adjust multichannel if you have color images
+    low_res_image = rescale(full_res_image, low_res_scale, anti_aliasing=True, multichannel=False)
+    return high_res_image, low_res_image
 
 
+def load_spatial_data(matrix_file, gene_file, barcode_file, coord_file, image_file, geojson_file):
+   # Load expression matrix
+   X = sp.load_npz(matrix_file)  # or read from CSV/MTX depending on format
 
+   # Load gene names and barcodes
+   genes = pd.read_csv(gene_file, header=None)[0].values
+   barcodes = pd.read_csv(barcode_file, header=None)[0].values
 
+   # Load coordinates
+   coords = pd.read_csv(coord_file, index_col=0)
+   coords.index = barcodes  # align coordinates with barcodes
 
+   # Create AnnData object
+   adata = ad.AnnData(X=X)
+   adata.var_names = genes
+   adata.obs_names = barcodes
+   adata.obsm["spatial"] = coords.values
+   coords.columns = ["pxl_col_in_fullres", "pxl_row_in_fullres"]
+   adata.obs[["pxl_col_in_fullres", "pxl_row_in_fullres"]] = coords.loc[adata.obs_names]
 
+   # Load scalefactors. make sure "bin_size_um" and "microns_per_pixel" are present
+   with open(geojson_file) as f:
+       geojson = json.load(f)
 
+   return adata, geojson   
 
+def load_and_prepare_data(matrix_file, gene_file, barcode_file, coord_file, image_file, geojson_file):
+    """
+    Load and prepare spatial transcriptomics data from non-VisiumHD sources.
+
+    Parameters:
+    * matrix_file (str) - Path to the expression matrix file (e.g., .npz, .mtx, or .csv).
+    * gene_file (str) - Path to the file containing gene names.
+    * barcode_file (str) - Path to the file containing barcodes corresponding to each spot or cell.
+    * coord_file (str) - Path to the CSV file containing spatial coordinates aligned with barcodes.
+    * image_file (str) - Path to the associated tissue image file.
+    * geojson_file (str) - Path to the GeoJSON file containing spatial metadata, including "bin_size_um" and "microns_per_pixel".
+
+    Returns:
+    * adata - AnnData object containing expression data, spatial coordinates, and metadata.
+    * geojson (dict) - Parsed GeoJSON metadata with spatial scaling information.
+    """
     
+    # Load the AnnData, full-res image, and GeoJSON (just like we did before)
+    adata, geojson = load_spatial_data(matrix_file, gene_file, barcode_file, coord_file, image_file, geojson_file)
     
+    full_res_image = imread(image_file)
+
+    # Create high-res and low-res images
+    high_res_image, low_res_image = create_rescaled_images(full_res_image)
+
+    return adata, full_res_image, high_res_image, low_res_image, geojson
 
