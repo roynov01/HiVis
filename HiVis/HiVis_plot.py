@@ -1182,7 +1182,7 @@ def plot_scatter_signif(df, x_col, y_col,
                         text=True, figsize=(7,7), size=10, legend=False, title=None,
                         ax=None, xlab=None, ylab=None,
                         color="black", color_genes="red", color_genes2="blue",
-                        x_line=None, y_line=None,cmap="viridis",repel=False,edgecolor=None):
+                        x_line=None, y_line=None,cmap="viridis",repel=False,edgecolor=None,bold=False):
     '''
     Plots a scatterplot based on a dataframe.
     
@@ -1258,7 +1258,7 @@ def plot_scatter_signif(df, x_col, y_col,
         if text:
             for _, row in group1_df.iterrows():
                 texts.append(ax.text(row[x_col], row[y_col], row["gene"],
-                                     color=color_genes))
+                                     color=color_genes,fontweight='bold' if bold else 'normal'))
     
     # Plot group 2 points and (optionally) add text labels.
     group2_df = df[df["group"] == "group2"]
@@ -1270,7 +1270,7 @@ def plot_scatter_signif(df, x_col, y_col,
         if text:
             for _, row in group2_df.iterrows():
                 texts.append(ax.text(row[x_col], row[y_col], row["gene"],
-                                     color=color_genes2))
+                                     color=color_genes2,fontweight='bold' if bold else 'normal'))
     if repel:
     # Adjust text to reduce overlap if any text labels were added.
         if text and texts:
