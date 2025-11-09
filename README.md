@@ -13,8 +13,8 @@ Plots are created using *matplotlib*, allowing stacking and further customizatio
 * **HiVis** works with 
 [QuPath](https://qupath.readthedocs.io/en/stable/)
 to enable easy manual annotation, pixel classification, and single-cell segmentation using
- [Stardist](https://github.com/stardist/stardist/) and 
- [Cellpose](https://github.com/MouseLand/cellpose).
+ [Stardist](https://github.com/stardist/stardist/),  
+ [Cellpose](https://github.com/MouseLand/cellpose) and [Instaseg](https://github.com/instanseg/instanseg).
  It links bins and single-cell objects, facilitating seamless information exchange across levels.  
 
 ![](docs/HiVis.png)
