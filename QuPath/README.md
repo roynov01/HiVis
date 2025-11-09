@@ -62,11 +62,12 @@ Nuclei segmentation options:
 - **Restrict expansion within anatomical regions**
   - Requires a trained **pixel classifier** or **manual annotation**
 - **Region-specific expansion size**
-- **Region-specific detection parameters** (e.g., detection probability threshold)
+- **Region-specific segmentation parameters** (e.g., detection probability threshold)
 - **Nuclei classification–based expansion**
   - Use a trained *object classifier* to apply different parameters to different cell types
 - **Artifact filtering**
   - Train an object classifier to distinguish *nuclei vs artifacts* (helpful for H&E)
+
 **Use this script for H&E data**:
 > VisiumHDAnalysis_StarDist_AnatomicalRegions_FilterNuc.groovy
 
