@@ -78,6 +78,7 @@ Nuclei segmentation options:
 Association of Visium-HD bins to segmented cells is implemented **within QuPath**.
 
 Bins are uploaded from the converted 'tissue_positions.csv' file 
+
 **Bin-to-Cell Association Rules**
 - A bin (spot) is associated to a cell (or nucleus) if its center is inside that region.
 - For each **bin**:
