@@ -52,7 +52,8 @@ Examples: H&E image or fluorescent DAPI-only staining.
 - Expansion is limited by:
   - A **maximum distance** from the nucleus
   - Until it touches a **neighboring expanding cell**
-Nuclei detection options:
+
+Nuclei segmentation options:
 - [StarDist](https://github.com/stardist/stardist)
 - [Cellpose](https://github.com/MouseLand/cellpose)
 - [InstaSeg](https://github.com/instanseg/instanseg),
