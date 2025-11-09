@@ -95,7 +95,7 @@ QuPath has two object types:
 - **Annotations**
   - Flexible and can contain child objects
 - **Detections**
-  - More efficient and suited for large datasets
+  - More efficient and suited for large number of objects
   - Cannot have children
   - `Cells` and `Tiles` are both subtypes of `Detections`
 
