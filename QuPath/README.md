@@ -147,9 +147,9 @@ To export the classifier result as a label image (mask), run the script
 | `VisiumHDAnalysis_DoubleNucleatedCells_v1.groovy`    | Custom script for mouse liver Fluorescent images: segment heptocytes and their nuclei with cellpose, segment non-parenchymal cells with Stardist + expansion     |
 
 ## Scripts Details: VisiumHDAnalysis_Flourescent.groov
-General Workflow Steps
 | Parameter                    | Possible Values | Description                                                                                  |
 | ---------------------------- | --------------- | -------------------------------------------------------------------------------------------- |
+**General Workflow Steps**
 | `segmentTissue`              | `0`, `1`        | If `1`, segment the entire tissue region.                                                    |
 | `segmentAnatomicalRegions`   | `0`, `1`        | If `1`, perform segmentation of anatomical subregions.                                       |
 | `segmentCells`               | `0`, `1`        | If `1`, segment individual cells.                                                            |
@@ -160,18 +160,18 @@ General Workflow Steps
 | `exportCellsAsGeoJson`       | `0`, `1`        | Export segmented cells as GeoJSON for visualization or spatial analysis.                     |
 | `exportAnnotationsAsGeoJson` | `0`, `1`        | Export QuPath annotations as GeoJSON.                                                        |
 | `saveResultTable`            | `0`, `1`        | If `1`, export results table as tab-separated `.txt` file.                                   |
-Segmentation and Channels
+**Segmentation and Channels**
 | `cellSegmentationMethod` | `"cellBorders"`, `"expandNuc"`, `"onlyNuc"`                          | Defines how cell boundaries are determined relative to nuclei. |
 | `segmentationAlg`        | `"cellpose"`, `"stardist"`, `"instaseg"`                             | Algorithm used for segmentation.                               |
 | `nucChannel`             | `"Channel 4"` (Tonsil), `"Channel 4"` (mouse_liver)                  | Image channel used for nuclei detection.                       |
 | `membraneChannels`       | `["Channel 1", "Channel 3"]` (Tonsil), `["Channel 1"]` (mouse_liver) | Channels used to identify cell membranes.                      |
-Cellpose Parameters
+**Cellpose Parameters**
 | `useCellposeSAM`       | `0`, `1`                                         | Use SAM (Segment Anything Model) integration in Cellpose. |
 | `CellposeNucModel`     | `"nuc"`, `"cpsam"`                               | Model used for nuclei segmentation.                       |
 | `CellposeCellModel`    | `"cyto3"`, `"cpsam"`, path to custom `.cpm` file | Model used for cell segmentation.                         |
 | `CellposeCellDiameter` | integer (e.g., `15`, `50`)                       | Approximate cell diameter in pixels.                      |
 | `CellposeNucDiameter`  | integer (e.g., `15`, `21`)                       | Approximate nucleus diameter in pixels.                   |
-StarDist Parameters
+**StarDist Parameters**
 | Parameter                   | Possible Values                 | Description                                                       |
 | `StarDistPathModel`         | path to `.pb` model file        | Path to trained StarDist model.                                   |
 | `clear_existing_detections` | `true`, `false`                 | Whether to clear previous detections before segmentation.         |
@@ -179,32 +179,32 @@ StarDist Parameters
 | `normalize_low_pct`         | integer (e.g., `0–5`)           | Lower percentile for normalization (set `0` to disable).          |
 | `normalize_high_pct`        | integer (e.g., `95–100`)        | Upper percentile for normalization (set `100` to disable).        |
 | `param_tilesize`            | multiple of 16 (default `1024`) | Tile size (in pixels) for processing; smaller = lower memory use. |
-InstaSeg Parameters
+**InstaSeg Parameters**
 | `InstaSegModel`             | path to InstaSeg model directory | Model used for nuclei and cell segmentation.   |
 | `InstaSeg_tileDims`         | integer (e.g., `1024`)           | Tile size (in pixels) for processing.          |
 | `InstaSeg_interTilePadding` | integer (e.g., `32`)             | Overlap between tiles to avoid edge artifacts. |
 | `InstaSeg_nThreads`         | integer                          | Number of processing threads.                  |
 | `InstaSeg_device`           | `"gpu"`, `"cpu"`                 | Compute device to use for segmentation.        |
-Classes and Output
+**Classes and Output**
 | `cellClassName`    | `"Cell"`                                    | Name of the QuPath class for cells.           |
 | `nucClassName`     | `"Nuc"`                                     | Name of the QuPath class for nuclei.          |
 | `spotClassName`    | `"Spot"`                                    | Name of the QuPath class for Visium HD spots. |
 | `resultsSubFolder` | `"results_tonsil"`, `"results_mouse_liver"` | Subfolder for saving exported results.        |
-Whole Tissue Parameters
+**Whole Tissue Parameters**
 | `wholeTissueClass`        | `"WholeTissue"`, `"Epithelium"`, `"Crypt"`, etc.                | Class label for the full tissue region.                    |
 | `WholeTissueClassifier`   | `"WholeTissue_Tonsil_Moderate_v1"`, `"WholeTissue_mouse_liver"` | Pixel classifier name used for whole tissue segmentation.  |
 | `WholeTissue_MinSize`     | integer (e.g., `10000`)                                         | Minimum connected component size (in pixels).              |
 | `WholeTissue_MinHoleSize` | integer (e.g., `3000–10000`)                                    | Minimum size of holes to retain; smaller holes are filled. |
-Anatomical Region Parameters
+**Anatomical Region Parameters**
 | `ClassNameForAnatomicalRegions`     | `"WholeTissue"`, `"tissue"`                                        | Name of parent class for anatomical regions.            |
 | `AnatomicalRegionsPixelClassifier`  | classifier name (e.g., `"epithel_non_epithel_ignore_moderate_v1"`) | Pixel classifier used to define anatomical subregions.  |
 | `AnatomicalRegions_MinSize`         | integer (e.g., `500`)                                              | Minimum region size to keep.                            |
 | `AnatomicalRegions_MinHoleSize`     | integer (e.g., `40`, `500`)                                        | Minimum hole size to preserve.                          |
 | `AnatomicalRegionsClassNames`       | e.g., `["WholeTissue"]`                                            | List of region class names.                             |
 | `AnatomicalRegionsExpansionMicrons` | list of integers (e.g., `[5]`)                                     | Expansion distance (in µm) per anatomical region class. |
-Pixel Classifier Parameters
+**Pixel Classifier Parameters**
 | `PixelClassifier` | classifier name (e.g., `"epithelial_celiac_classifier"`) | Pixel classifier used for cell classification. |
-Visium HD Spot Parameters
+**Visium HD Spot Parameters**
 | `scalefactors_json`     | path to `scalefactors_json.json` file | Defines scaling between image and Visium coordinate system.      |
 | `csvfile`               | path to `tissue_positions.csv` file   | Contains spot positions and barcodes.                            |
 
