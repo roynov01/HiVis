@@ -136,7 +136,18 @@ To export the classifier result as a label image (mask), run the script
  with downsample=1.
 
 ## Train your own model 
-...
+Train your own cellpose model within QuPath: 
+Follow the instructions in [QuPath Cellpose extension](https://github.com/BIOP/qupath-extension-cellpose)
+Here are few comments we find important : 
+- Use duplicated images for training or even different project
+- Select multiple ROIs that represent well the variability in the appearance of the cells in the data . 
+	Select regions that contain multiple cells (eg 50-100 regions of 10-20 cells each).
+	Use "Create region annotations…" with specified size and class (Training / Validation)
+- For each such region run cell segmentation with your favourite model, use the flag "createAnnotations" to enable editing the segmentation
+- Delete artifacts, and cell that are completely wrong. Correct segmentation when needed, using the different annotation tools. We recommend using Brush or Polygon. You can also use SAM extension 
+- Make sure to be consistent when annotating (eg: is the cell membrane included or not )
+- You must annotate all the cells within each of the selected ROIs
+
 
 ## Scripts Overview
   
