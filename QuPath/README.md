@@ -111,7 +111,7 @@ Instead, **parent cell ID is encoded in the bin’s** `Name` **field** as:
 - Each spot receives measurements of the *percentage of its area* covered by each class
 - Uses **hard decision classification**
 
-## Manual annoatations
+## Manual annotations
 In the annotation tab, select the class you want to annotate and click "set selected".
 Then annotate with any of the [annotation tools](https://qupath.readthedocs.io/en/stable/docs/starting/annotating.html#annotation-tools).
 To export the annotations, select the annotations you want to export (ctrl+A for all), and click on File => Export objects as GeoJSON, leave the default options. 
