@@ -1,0 +1,61 @@
+{
+  "pixel_classifier_type": "OpenCVPixelClassifier",
+  "metadata": {
+    "inputPadding": 0,
+    "inputResolution": {
+      "pixelWidth": {
+        "value": 2.6014447218276198,
+        "unit": "µm"
+      },
+      "pixelHeight": {
+        "value": 2.6014447218276198,
+        "unit": "µm"
+      },
+      "zSpacing": {
+        "value": 1.0,
+        "unit": "z-slice"
+      },
+      "timeUnit": "SECONDS",
+      "timepoints": []
+    },
+    "inputWidth": 512,
+    "inputHeight": 512,
+    "inputNumChannels": 3,
+    "outputType": "CLASSIFICATION",
+    "outputChannels": [],
+    "classificationLabels": {
+      "1": {
+        "name": "WholeTissue",
+        "color": [
+          156,
+          243,
+          1
+        ]
+      }
+    }
+  },
+  "op": {
+    "type": "data.op.channels",
+    "colorTransforms": [
+      {
+        "combineType": "MEAN"
+      }
+    ],
+    "op": {
+      "type": "op.core.sequential",
+      "ops": [
+        {
+          "type": "op.filters.gaussian",
+          "sigmaX": 2.0,
+          "sigmaY": 2.0
+        },
+        {
+          "type": "op.threshold.constant",
+          "thresholds": [
+            500.0
+          ]
+        }
+      ]
+    }
+  }
+}
