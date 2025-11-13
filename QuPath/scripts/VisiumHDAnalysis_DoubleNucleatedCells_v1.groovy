@@ -98,6 +98,7 @@ def bv_MinNucIntensity    = 18000 //17000 //17000 //remove any detections with a
 // =======================================================================================================
 
 // Get Pixel size from the image
+def server = getCurrentServer()
 def cal = server.getPixelCalibration()
 def pixelWidth = cal.pixelWidth
 def pixelHeight = cal.pixelHeight
@@ -105,7 +106,6 @@ double bvCellExpansionPixels = bvCellExpansionMicrons/pixelWidth
 
 def cellClass = getPathClass(cellClassName)
 var imageData = getCurrentImageData()
-def server = getCurrentServer()
 def downsample = 1.0
 
 
