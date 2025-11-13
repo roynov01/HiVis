@@ -20,37 +20,29 @@
 // - Export features for all detections : cell/nuc/spots
 //
 // QuPath 0.6.0 compatible script
-// ===================  Workflow control Parameters  ====================================
+// 
+// sample_data: mouse_liver
+//
+// ===================  Workflow control Parameters  =========================================================
 
-def segmentTissue               = 1 // 
+def segmentTissue               = 1 
 def createAnatomicalRegionsFromPixelClassifier = 1
-def segmentCells                = 1 //
+def segmentCells                = 1 
 def loadSpots                   = 1
 def associateSpotsToCells       = 1
-def runPixelClassifierForSpot   = 1
-def runPixelClassifierForCell   = 1 // MAKE SURE THAT AddDistanceMeasurements IS ALSO 1
+def runPixelClassifierForSpot   = 0
+def runPixelClassifierForCell   = 0 
 def AddDistanceMeasurements     = 1
 def measureSpotZonationInCell   = 1
-def exportCellLabels            = 1 // keep 0
-def exportSpotLabels            = 1 // keep 0
 def exportCellsAndNucsAsGeoJson = 1
 def saveResultTable             = 1 // export result table to Tab-separated txt file
 
-// Cell detection control 
-def clearAllDetections = 0   // leave 0 
-def runCellDetection   = 1
-def runNucDetection    = 1
-def combineNucAndCells = 1
-def keepNucsInCells    = 1
-def segmentBVCells     = 1
-
-var cellClassName = "Cell"
-//var nucClassName  = "Nuc"
-var spotClassName = "Spot"
-
-//def resultsSubFolder = 'results_v2' // subfolder for table 
+// ===================  File paths  ==========================================================================
 def resultsSubFolder = 'results_mouse_liver'
+def scalefactors_json = 'A:/royno/HiVis_proj_v2/datasets/mouse_liver_98_WT_scalefactors_json.json' // Use Full path
+def csvfile = 'A:/royno/HiVis_proj_v2/datasets/mouse_liver_98_WT_tissue_positions.csv' // mouse_liver - TO CHANGE
 
+// ===================  Pixel classifier and anatomical region expansion  ====================================
 def wholeTissueClass = "WholeTissue" 
 def BVClass          = "Blood_vessel" // 
 def hepatoClass      = "WholeTissue"  //  
@@ -59,51 +51,51 @@ def WholeTissueClassifier   = "Whole Tissue" // name of WholeTissue pixel classi
 def WholeTissue_MinSize     =  25            // Minimal WholeTissue connected-component size        
 def WholeTissue_MinHoleSize = 50             // minmal hole size to keep when creating WholeTissue regions, samller holes are filled 
 
+// ===================  Pixel Classifier for Anatomical regions   ====================================
+def PixelClassifier = "blood_vessels_fullres"
+def minObjectSize   = 10
+def minHoleSize     = 100
+def minEmptyArea    = 400
+def maxEmptyArea    = 500000
+
+// ===================  Segmentation parameters  =============================================================
+// Cell detection control 
+def runCellDetection   = 1
+def runNucDetection    = 1
+def combineNucAndCells = 1
+def keepNucsInCells    = 1
+def segmentBVCells     = 1
+
+var cellClassName = "Cell"
+var spotClassName = "Spot"
+
 // ===================  Cell Segmentation parameters  ====================================
+// hepatocytes parameters 
 //def pathModel_cyto = 'cyto3' // Specify the model name (cyto, nuclei, cyto2, ... or a path to your custom model as a string)
-/* Path to costum model */
+// Path to costum model 
 def pathModel_cyto = 'A:/royno/Visium_HD_liver/experiment1/qupath_project/models/Custom_model_2025-01-08_17_02.cpm'
-
 def pathModel_nuc = 'cyto3' // Other models for Cellpose https://cellpose.readthedocs.io/en/latest/models.html
-def pathModel_bv_nuc = 'nuc'
-def nucChannel = 3
-def membChannel = 0
-def nucDiameter = 21
-def membDiameter = 50
-def bvNucDiameter = 15
-double bvCellExpansionMicrons = 2 //size of cell expansion in microns. 
+def nucChannel       = 3
+def membChannel      = 0
+def nucDiameter      = 21
+def membDiameter     = 50
 
+// bv cells parameters 
 def use_cellpose_for_bv_cells = 0 // 1=use cellpose, 0=use stardist
+def pathModel_bv_nuc = 'nuc'
+def bvNucDiameter    = 15
+double bvCellExpansionMicrons = 2 //size of cell expansion in microns. 
 //def bv_stardist_modelPath = "A:/shared/QuPathScriptsAndProtocols/QuPath_StarDistModels/dsb2018_heavy_augment.pb"
 def bv_stardist_modelPath = "A:/shared/QuPathScriptsAndProtocols/QuPath_StarDistModels/stardist_for_vishnu_v5.pb"
 def bv_stardist_threshold = 0.3 //0.3
-def bv_MaxNucArea= 80 
-def bv_MinNucArea= 10   
-def bv_MinNucIntensity=18000 //17000 //17000 //remove any detections with an intensity less than or equal to this value          
+def bv_MaxNucArea         = 80 
+def bv_MinNucArea         = 10   
+def bv_MinNucIntensity    = 18000 //17000 //17000 //remove any detections with an intensity less than or equal to this value          
 
 
-// ===================  Pixel Classifier Parameters   ====================================
-def PixelClassifier = "blood_vessels_fullres"
-
-def minObjectSize = 10
-def minHoleSize   = 100
-
-def minEmptyArea = 400
-def maxEmptyArea = 500000
-
-// ===================  Visium HD Spots parameters  ====================================
-//double spot_diameter_fullres_orig = 225.00376238353425; // take this value from the file scalefactors_json.json
-double spot_diameter_fullres = 6.229140006048139 //8.048464667916532; //29.22254153479092; // take this value from the file scalefactors_json.json
-
-//def csvfile = 'A:/royno/HiVis_proj_v2/datasets/mouse_liver_98_WT_tissue_positions.csv' // mouse_liver - TO CHANGE
-def csvfile = 'A:/royno/HiVis_proj_v2/datasets/mouse_liver_97_WT_tissue_positions.csv' // mouse_liver - TO CHANGE
-
-// ======================================================================================================
+// =======================================================================================================
 // ===================  Code Begins - Dont Change from here downward  ====================================
-
-var imageData = getCurrentImageData()
-def server = getCurrentServer()
-def downsample = 1.0
+// =======================================================================================================
 
 // Get Pixel size from the image
 def cal = server.getPixelCalibration()
@@ -111,17 +103,20 @@ def pixelWidth = cal.pixelWidth
 def pixelHeight = cal.pixelHeight
 double bvCellExpansionPixels = bvCellExpansionMicrons/pixelWidth
 
-//print("============ pixelWidth="+ pixelWidth+ ", pixelHeight="+pixelHeight+" =====================")
+def cellClass = getPathClass(cellClassName)
+var imageData = getCurrentImageData()
+def server = getCurrentServer()
+def downsample = 1.0
 
 
-// ===================  Segment Whole Tissue  ====================================
+// ===================  Segment Whole Tissue =============================================================
 if (segmentTissue) {
     createAnnotationsFromPixelClassifier(WholeTissueClassifier, WholeTissue_MinSize, WholeTissue_MinHoleSize)
     
     println '======================== Whole Tissue segmentation Done =================== '
 }
 
-// ===================  Segment Anatomical regions  ====================================
+// ===================  Segment Anatomical regions  ======================================================
 if (createAnatomicalRegionsFromPixelClassifier) {
 
     println "[DEBUG] createAnatomicalRegionsFromPixelClassifier start, Number of annotation objects: ${getAnnotationObjects().size()}"
@@ -165,8 +160,6 @@ if (segmentCells) {
         return
     }
 
-    if (clearAllDetections) 
-        clearDetections()
     // Cell Detection 
     // =========================================================================================
     def cellpose_cyto = Cellpose2D.builder( pathModel_cyto )
@@ -196,7 +189,6 @@ if (segmentCells) {
                 
     } 
         
-    
     // hepatocyte Nuc Detection 
     // =========================================================================================
     def cellpose_nuc = Cellpose2D.builder( pathModel_nuc )
@@ -436,6 +428,22 @@ if (segmentCells) {
 
 // ===================  Load Visium HD Spots and associate them to Cells ====================================
 if (loadSpots) {
+    // Extract scale factors
+    // Read the file content
+    def jsonText = new String(Files.readAllBytes(Paths.get(scalefactors_json)))
+    
+    // Use regex to extract the value of "spot_diameter_fullres"
+    def pattern = ~/\"spot_diameter_fullres\"\s*:\s*([0-9.]+)/
+    def matcher = pattern.matcher(jsonText)
+    
+    if (matcher.find()) {
+        //def spot_diameter_fullres = matcher.group(1).toDouble()
+        spot_diameter_fullres = matcher.group(1).toDouble()
+        println "Spot diameter full resolution: ${spot_diameter_fullres}"
+    } else {
+        println "Could not find 'spot_diameter_fullres' in the JSON"
+    }       
+    
     println "[INFO] Loading Spots ..."
     // Create BufferedReader
     def csvReader = new BufferedReader(new FileReader(csvfile));
@@ -794,10 +802,8 @@ def myDetectionToAnnotationDistances(ImageData<?> imageData, boolean splitClassN
 // ******************* imports **********************************
 import qupath.ext.stardist.StarDist2D
 import qupath.lib.scripting.QP
-
 import qupath.ext.biop.cellpose.Cellpose2D
 import qupath.lib.analysis.features.ObjectMeasurements
-
 import groovy.time.*
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -809,7 +815,6 @@ import qupath.lib.objects.PathDetectionObject;
 import qupath.lib.objects.PathTileObject;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.locationtech.jts.geom.util.AffineTransformation;
-//import qupath.lib.objects.classes.PathClassFactory
 import qupath.lib.roi.ROIs
 import qupath.lib.roi.RectangleROI
 import qupath.lib.roi.RoiTools.CombineOp

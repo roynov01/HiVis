@@ -30,111 +30,114 @@
 // - Save detection and annotation measurements into csv files 
 //   The detection table contain both cells and spots information
 //
+// QuPath 0.6.0 compatible script
+//
 // sample data: tonsil_fullres.tif 
 //
-// ===================  Workflow control Parameters  ====================================
+// ===================  Workflow control Parameters  =========================================================
 
 def segmentTissue                 = 1 // 
-def segmentAnatomicalRegions      = 0
+def segmentAnatomicalRegions      = 1
 def segmentCells                  = 1 // 
 def loadSpots                     = 1
 def associateSpotsToCells         = 1
 def runPixelClassifierForSpot     = 0
-def runPixelClassifierForCell     = 0 // MAKE SURE THAT AddMeasurementsToCells IS ALSO 1
-//def exportCellLabels              = 0 // keep 0
-//def exportSpotLabels              = 0 // keep 0
+def runPixelClassifierForCell     = 0 
 def exportCellsAsGeoJson          = 1
-def exportAnnotationsAsGeoJson    = 0
+def exportAnnotationsAsGeoJson    = 1
 def saveResultTable               = 1 // export result table to Tab-separated txt file
+
+// ===================  File paths  ==========================================================================
+def resultsSubFolder = 'results_tonsil' // subfolder for table 
+
+def scalefactors_json = 'A:/royno/HiVis_proj_v2/datasets/tonsil_scalefactors_json.json' // Use Full path
+def csvfile = 'A:/royno/HiVis_proj_v2/datasets/tonsil_tissue_positions.csv'             // Use Full path
+
+// ===================  Segmentation parameters  =============================================================
+var cellClassName = "Cell"
+var nucClassName = "Nuc"
+var spotClassName = "Spot"
 
 def cellSegmentationMethod     = "cellBorders" // "cellBorders" // "expandNuc" "onlyNuc"
 def segmentationAlg            = "cellpose" //"cellpose" // "stardist" "instaseg"
-def nucChannel                 = "Channel 4"
-def membraneChannels           = ["Channel 1", "Channel 3"]
+def nucChannel                 = "Channel 4"                 // Tonsil
+def membraneChannels           = ["Channel 1", "Channel 3"]  // Tonsil
 
 // Cellpose parameters 
-var CellposeNucModel = "nuc"
-var CellposeCellModel = "cyto3"
-var CellposeCellDiameter = 15 
-var CellposeNucDiameter = 15 
+var useCellposeSAM         = 1 
+var CellposeNucModel       = "nuc" 
+var CellposeCellModel      = "cyto3" 
+//var CellposeCellModel    = 'A:/royno/Visium_HD_liver/experiment1/qupath_project/models/Custom_model_2025-01-08_17_02.cpm'
+var CellposeCellDiameter   = 15 // Tonsil
+var CellposeNucDiameter    = 15 // Tonsil
 
 // Stardist parameters 
-var StarDistPathModel = 'A:/shared/QuPathScriptsAndProtocols/QuPath_StarDistModels/dsb2018_heavy_augment.pb'
-var clear_existing_detections = false
-var param_threshold    = 0.5 //0.1 //0.5 //threshold for detection. All cells segmented by StarDist will have a detection probability associated with it, where higher values indicate more certain detections. Floating point, range is 0 to 1. Default 0.5
+//var StarDistPathModel = 'A:/shared/QuPathScriptsAndProtocols/QuPath_StarDistModels/dsb2018_heavy_augment.pb'
+var StarDistPathModel = 'A:/royno/HiVis_proj_v2/Qupath6/Models/StarDistModels/dsb2018_heavy_augment.pb' // use Full path
+var param_threshold    = 0.5 // threshold for detection. All cells segmented by StarDist will have a detection probability associated with it, where higher values indicate more certain detections. Floating point, range is 0 to 1. Default 0.5
 var normalize_low_pct  = 1   //lower limit for normalization. Set to 0 to disable
 var normalize_high_pct = 99  // upper limit for normalization. Set to 100 to disable.
-//var param_expansion    = 20 //3 //20 //5   //size of cell expansion in pixels. Default is 10.
 var param_tilesize     = 1024 //size of tile in pixels for processing. Must be a multiple of 16. Lower values may solve any memory-related errors, but can take longer to process. Default is 1024.
 
 // InstaSeg parameters
-var InstaSegModel = "A:/ofrag/QuPath-InstaSeg-Models/downloaded/fluorescence_nuclei_and_cells-0.1.0"
-def InstaSeg_tileDims = 1024
+//var InstaSegModel           = "A:/ofrag/QuPath-InstaSeg-Models/downloaded/fluorescence_nuclei_and_cells-0.1.0"
+var InstaSegModel             = "A:/royno/HiVis_proj_v2/Qupath6/Models/InstaSegModels/fluorescence_nuclei_and_cells-0.1.0" // use full path 
+def InstaSeg_tileDims         = 1024
 def InstaSeg_interTilePadding = 32
-def InstaSeg_nThreads = 4
-def InstaSeg_device = "gpu"
+def InstaSeg_nThreads         = 4
+def InstaSeg_device           = "gpu" 
 
-// ===================
-var cellClassName = "Cell"
-var nucClassName = "Nuc"
-//var nucClassName  = "Nuc"
-var spotClassName = "Spot"
-def cellClass = getPathClass(cellClassName)
+// ===================  Pixel classifier and anatomical region expansion  ====================================
+def PixelClassifier         = "epithel_region_moderate" // "epithelial_celiac_classifier"
 
-def resultsSubFolder = 'results_tonsil' // subfolder for table 
+// Whole tissue classifier
+def wholeTissueClass        = "WholeTissue" 
+def WholeTissueClassifier   = "WholeTissue_Tonsil_Moderate_v1"    // name of WholeTissue pixel classifier
+def WholeTissue_MinSize     = 10000         // Minimal WholeTissue connected-component size        
+def WholeTissue_MinHoleSize = 10000         // Minmal hole size to keep when creating WholeTissue regions, samller holes are filled 
 
-def wholeTissueClass = "WholeTissue" //"Epithelium" //"non_epithelium" // "Crypt" //"WholeTissue" 
-
-def WholeTissueClassifier = "WholeTissue_Tonsil_Moderate_v1"    // name of WholeTissue pixel classifier
-def WholeTissue_MinSize =  10000          // Minimal WholeTissue connected-component size        
-def WholeTissue_MinHoleSize = 10000 //3000        // minmal hole size to keep when creating WholeTissue regions, samller holes are filled 
-
-
-// ===================  Parameters for Creation of TissueWithoutGoblet annotations ======================================================================
-// ===================  Parameters for Creation of Anatomical Regions annotations using the TissueWithoutGoblet annotations =============================
-def ClassNameForAnatomicalRegions = "WholeTissue" //"tissue" //"WholeTissue"
-def AnatomicalRegionsPixelClassifier = "epithel_non_epithel_ignore_moderate_v1" //"epithelial_celiac_classifier" //"WholeTissue_High_v1" //"epithelial_celiac_classifier"
-def AnatomicalRegions_MinSize = 500 //500
-def AnatomicalRegions_MinHoleSize = 40 //500 //80
-
-// ===================  Cell Segmentation parameters  - Segmentation is based on StarDist + expansion ====================================
-//AnatomicalRegionsClassNames = ["epithel", "non_epithel"]
-//AnatomicalRegionsExpansionMicrons  = [7, 2] //[7, 2]
-AnatomicalRegionsClassNames = ["WholeTissue"]
-AnatomicalRegionsExpansionMicrons  = [2]
-//AnatomicalRegionsExpansionMicrons  = [7]
-// NOTE - see below for AnatomicalRegionsStarDist
-
-// Get Pixel size from the image
-def cal = getCurrentServer().getPixelCalibration()
-def pixelWidth = cal.pixelWidth
-def pixelHeight = cal.pixelHeight
-//double cellExpansionPixels = cellExpansionMicrons/pixelWidth
-def AnatomicalRegionsExpansionPixels = AnatomicalRegionsExpansionMicrons.collect { it / pixelWidth }
-
-//print("============ pixelWidth="+ pixelWidth+ ", pixelHeight="+pixelHeight+" =====================")
+// Anatomical region classifier
+def ClassNameForAnatomicalRegions    = "WholeTissue" // Annotations which will be further divided into anatomical regions
+def AnatomicalRegionsPixelClassifier = "epithel_non_epithel_ignore_moderate_v1" // "epithel_non_epithel_ignore_moderate_v1" //"epithelial_celiac_classifier" //"WholeTissue_High_v1" //"epithelial_celiac_classifier"
+def AnatomicalRegions_MinSize        = 500 
+def AnatomicalRegions_MinHoleSize    = 40 
+AnatomicalRegionsClassNames        = ["WholeTissue"] //["epithel", "non_epithel"]
+AnatomicalRegionsExpansionMicrons  = [5] //[7, 2] // Nuclei expansion parameter for different anatomical regions
 
 
- // ===================  Pixel Classifier Parameters   ====================================
-def PixelClassifier = "epithelial_celiac_classifier"
-
-// ===================  Visium HD Spots parameters  ====================================
-//double spot_diameter_fullres = 6.150411343157314  // take this value from the file scalefactors_json.json
-def scalefactors_json = 'A:/royno/HiVis_proj_v2/datasets/tonsil_scalefactors_json.json' // TO CHANGE
-def csvfile = 'A:/royno/HiVis_proj_v2/datasets/tonsil_tissue_positions.csv' // TO CHANGE
 
 // =======================================================================================================
 // ===================  Code Begins - Dont Change from here downward  ====================================
-
 // =======================================================================================================
-// ===================  Segment Whole Tissue =============================================================
-var imageData = getCurrentImageData()
 
+def cal = getCurrentServer().getPixelCalibration()
+def pixelWidth = cal.pixelWidth
+def pixelHeight = cal.pixelHeight
+def AnatomicalRegionsExpansionPixels = AnatomicalRegionsExpansionMicrons.collect { it / pixelWidth }
+
+def cellClass = getPathClass(cellClassName)
+var imageData = getCurrentImageData()
 
 // imageData for cellpose 
 // Note here that it is the imageData we created above and not the result of getCurrentImageData()
 // Some server magic. Extract channels of interest and project them.
-def avgServer = new TransformedServerBuilder( getCurrentServer() ).extractChannels(membraneChannels[0], membraneChannels[1]).averageChannelProject().build()
+//def avgServer = new TransformedServerBuilder( getCurrentServer() ).extractChannels(membraneChannels[0], membraneChannels[1]).averageChannelProject().build()
+
+def serverBuilder = new TransformedServerBuilder(getCurrentServer())
+if (membraneChannels.size() == 0) {
+    print "No channels specified in membraneChannels"
+    return
+}
+// Extract all specified channels
+serverBuilder = serverBuilder.extractChannels(*membraneChannels)
+def memChannelName = membraneChannels[0]
+// If more than 1 channel, apply average projection
+if (membraneChannels.size() > 1) {
+    serverBuilder = serverBuilder.averageChannelProject()
+    memChannelName = "Average channels"
+} 
+// Finalize the server
+def avgServer = serverBuilder.build()
 // Extract the one other channel we want
 def singleChannel = new TransformedServerBuilder( getCurrentServer() ).extractChannels(nucChannel).build()
 // Make a combined server. Notice the order here is DAPI first, then the average
@@ -143,11 +146,12 @@ def combined = new ConcatChannelsImageServer( getCurrentServer(), [singleChannel
 def imageData_combined = new ImageData(combined)
                
 // Channels for InstaSeg
-def channels = membraneChannels + nucChannel 
+def channels = [nucChannel] + membraneChannels  // concatenate
 def transformedChannelsForInstaSeg = channels.collect { ch ->
     ColorTransforms.createChannelExtractor(ch)
-}
+} 
 
+// ===================  Segment Whole Tissue =============================================================
 if (segmentTissue) {
     createAnnotationsFromPixelClassifier(WholeTissueClassifier, WholeTissue_MinSize, WholeTissue_MinHoleSize)
     
@@ -186,7 +190,7 @@ if (segmentCells) {
               //.includeProbability(true)
               .classify( nucClassName )       // PathClass to give newly created objects
               .measureIntensity()
-              //.tileSize(param_tilesize)
+              .tileSize(param_tilesize)
               .measureShape()
               //.cellExpansion(param_expansion) //Cell expansion in microns
               .build()
@@ -199,7 +203,7 @@ if (segmentCells) {
               //.includeProbability(true)
               .classify( cellClassName )       // PathClass to give newly created objects
               .measureIntensity()
-              //.tileSize(param_tilesize)
+              .tileSize(param_tilesize)
               .measureShape()
               //.cellExpansion(param_expansion) //Cell expansion in microns
               .cellExpansion(AnatomicalRegionsExpansionMicrons[k]) //Cell expansion in microns
@@ -207,12 +211,13 @@ if (segmentCells) {
 
         def cellpose_cells = Cellpose2D.builder( CellposeCellModel )
                 .pixelSize(pixelWidth)             // Resolution for detection in um
-                .channels( "Average channels", nucChannel )	      // Select detection channel(s)
+                //.channels( "Average channels", nucChannel )	      // Select detection channel(s)
+                .channels( memChannelName, nucChannel )	      // Select detection channel(s)
                 .normalizePercentilesGlobal(0.1, 99.8, 10)
-                .tileSize(512)                  // If your GPU can take it, make larger tiles to process fewer of them. 
-                .cellposeChannels(1,2)         // Need these, otherwise it just sends the one channel. These will be sent directly to --chan and --chan2
+                .tileSize(param_tilesize)                  // If your GPU can take it, make larger tiles to process fewer of them. 
+                //.cellposeChannels(1,2)         // Need these, otherwise it just sends the one channel. These will be sent directly to --chan and --chan2
+                                                // OG - CHECK IF WE NEED THE ABOVE
                 .diameter(CellposeCellDiameter)                    // Median object diameter. Set to 0.0 for the `bact_omni` model or for automatic computation
-        //        .cellExpansion(5.0)              // Approximate cells based upon nucleus expansion
                 .classify( cellClassName )       // PathClass to give newly created objects
                 .measureShape()                // Add shape measurements
                 .measureIntensity()             // Add cell measurements (in all compartments)  
@@ -223,10 +228,10 @@ if (segmentCells) {
                 .pixelSize(pixelWidth)             // Resolution for detection in um
                 .channels( nucChannel )	      // Select detection channel(s)
                 .normalizePercentilesGlobal(0.1, 99.8, 10)
-                .tileSize(512)                  // If your GPU can take it, make larger tiles to process fewer of them. 
+                .tileSize(param_tilesize)                  // If your GPU can take it, make larger tiles to process fewer of them. 
                 //.cellposeChannels(1,2)         // Need these, otherwise it just sends the one channel. These will be sent directly to --chan and --chan2
                 .diameter(CellposeNucDiameter)                    // Median object diameter. Set to 0.0 for the `bact_omni` model or for automatic computation
-        //        .cellExpansion(5.0)              // Approximate cells based upon nucleus expansion
+                //.cellExpansion(5.0)              // Approximate cells based upon nucleus expansion
                 .classify( nucClassName )       // PathClass to give newly created objects
                 .measureShape()                // Add shape measurements
                 .measureIntensity()             // Add cell measurements (in all compartments)  
@@ -237,10 +242,56 @@ if (segmentCells) {
                 .pixelSize(pixelWidth)             // Resolution for detection in um
                 .channels( nucChannel )	      // Select detection channel(s)
                 .normalizePercentilesGlobal(0.1, 99.8, 10)
-                .tileSize(512)                  // If your GPU can take it, make larger tiles to process fewer of them. 
+                .tileSize(param_tilesize)                  // If your GPU can take it, make larger tiles to process fewer of them. 
                 //.cellposeChannels(1,2)         // Need these, otherwise it just sends the one channel. These will be sent directly to --chan and --chan2
                 .diameter(CellposeNucDiameter)                    // Median object diameter. Set to 0.0 for the `bact_omni` model or for automatic computation
                 .cellExpansion(AnatomicalRegionsExpansionMicrons[k])    // Approximate cells based upon nucleus expansion
+                .classify( cellClassName )       // PathClass to give newly created objects
+                .measureShape()                // Add shape measurements
+                .measureIntensity()             // Add cell measurements (in all compartments)  
+                .simplify(0)                   // Simplification 1.6 by default, set to 0 to get the cellpose masks as precisely as possible
+                .build()
+
+        def cellpose_sam_cells = Cellpose2D.builder( CellposeCellModel )
+                .pixelSize(pixelWidth)             // Resolution for detection in um
+                //.channels( "Average channels", nucChannel )	      // Select detection channel(s)
+                .channels( memChannelName, nucChannel )	      // Select detection channel(s)
+                .normalizePercentilesGlobal(0.1, 99.8, 10)
+                .tileSize(param_tilesize)                  // If your GPU can take it, make larger tiles to process fewer of them. 
+                //.cellposeChannels(1,2)         // Need these, otherwise it just sends the one channel. These will be sent directly to --chan and --chan2
+                                                // OG - CHECK IF WE NEED THE ABOVE
+                .diameter(CellposeCellDiameter)                    // Median object diameter. Set to 0.0 for the `bact_omni` model or for automatic computation
+                .useCellposeSAM()  
+                .classify( cellClassName )       // PathClass to give newly created objects
+                .measureShape()                // Add shape measurements
+                .measureIntensity()             // Add cell measurements (in all compartments)  
+                .simplify(0)                   // Simplification 1.6 by default, set to 0 to get the cellpose masks as precisely as possible
+                .build()
+        
+        def cellpose_sam_nuc = Cellpose2D.builder( CellposeNucModel )
+                .pixelSize(pixelWidth)             // Resolution for detection in um
+                .channels( nucChannel )	      // Select detection channel(s)
+                .normalizePercentilesGlobal(0.1, 99.8, 10)
+                .tileSize(param_tilesize)                  // If your GPU can take it, make larger tiles to process fewer of them. 
+                //.cellposeChannels(1,2)         // Need these, otherwise it just sends the one channel. These will be sent directly to --chan and --chan2
+                .diameter(CellposeNucDiameter)                    // Median object diameter. Set to 0.0 for the `bact_omni` model or for automatic computation
+                .useCellposeSAM()  
+                //.cellExpansion(5.0)              // Approximate cells based upon nucleus expansion
+                .classify( nucClassName )       // PathClass to give newly created objects
+                .measureShape()                // Add shape measurements
+                .measureIntensity()             // Add cell measurements (in all compartments)  
+                .simplify(0)                   // Simplification 1.6 by default, set to 0 to get the cellpose masks as precisely as possible
+                .build()
+
+        def cellpose_sam_expand_nuc = Cellpose2D.builder( CellposeNucModel )
+                .pixelSize(pixelWidth)             // Resolution for detection in um
+                .channels( nucChannel )	      // Select detection channel(s)
+                .normalizePercentilesGlobal(0.1, 99.8, 10)
+                .tileSize(param_tilesize)                  // If your GPU can take it, make larger tiles to process fewer of them. 
+                //.cellposeChannels(1,2)         // Need these, otherwise it just sends the one channel. These will be sent directly to --chan and --chan2
+                .diameter(CellposeNucDiameter)                    // Median object diameter. Set to 0.0 for the `bact_omni` model or for automatic computation
+                .cellExpansion(AnatomicalRegionsExpansionMicrons[k])    // Approximate cells based upon nucleus expansion
+                .useCellposeSAM()  
                 .classify( cellClassName )       // PathClass to give newly created objects
                 .measureShape()                // Add shape measurements
                 .measureIntensity()             // Add cell measurements (in all compartments)  
@@ -261,17 +312,23 @@ if (segmentCells) {
                 .build()
                 //.detectObjects()
 
-       // Run detection for the selected objects
+        // Run detection for the selected objects
         switch (cellSegmentationMethod) 
         {
            case "cellBorders":
                if (segmentationAlg == "cellpose") {
                    println "cellSegmentationMethod is cellBorders, segmentationAlg is cellpose"
-                   cellpose_cells.detectObjects(imageData_combined, pathObjects)               
+                   if (useCellposeSAM)
+                       cellpose_sam_cells.detectObjects(imageData_combined, pathObjects)               
+                   else
+                       cellpose_cells.detectObjects(imageData_combined, pathObjects)               
                }
                if (segmentationAlg == "instaseg") {
                    println "cellSegmentationMethod is cellBorders, segmentationAlg is instaseg"
                    instaseg_cells.detectObjects(imageData, pathObjects)
+               }
+               if (segmentationAlg == "stardist") {
+                   println "stardist does not suite   cellBorders  segmentation mode. switch to   expandNuc"  or  onlyNuc
                }
                break
            case "expandNuc":
@@ -282,7 +339,10 @@ if (segmentCells) {
                }
                if (segmentationAlg == "cellpose") {
                    println "cellSegmentationMethod is expandNuc, segmentationAlg is cellpose"
-                   cellpose_expand_nuc.detectObjects(imageData, pathObjects) 
+                   if (useCellposeSAM)
+                       cellpose_sam_expand_nuc.detectObjects(imageData, pathObjects) 
+                   else
+                       cellpose_expand_nuc.detectObjects(imageData, pathObjects) 
                }
                break
            case "onlyNuc":
@@ -292,8 +352,11 @@ if (segmentCells) {
                    stardist_nuc.detectObjects(imageData, pathObjects)                  
                }
                if (segmentationAlg == "cellpose") {
-                   println "cellSegmentationMethod is onlyNuc, segmentationAlg is stardist"
-                   cellpose_nuc.detectObjects(imageData, pathObjects)                  
+                   println "cellSegmentationMethod is onlyNuc, segmentationAlg is cellpose"
+                   if (useCellposeSAM)
+                       cellpose_sam_nuc.detectObjects(imageData, pathObjects)                  
+                   else
+                       cellpose_nuc.detectObjects(imageData, pathObjects)                  
                }
                break
            default:
@@ -310,6 +373,7 @@ resolveHierarchy()
 
 // =======================================================================================================
 // ===================  Load Visium HD Spots and associate them to Cells =================================
+def spot_diameter_fullres = 1 // dummy value
 if (loadSpots) {
     // Extract scale factors
     // Read the file content
@@ -320,7 +384,8 @@ if (loadSpots) {
     def matcher = pattern.matcher(jsonText)
     
     if (matcher.find()) {
-        def spot_diameter_fullres = matcher.group(1).toDouble()
+        //def spot_diameter_fullres = matcher.group(1).toDouble()
+        spot_diameter_fullres = matcher.group(1).toDouble()
         println "Spot diameter full resolution: ${spot_diameter_fullres}"
     } else {
         println "Could not find 'spot_diameter_fullres' in the JSON"
@@ -488,6 +553,7 @@ println '======================== Workflow Done! ===============================
 // ===================  Library import  ====================================
 
 import qupath.ext.stardist.StarDist2D
+import qupath.lib.scripting.QP
 import qupath.ext.biop.cellpose.Cellpose2D
 import qupath.lib.images.servers.TransformedServerBuilder
 import qupath.lib.images.ImageData
@@ -497,7 +563,6 @@ import java.io.FileReader;
 import qupath.lib.objects.PathAnnotationObject;
 import qupath.lib.objects.PathDetectionObject;
 import qupath.lib.objects.PathTileObject;
-//import qupath.lib.objects.classes.PathClassFactory
 import qupath.lib.roi.ROIs
 import qupath.lib.roi.RectangleROI
 import qupath.lib.roi.RoiTools.CombineOp
@@ -509,3 +574,10 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.regex.Matcher
 import java.util.regex.Pattern
+import qupath.lib.analysis.features.ObjectMeasurements
+import java.util.stream.Collectors;
+import org.locationtech.jts.algorithm.locate.IndexedPointInAreaLocator;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.PrecisionModel;
+import qupath.lib.analysis.DistanceTools
+

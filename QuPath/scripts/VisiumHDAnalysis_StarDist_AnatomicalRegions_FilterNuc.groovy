@@ -19,89 +19,81 @@
 // - Export anatomical regions boundaries as GeoJson file 
 // - Save detection and annotation measurements into csv files
 //   The detection table contain both cells and spots information
+//
+// QuPath 0.6.0 compatible script
+//
+// sample data: mouse_intestine.tif
+//
 
+// ===================  Workflow control Parameters  =========================================================
 
-// ===================  Workflow control Parameters  ====================================
-
-def segmentTissue                 = 0 // 
-def segmentAnatomicalRegions      = 0
+def segmentTissue                 = 1 // 
+def segmentAnatomicalRegions      = 1
 def segmentCells                  = 1 // 
 def filterNucBeforeCellExpansion  = 1
-def AddMeasurementsToCells        = 0
-def loadSpots                     = 0
-def associateSpotsToCells         = 0
+def AddMeasurementsToCells        = 1
+def loadSpots                     = 1
+def associateSpotsToCells         = 1
 def runPixelClassifierForSpot     = 0
 def runPixelClassifierForCell     = 0 // MAKE SURE THAT AddMeasurementsToCells IS ALSO 1
-def exportCellsAsGeoJson          = 0
-def exportAnnotationsAsGeoJson    = 0
-def saveResultTable               = 0 // export result table to Tab-separated txt file
+def exportCellsAsGeoJson          = 1
+def exportAnnotationsAsGeoJson    = 1
+def saveResultTable               = 1 // export result table to Tab-separated txt file
 
-var cellClassName = "Cell"
-var spotClassName = "Spot"
-def cellClass = getPathClass(cellClassName)
+// ===================  File paths  ==========================================================================
+def resultsSubFolder = 'results' // subfolder for table 
+def scalefactors_json = 'A:/royno/HiVis_proj_v2/datasets/mouse_intestine_scalefactors_json.json' // Use full path
+def csvfile = 'A:/royno/HiVis_proj_v2/datasets/mouse_intestine_tissue_positions.csv' // Use full path
 
-def resultsSubFolder = 'results_qp6' // subfolder for table 
-
-def wholeTissueClass = "WholeTissue" //"Epithelium" //"non_epithelium" // "Crypt" //"WholeTissue" 
-
-def WholeTissueClassifier = "WholeTissue_High_v1"    // name of WholeTissue pixel classifier
-def WholeTissue_MinSize =  10000          // Minimal WholeTissue connected-component size        
+// ===================  Pixel classifier and anatomical region expansion  ====================================
+def wholeTissueClass = "WholeTissue" 
+def WholeTissueClassifier   = "WholeTissue_High_v1"    // name of WholeTissue pixel classifier
+def WholeTissue_MinSize     =  10000      // Minimal WholeTissue connected-component size        
 def WholeTissue_MinHoleSize = 3000        // minmal hole size to keep when creating WholeTissue regions, samller holes are filled 
 
+// ===================  Parameters for Creation of Anatomical Regions annotations 
+def ClassNameForAnatomicalRegions    = "WholeTissue" 
+def AnatomicalRegionsPixelClassifier = "epithel_non_epithel_ignore_moderate_v1" 
+def AnatomicalRegions_MinSize        = 500 
+def AnatomicalRegions_MinHoleSize    = 40 
 
-//setImageType('BRIGHTFIELD_H_E');
+// ===================  Pixel Classifier Parameters   
+def PixelClassifier = "epithel_non_epithel_ignore_moderate_v1"
 
-// ===================  Parameters for Creation of TissueWithoutGoblet annotations ======================================================================
-// ===================  Parameters for Creation of Anatomical Regions annotations using the TissueWithoutGoblet annotations =============================
-def ClassNameForAnatomicalRegions = "WholeTissue" //"tissue" //"WholeTissue"
-def AnatomicalRegionsPixelClassifier = "epithel_non_epithel_ignore_moderate_v1" //"epithelial_celiac_classifier" //"WholeTissue_High_v1" //"epithelial_celiac_classifier"
-def AnatomicalRegions_MinSize = 500 //500
-def AnatomicalRegions_MinHoleSize = 40 //500 //80
+// ===================  Segmentation parameters  =============================================================
+// ===================  Segmentation is based on StarDist + expansion
+var cellClassName = "Cell"
+var spotClassName = "Spot"
 
-// ===================  Cell Segmentation parameters  - Segmentation is based on StarDist + expansion ====================================
-AnatomicalRegionsClassNames = ["epithel", "non_epithel"]
-AnatomicalRegionsExpansionMicrons  = [7, 2] //[7, 2]
-//AnatomicalRegionsClassNames = ["WholeTissue"]
-//AnatomicalRegionsExpansionMicrons  = [2]
-//AnatomicalRegionsExpansionMicrons  = [7]
-// NOTE - see below for AnatomicalRegionsStarDist
-
-var StarDistPathModel = 'A:/shared/QuPathScriptsAndProtocols/QuPath_StarDistModels/he_heavy_augment.pb'
 // Stardist parameters 
+var StarDistPathModel = 'A:/shared/QuPathScriptsAndProtocols/QuPath_StarDistModels/he_heavy_augment.pb'
 var clear_existing_detections = false
-var param_threshold    = 0.1 //0.1 //0.5 //threshold for detection. All cells segmented by StarDist will have a detection probability associated with it, where higher values indicate more certain detections. Floating point, range is 0 to 1. Default 0.5
+var param_threshold    = 0.1 //0.5 //threshold for detection. All cells segmented by StarDist will have a detection probability associated with it, where higher values indicate more certain detections. Floating point, range is 0 to 1. Default 0.5
 var normalize_low_pct  = 1   //lower limit for normalization. Set to 0 to disable
 var normalize_high_pct = 99  // upper limit for normalization. Set to 100 to disable.
-//var param_expansion    = 20 //3 //20 //5   //size of cell expansion in pixels. Default is 10.
 var param_tilesize     = 1024 //size of tile in pixels for processing. Must be a multiple of 16. Lower values may solve any memory-related errors, but can take longer to process. Default is 1024.
 
-// Get Pixel size from the image
-def cal = getCurrentServer().getPixelCalibration()
-def pixelWidth = cal.pixelWidth
-def pixelHeight = cal.pixelHeight
-def AnatomicalRegionsExpansionPixels = AnatomicalRegionsExpansionMicrons.collect { it / pixelWidth }
+AnatomicalRegionsClassNames = ["epithel", "non_epithel"]
+AnatomicalRegionsExpansionMicrons  = [7, 2] 
 
-
-//print("============ pixelWidth="+ pixelWidth+ ", pixelHeight="+pixelHeight+" =====================")
-
-// ===================  Nuc Classifier Parameters   ====================================
+// ===================  Nuc Classifier Parameters   ==========================================================
 def PositiveNegativeNucClassifier = "PositiveNegative_Nuc_v3"
 
 
- // ===================  Pixel Classifier Parameters   ====================================
-def PixelClassifier = "epithelial_celiac_classifier"
-
-// ===================  Visium HD Spots parameters  ====================================
-//double spot_diameter_fullres = 7.30563538369773 //8.048464667916532; //29.22254153479092; // take this value from the file scalefactors_json.json
-def scalefactors_json = 'A:/royno/HiVis_proj_v2/datasets/mouse_intestine_scalefactors_json.json' // TO CHANGE
-def csvfile = 'A:/royno/HiVis_proj_v2/datasets/mouse_intestine_tissue_positions.csv' // TO CHANGE
 
 // =======================================================================================================
 // ===================  Code Begins - Dont Change from here downward  ====================================
 
 // =======================================================================================================
 // ===================  Segment Whole Tissue =============================================================
+// Get Pixel size from the image
+def cal = getCurrentServer().getPixelCalibration()
+def pixelWidth = cal.pixelWidth
+def pixelHeight = cal.pixelHeight
+def AnatomicalRegionsExpansionPixels = AnatomicalRegionsExpansionMicrons.collect { it / pixelWidth }
+def cellClass = getPathClass(cellClassName)
 var imageData = getCurrentImageData()
+
 if (segmentTissue) {
     //createAnnotationsFromPixelClassifier(WholeTissueClassifier, WholeTissue_MinSize, WholeTissue_MinHoleSize, "SELECT_NEW")
     createAnnotationsFromPixelClassifier(WholeTissueClassifier, WholeTissue_MinSize, WholeTissue_MinHoleSize)
@@ -164,6 +156,7 @@ if (segmentCells) {
             // end of workaround ..
             
             stardistNuc.detectObjects(imageData, pathObjects)
+    
             runObjectClassifier(PositiveNegativeNucClassifier); 
             selectObjectsByClassification("negative");
             var negative = getSelectedObjects()
@@ -179,44 +172,32 @@ if (segmentCells) {
             selectObjects(cellObjects)
             //for (cell in cellObjects) {cell.setPathClass(cellClass) }            
             for (cell in cellObjects) {cell.setPathClass(getPathClass(regionClassName)) }            
-// *    
-
             detectionToAnnotationDistancesSigned(false)
             // constrain the cells by the parent Annotation
             var hierarchy = getCurrentHierarchy()
             
             double maxDistanceToCheck = - AnatomicalRegionsExpansionMicrons[k]*3 
-            println 'Checking all cells closer to annotation border than '+ maxDistanceToCheck
             // Loop through each annotation
             for (annotation in pathObjects) {
                 // Get the ROI of the parent annotation
                 var roi = annotation.getROI()  
                 // Get all cells within this annotation, but to make it run faster, check for intersection only cells close to the border
                 var measurementsName = "Signed distance to annotation "+regionClassName+" µm"
-                //var cells = hierarchy.getObjectsForROI(PathDetectionObject.class, roi).findAll{it.getMeasurementList().getMeasurementValue(measurementsName) > maxDistanceToCheck}
-                //var cells = hierarchy.getObjectsForROI(PathDetectionObject.class, roi).findAll{it.getMeasurementList().get(measurementsName) > maxDistanceToCheck}
-                var cells = hierarchy.getObjectsForROI(PathDetectionObject.class, roi)
+                var cells = hierarchy.getObjectsForROI(PathDetectionObject.class, roi).findAll{it.getMeasurementList().get(measurementsName) > maxDistanceToCheck}
                 // Clip each cell to the parent ROI
                 for (cell in cells) {
-                    println 'clipping cell #'+ cell.getID().toString() + ', Distance='+cell.getMeasurementList().get(measurementsName)
                     //cell.setROI(cell.getROI().clipToROI(roi))
                     var roiCell = cell.getROI()
                     roiCell = RoiTools.combineROIs(roi, roiCell, CombineOp.INTERSECT);
                     cell.setROI(roiCell)        
                 }
-            }       
-//  */               
+            }    
             if (!existingCells.isEmpty()) 
                 addObjects(existingCells)
         } // filterNucBeforeCellExpansion
         else {
              stardist_cells.detectObjects(imageData, pathObjects)
-             //for (cell in getCellObjects()) {cell.setPathClass(cellClass) }                     
-             //for (cell in getCellObjects()) {cell.setPathClass(getPathClass(regionClassName)) }                     
         }
-        
-        // OG  keep region class ?? 
-        //for (cell in getCellObjects()) {cell.setPathClass(cellClass) }
         
         println '======================== Cell segmentation on '+AnatomicalRegionsClassNames[k]+' Done =========================== '
     }
