@@ -196,7 +196,7 @@ As a result, **QuPath's built-in parent-child hierarchy cannot be used**.
 Instead, **parent cell ID is encoded in the bin’s** `Name` **field** as:
 > BinBarcode__ParentCellObjectID
 
-## Referances
+## References
 **QuPath**: Bankhead P, Loughrey MB, Fernández JA, Dombrowski Y, McArt DG, Dunne PD, et al. QuPath: Open source software for digital pathology image analysis. Sci Rep. 2017 Dec 4;7(1):16878. 
 
 **Stardist**: Weigert M, Schmidt U. Nuclei instance segmentation and classification in histopathology images with StarDist. 2022. Available from: http://arxiv.org/abs/2203.02284
