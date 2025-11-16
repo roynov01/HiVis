@@ -15,7 +15,8 @@ Some of the workflows use object classifiers to discard artifacts which are fals
 This tutorial includes:
 - [Cell segmentation - based on nuclei only (H&E or fluorescence, using Stardist)](#cell-segmentation---based-on-nuclei-only-he-or-fluorescence-using-stardist)
 - [Cell segmentation - based on multiple channels (fluorescence, using Cellpose or InstaSeg)](#cell-segmentation---based-on-multiple-channels-fluorescence-using-cellpose-or-instaseg)
-- [Dedicated cell segmentation for mouse liver - based on multiple channels and different segmentation for hepatocytes and epithelial cells](#Dedicated-cell-segmentation-for-mouse-liver---based-on-multiple-channels-and-different-segmentation-for-hepatocytes-and-epithelial-cells) 
+- [Dedicated cell segmentation for mouse liver - based on multiple channels and different segmentation for hepatocytes and epithelial cells](#Dedicated-cell-segmentation-for-mouse-liver---based-on-multiple-channels-and-different-segmentation-for-hepatocytes-and-epithelial-cells)
+- [Get Prepared](#Get-Prepared)
   - [Input Data](#input-data)
   - [Selecting regions of interest using Manual Annotations](#selecting-regions-of-interest-using-manual-annotations)
   - [Training Pixel Classifier for Automatic segmentation of anatomical regions](#training-pixel-classifier-for-automatic-segmentation-of-anatomical-regions)
@@ -297,4 +298,5 @@ Instead, **parent cell ID is encoded in the bin’s** `Name` **field** as:
 **Cellpose**: Stringer C, Wang T, Michaelos M, Pachitariu M. Cellpose: a generalist algorithm for cellular segmentation. Nat Methods. 2021 Jan;18(1):100–6. 
 
 **InstanSeg**: Goldsborough T, Philps B, O’Callaghan A, Inglis F, Leplat L, Filby A, et al. InstanSeg: an embedding-based instance segmentation algorithm optimized for accurate, efficient and portable cell segmentation. arXiv; 2024. Available from: http://arxiv.org/abs/2408.15954
+
 
