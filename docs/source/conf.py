@@ -2,7 +2,7 @@
 project = 'HiVis'
 copyright = '2025, Roy Novoselsky'
 author = 'Roy Novoselsky'
-release = '0.8.1'
+release = os.environ.get('READTHEDOCS_VERSION_NAME', 'latest')
 
 import os
 import sys
@@ -14,6 +14,7 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.viewcode',  
     'myst_parser',
+    'sphinx.ext.linkcode',  
 ]
 
 html_theme = 'sphinx_rtd_theme'
