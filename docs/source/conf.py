@@ -2,7 +2,7 @@
 project = 'HiVis'
 copyright = '2025, Roy Novoselsky'
 author = 'Roy Novoselsky'
-release = '0.1.0'
+release = '0.8.1'
 
 import os
 import sys
@@ -24,7 +24,8 @@ myst_enable_extensions  = [
     'dollarmath',
     'amsmath', 
 ]
-
+autosummary_generate = True
+html_show_sourcelink = True
 autodoc_member_order = 'bysource' 
 add_module_names = False
 html_domain_indices = False
