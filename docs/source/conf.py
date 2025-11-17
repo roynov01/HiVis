@@ -2,7 +2,7 @@
 project = 'HiVis'
 copyright = '2025, Roy Novoselsky'
 author = 'Roy Novoselsky'
-release = '0.1.0'
+release = '0.8.1'
 
 import os
 import sys
