@@ -35,6 +35,12 @@ copyright = '2025, Roy Novoselsky'
 author = 'Roy Novoselsky'
 release = os.environ.get('READTHEDOCS_VERSION_NAME', 'latest')
 
+# Mock heavy external dependencies so Sphinx can import HiVis to inspect signatures
+autodoc_mock_imports = [
+    "numpy", "pandas", "geopandas", "shapely", "anndata", "scanpy",
+    "matplotlib", "PIL", "Pillow", "tqdm", "sklearn", "statsmodels",
+    "scipy", "pyarrow", "dill"
+]
 
 #sys.path.insert(0, os.path.abspath('../../HiVis'))
 sys.path.insert(0, os.path.abspath('../..'))
