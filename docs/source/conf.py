@@ -39,7 +39,7 @@ release = os.environ.get('READTHEDOCS_VERSION_NAME', 'latest')
 autodoc_mock_imports = [
     "numpy", "pandas", "geopandas", "shapely", "anndata", "scanpy",
     "matplotlib", "PIL", "Pillow", "tqdm", "sklearn", "statsmodels",
-    "scipy", "pyarrow", "dill"
+    "scipy", "pyarrow", "dill","skimage"
 ]
 
 #sys.path.insert(0, os.path.abspath('../../HiVis'))
