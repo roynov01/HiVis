@@ -691,10 +691,10 @@ def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_o
     # del adata.uns["spatial"]
     
     # filter spots that are classified to be under tissue
-    if on_tissue_only: 
+    if ('in_tissue' in adata.obs.columns) and on_tissue_only: 
         metadata = metadata.loc[metadata['in_tissue'] == 1,]
         adata = adata[adata.obs['in_tissue'] == 1]
-    del metadata["in_tissue"] 
+        del metadata["in_tissue"] 
     
     # merge data and metadata
     metadata = metadata[~metadata.index.duplicated(keep='first')]
