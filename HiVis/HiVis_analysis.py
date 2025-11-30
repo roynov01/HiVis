@@ -35,9 +35,20 @@ class AnalysisVisium:
         fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(ncols=2,nrows=2, figsize=figsize)
         if self.main.json is not None:
             ax0 = self.main.plot.spatial(title=self.main.name, ax=ax0,axis_labels=True,scalebar=False)
-        ax1 = self.main.plot.hist("mito_percent_log10", title="Mitochondrial content per spot", xlab="log10(Mito %)",ax=ax1)
-        ax2 = self.main.plot.hist("nUMI_log10", title="Number of UMIs per spot", xlab="log10(UMIs)",ax=ax2)
-        ax3 = self.main.plot.hist("nUMI_gene_log10", title="Number of UMIs per gene", xlab="log10(UMIs)",ax=ax3)
+        try:
+            ax1 = self.main.plot.hist("mito_percent_log10", title="Mitochondrial content per spot", xlab="log10(Mito %)", ax=ax1)
+        except:
+            ax1.set_title("mito_percent_log10 (no data)")
+        
+        try:
+            ax2 = self.main.plot.hist("nUMI_log10", title="Number of UMIs per spot", xlab="log10(UMIs)", ax=ax2)
+        except:
+            ax2.set_title("nUMI_log10 (no data)")
+        
+        try:
+            ax3 = self.main.plot.hist("nUMI_gene_log10", title="Number of UMIs per gene", xlab="log10(UMIs)", ax=ax3)
+        except:
+            ax3.set_title("nUMI_gene_log10 (no data)")
         plt.tight_layout()
         if save:
             self.main.plot.save(figname="QC", fig=fig)

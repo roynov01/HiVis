@@ -20,7 +20,6 @@ from scipy.cluster.hierarchy import linkage, dendrogram
 from statsmodels.stats.multitest import multipletests
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
-from skimage.transform import rescale
 from skimage.io import imread
 import anndata as ad
 import json
@@ -1008,12 +1007,15 @@ def combine_dges(dges_list, group_names, pval_reducer, log2fc_reducer=np.nanmedi
 
 
 def create_rescaled_images(full_res_image, high_res_scale=0.5, low_res_scale=0.1):
-    high_res_image = rescale(full_res_image, high_res_scale, anti_aliasing=True, multichannel=False)  # Adjust multichannel if you have color images
-    low_res_image = rescale(full_res_image, low_res_scale, anti_aliasing=True, multichannel=False)
-    return high_res_image, low_res_image
+    from skimage.measure import block_reduce
+    down_factor_highres = int(1/high_res_scale)
+    down_factor_lowres = int(1/low_res_scale)
+    high_res_image = block_reduce(full_res_image, block_size=(down_factor_highres, down_factor_highres, 1), func=np.mean)
+    low_res_image = block_reduce(full_res_image, block_size=(down_factor_lowres, down_factor_lowres, 1), func=np.mean)
+    return high_res_image, low_res_image, high_res_scale, low_res_scale
 
 
-def load_spatial_data(matrix_file, gene_file, barcode_file, coord_file, image_file, geojson_file):
+def _load_spatial_data(matrix_file, gene_file, barcode_file, coord_file, image_file, geojson_file):
    # Load expression matrix
    X = sp.load_npz(matrix_file)  # or read from CSV/MTX depending on format
 
@@ -1057,7 +1059,7 @@ def load_and_prepare_data(matrix_file, gene_file, barcode_file, coord_file, imag
     """
     
     # Load the AnnData, full-res image, and GeoJSON (just like we did before)
-    adata, geojson = load_spatial_data(matrix_file, gene_file, barcode_file, coord_file, image_file, geojson_file)
+    adata, geojson = _load_spatial_data(matrix_file, gene_file, barcode_file, coord_file, image_file, geojson_file)
     
     full_res_image = imread(image_file)
 
