@@ -62,7 +62,7 @@ Please refer to the [demo notebooks](https://github.com/roynov01/HiVis/tree/main
 
 For QuPath, please refer to the [tutorial](https://github.com/roynov01/HiVis/tree/main/QuPath).
 
-Function docstrings are available on [ReadTheDocs](https://hivis.readthedocs.io/en/latest/).
+Function docstrings are available on [ReadTheDocs](https://hivis.readthedocs.io/latest/).
 
 ## Contact
 Bug report/feature request via the [GitHub issue tracker](https://github.com/roynov01/HiVis/issues).
