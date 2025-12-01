@@ -192,6 +192,8 @@ class AnalysisVisium:
             if not indices:
                 # Assign the original value or np.nan if no neighbor is found.
                 new_val = values[i]
+                smoothed_values.append(new_val)
+                continue
             neighbor_values = values[indices]
             
             if method == "median":
