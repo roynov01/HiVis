@@ -559,7 +559,82 @@ class HiVis:
         '''**Returns** HiVis.adata.obs.head(n), where n is number of rows'''
         return self.adata.obs.head(n)
     
-    
+    def merge(self, adata, obs=None, var=None, layer=None ,umap=True, pca=True, hvg=True, obsm=None, uns=None):
+        '''
+        Merge info from an anndata to self.adata, in case genes have been filtered.
+        
+        Parameters:
+            * adata (ad.AnnData) - anndata where to get the values from
+            * obs - single string or list of obs to merge
+            * var - single string or list of var to merge
+            * layer - single string or list of layers to merge
+            * umap (bool) - add umap to OBSM, and UMAP coordinates to obs
+            * pca (bool) - add PCA to OBSM
+            * hvg (bool) - add highly variable genes to vars
+        '''
+        
+        if not obs:
+            obs = []
+        elif isinstance(obs, str):
+            obs = [obs]
+        if not var:
+            var = []
+        elif isinstance(var, str):
+            var = [var]
+        if isinstance(obsm, str):
+            obsm = [obsm]
+        if isinstance(uns, str):
+            uns = [uns]   
+            
+        if umap and "X_umap" in adata.obsm:
+            if self.adata.shape[0] == adata.shape[0]:
+                self.adata.obsm['X_umap'] = adata.obsm['X_umap'].copy()
+            else:
+                print("Cant add UMAP to obsm, size of adatas don't match")
+            umap_coords = adata.obsm['X_umap']
+            adata.obs['UMAP_1'] = umap_coords[:, 0]
+            adata.obs['UMAP_2'] = umap_coords[:, 1]
+            
+            obs += ['UMAP_1','UMAP_2']
+        if pca and "X_pca" in adata.obsm:
+            if self.adata.shape[0] == adata.shape[0]:
+                self.adata.obsm['X_pca'] = adata.obsm['X_pca'].copy()
+        if hvg and 'highly_variable' in adata.var.columns:
+            if not var:
+                var = ['highly_variable']
+            else:
+                if 'highly_variable' not in var:
+                    var += ['highly_variable']
+        if layer is not None:
+            if layer in adata.layers:
+                if self.adata.shape[0] == adata.shape[0]:
+                    self.adata.layers[layer] = adata.layers[layer].copy()
+                else:
+                    print(f"Can't add layer {layer} to self.adata.layers, size of adatas don't match")
+            else:
+                print(f"Layer {layer} not found in the provided adata.")
+        if obs:
+            existing_columns = [col for col in obs if col in self.adata.obs.columns]
+            if existing_columns:
+                self.adata.obs.drop(columns=existing_columns, inplace=True)
+            self.adata.obs = self.adata.obs.join(adata.obs[obs], how="left")
+            
+            HiVis_utils._convert_bool_columns_to_float(self.adata.obs)
+        if var:
+            existing_columns = [col for col in var if col in self.adata.var.columns]
+            if existing_columns:
+                self.adata.var.drop(columns=existing_columns, inplace=True)
+            self.adata.var = self.adata.var.join(adata.var[var], how="left")
+            
+            HiVis_utils._convert_bool_columns_to_float(self.adata.var)
+        
+        if uns:
+            for u in uns:
+                self.adata.uns[u] = adata.uns[u].copy()
+        if obsm:
+            for o in obsm:
+                self.adata.obsm[o] = adata.obsm[o].copy()
+                
     def recolor(self, fluorescence=None, normalization_method="percentile"):
         '''
         Recolors a flurescence image
