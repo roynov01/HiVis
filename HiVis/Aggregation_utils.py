@@ -63,10 +63,10 @@ def split_spots_cells(input_df):
     df[['Spot_ID', 'Cell_ID']] = split_names
     cols = ['Cell_ID', 'Spot_ID']
     cols = ['Cell_ID', 'Spot_ID','InNuc']
-    spots_only = df.loc[input_df['Classification']=='Spot',cols]
+    spots_only = df.loc[input_df['Object type']=='Tile',cols]
     spots_only = spots_only.set_index("Spot_ID")
         
-    cells_only = input_df.loc[input_df['Classification']!='Spot']
+    cells_only = input_df.loc[input_df['Object type']!='Tile']
     cells_only = cells_only.set_index("Cell_ID")
     # vizium_instance.adata.obs = vizium_instance.adata.obs.join(cells_only,how='left',on="Cell_ID")
     
