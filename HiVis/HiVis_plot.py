@@ -682,7 +682,7 @@ class PlotAgg:
                 rank_lookup = {cat: i for i, cat in enumerate(cat_order)}
                 ranks = np.array([rank_lookup.get(str(v), len(cat_order)) for v in values])
                 order = np.argsort(ranks)        
-                x, y, values = x[order], y[order], values[order]
+                x, y, values = x.iloc[order], y.iloc[order], values.iloc[order]
             
             if np.issubdtype(values.dtype, np.number): 
                 argsort_values = np.argsort(values)

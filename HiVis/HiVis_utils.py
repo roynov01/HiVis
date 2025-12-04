@@ -20,7 +20,6 @@ from scipy.cluster.hierarchy import linkage, dendrogram
 from statsmodels.stats.multitest import multipletests
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
-from skimage.io import imread
 import anndata as ad
 import json
 
@@ -1061,7 +1060,7 @@ def load_and_prepare_data(matrix_file, gene_file, barcode_file, coord_file, imag
     # Load the AnnData, full-res image, and GeoJSON (just like we did before)
     adata, geojson = _load_spatial_data(matrix_file, gene_file, barcode_file, coord_file, image_file, geojson_file)
     
-    full_res_image = imread(image_file)
+    full_res_image = tifffile.imread(image_file)
 
     # Create high-res and low-res images
     high_res_image, low_res_image = create_rescaled_images(full_res_image)

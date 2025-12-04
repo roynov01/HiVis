@@ -523,7 +523,7 @@ class HiVis:
             if what in adata.obs.columns:  # Metadata from OBS
                 column_data = adata.obs[what]
                 if column_data.dtype.name == 'category':  # Handle categorical dtype
-                    return column_data.astype(str).values
+                    return column_data.astype("object").values
                 return column_data.values
             if what in adata.var.index:  # A gene
                 gene_data = adata[:, what].X if layer is None else adata[:, what].layers[layer]
@@ -531,14 +531,14 @@ class HiVis:
             if what in adata.var.columns:  # Gene metadata from VAR
                 column_data = adata.var[what]
                 if column_data.dtype.name == 'category':  # Handle categorical dtype
-                    return column_data.astype(str).values
+                    return column_data.astype("object").values
                 return column_data.values
             obs_cols_lower = adata.obs.columns.str.lower()
             if what.lower() in obs_cols_lower:
                 col_name = adata.obs.columns[obs_cols_lower.get_loc(what.lower())]
                 column_data = adata.obs[col_name]
                 if column_data.dtype.name == 'category':  # Handle categorical dtype
-                    return column_data.astype(str).values
+                    return column_data.astype("object").values
                 return column_data.values
             if self.organism == "mouse" and (what.lower().capitalize() in adata.var.index):
                 gene_name = what.lower().capitalize()
@@ -553,7 +553,7 @@ class HiVis:
                 col_name = adata.var.columns[var_cols_lower.get_loc(what.lower())]
                 column_data = adata.var[col_name]
                 if column_data.dtype.name == 'category':  # Handle categorical dtype
-                    return column_data.astype(str).values
+                    return column_data.astype("object").values
                 return column_data.values
         else:
             # Create a new HiVis object based on adata subsetting
