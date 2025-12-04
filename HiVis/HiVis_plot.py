@@ -351,7 +351,7 @@ class PlotVisium:
             self.save(f"{what}_HIST")
         return ax
     
-    def cor(self, what, number_of_genes=10, normilize=True, self_corr_value=np.nan,
+    def cor(self, what, number_of_genes=10, normalize=True, self_corr_value=np.nan,
             layer=None, cluster=True, ax=None,figsize=(7,7),save=False,
            size=15,text=True,cmap="copper",legend=True,legend_title=None,print_=False):
         '''
@@ -388,7 +388,7 @@ class PlotVisium:
                 if self_corr_value is not None:
                     df.loc[df["gene"] == what,"r"] = self_corr_value
             else:
-                df = self.main.analysis.cor(what,normilize=normilize,layer=layer,
+                df = self.main.analysis.cor(what,normalize=normalize,layer=layer,
                                         inplace=True,self_corr_value=self_corr_value)
                 df.rename(columns={f"exp_{what}":"expression_mean"},inplace=True)
                 df.rename(columns={f"cor_qval_{what}":"qval"},inplace=True)
@@ -411,7 +411,7 @@ class PlotVisium:
             if print_:
                 print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
         else:
-            df = self.main.analysis.cor(what,normilize=normilize,layer=layer)
+            df = self.main.analysis.cor(what,normalize=normilize,layer=layer)
             if cluster:
                 df = HiVis_utils.cluster_df(df,correlation=True)
             df[np.isclose(df, 1)] = np.nan
