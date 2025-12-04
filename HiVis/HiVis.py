@@ -388,6 +388,11 @@ class HiVis:
         cells_only.index.name = id_col
         
         self.adata.obs = self.adata.obs.drop(columns=[id_col], errors='ignore')
+        overlap = self.adata.obs.columns.intersection(spots_only.columns)
+        overlap = overlap.difference([id_col])
+        if len(overlap) > 0:
+            self.adata.obs = self.adata.obs.drop(columns=list(overlap))
+            print(f"Dropping overlapping columns from obs: {list(overlap)}")
         self.adata.obs = self.adata.obs.join(spots_only,how="left")
         
         aggregation_func = Aggregation_utils._aggregate_data_cells

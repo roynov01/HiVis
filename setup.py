@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="HiVis", 
-    version="0.8.1",
+    version="0.8.2",
     author="Roy Novoselsky",
     author_email="roy.novoselsky@weizmann.ac.il",
     description="A user friendly tool for working with VisiumHD data",
