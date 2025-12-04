@@ -363,7 +363,7 @@ class PlotVisium:
             * number_of_genes (int) - only applicable if what is a single gene. \
                                         how many gene names (text) to add to the plot.
             * cluster (bool) - only applicable if what is a list of genes. whether to cluster the heatmap
-            * normilize (bool) - normilize data before performing correlation
+            * normalize (bool) - normalize data before performing correlation
             * layer (str)- which layer to use from the self.adata. If None, will use X
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * cmap - colormap for scatterplot / heatmap. in heatmap can be list of colors.
@@ -411,7 +411,7 @@ class PlotVisium:
             if print_:
                 print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
         else:
-            df = self.main.analysis.cor(what,normalize=normilize,layer=layer)
+            df = self.main.analysis.cor(what,normalize=normalize,layer=layer)
             if cluster:
                 df = HiVis_utils.cluster_df(df,correlation=True)
             df[np.isclose(df, 1)] = np.nan
@@ -969,7 +969,7 @@ class PlotAgg:
             * number_of_genes (int) - only applicable if what is a single gene. \
                                         how many gene names (text) to add to the plot.
             * cluster (bool) - only applicable if what is a list of genes. whether to cluster the heatmap
-            * normilize (bool) - normilize data before performing correlation.
+            * normalize (bool) - normilize data before performing correlation.
             * layer (str)- which layer to use from the self.adata. If None, will use X
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * cmap - colormap for scatterplot / heatmap. in heatmap can be list of colors.
@@ -1554,7 +1554,7 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
     return ax
 
 
-def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True, 
+def plot_heatmap(heatmap_data, x_y_val=None, normalize=False, sort=True, 
                  sort_method="sum",ax=None, xlab=None, ylab=None, title=None,grid_x=False,grid_y=False,
                  cmap="coolwarm",figsize=(8,16),legend=True, legend_title=None,colnames=True,rownames=True):
     '''
@@ -1564,7 +1564,7 @@ def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True,
                                 or three columns, of category(x), gene (y), value
         * x_y_val (list) - if the heatmap_data is three columns, specify. 
                                 category(x), gene (y), value
-        * normilize (bool) - whether to normilize each row to the maximal value of the row
+        * normalize (bool) - whether to normalize each row to the maximal value of the row
         * sort (bool) - sort the rows
         * sort_method - if sort is True, how to sort. possible values are "sum","std","mean"
         * ax - matplotlib Axes, if provided
@@ -1572,7 +1572,7 @@ def plot_heatmap(heatmap_data, x_y_val=None, normilize=False, sort=True,
     '''
     if x_y_val:
         heatmap_data = heatmap_data.pivot(index=x_y_val[1], columns=x_y_val[0], values=x_y_val[2])
-    if normilize:
+    if normalize:
         heatmap_data = heatmap_data.div(heatmap_data.max(axis=1), axis=0)
     if sort:
         if sort_method == "sum":
