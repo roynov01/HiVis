@@ -73,8 +73,12 @@ var normalize_low_pct  = 1   //lower limit for normalization. Set to 0 to disabl
 var normalize_high_pct = 99  // upper limit for normalization. Set to 100 to disable.
 var param_tilesize     = 1024 //size of tile in pixels for processing. Must be a multiple of 16. Lower values may solve any memory-related errors, but can take longer to process. Default is 1024.
 
-AnatomicalRegionsClassNames = ["epithel", "non_epithel"]
-AnatomicalRegionsExpansionMicrons  = [7, 2] 
+
+AnatomicalRegionsClassNames = ["WholeTissue"]
+AnatomicalRegionsExpansionMicrons  = [7] 
+// or:
+//AnatomicalRegionsClassNames = ["epithel", "non_epithel"]
+//AnatomicalRegionsExpansionMicrons  = [7, 2] 
 
 // ===================  Nuc Classifier Parameters   ==========================================================
 def PositiveNegativeNucClassifier = "PositiveNegative_Nuc_v3"
