@@ -15,6 +15,7 @@ from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.patches as patches
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
+import matplotlib.ticker as ticker
 from matplotlib.colors import Normalize
 from scipy.interpolate import griddata
 import seaborn as sns
@@ -803,8 +804,16 @@ class PlotAgg:
                     sm.set_array([])  
                     cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
                     cbar.set_label(legend_title)
-                    if np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int)):
-                        cbar.set_ticks(np.arange(int(np.nanmin(values)), int(np.nanmax(values)) + 1))
+                    vmin, vmax = np.nanmin(values), np.nanmax(values)
+                    is_int = np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int))
+                
+                    if is_int and (vmax - vmin) <= 10:
+                        # Small integer range – nice to show all integers
+                        cbar.set_ticks(np.arange(int(vmin), int(vmax) + 1))
+                    else:
+                        # Larger range – use a sensible number of ticks
+                        cbar.locator = ticker.MaxNLocator(nbins=5)  # 5–7 is usually good
+                        cbar.update_ticks()
             # else: # Categorical case
             #     self.geometry["temp"] = values
             #     unique_values = np.unique(values.astype(str))
@@ -969,7 +978,7 @@ class PlotAgg:
             * number_of_genes (int) - only applicable if what is a single gene. \
                                         how many gene names (text) to add to the plot.
             * cluster (bool) - only applicable if what is a list of genes. whether to cluster the heatmap
-            * normalize (bool) - normilize data before performing correlation.
+            * normalize (bool) - normalize data before performing correlation.
             * layer (str)- which layer to use from the self.adata. If None, will use X
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * cmap - colormap for scatterplot / heatmap. in heatmap can be list of colors.
@@ -1144,8 +1153,16 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
         if legend:
             cbar = plt.colorbar(scatter, ax=ax, shrink=0.6)
             cbar.set_label(legend_title)
-            if np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int)):
-                cbar.set_ticks(np.arange(int(np.nanmin(values)), int(np.nanmax(values)) + 1))
+            vmin, vmax = np.nanmin(values), np.nanmax(values)
+            is_int = np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int))
+        
+            if is_int and (vmax - vmin) <= 10:
+                # Small integer range – nice to show all integers
+                cbar.set_ticks(np.arange(int(vmin), int(vmax) + 1))
+            else:
+                # Larger range – use a sensible number of ticks
+                cbar.locator = ticker.MaxNLocator(nbins=5)  # 5–7 is usually good
+                cbar.update_ticks()
     else: # Categorical case: Use legend 
         unique_values, idx = np.unique(values.astype(str), return_index=True)
         unique_values = unique_values[np.argsort(idx)]
@@ -1510,8 +1527,15 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
         if legend:
             cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
             cbar.set_label(legend_title)
-            if np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int)):
-                cbar.set_ticks(np.arange(int(np.nanmin(values)), int(np.nanmax(values)) + 1))
+            is_int = np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int))
+            vmin, vmax = np.nanmin(values), np.nanmax(values)
+            if is_int and (vmax - vmin) <= 10:
+                # Small integer range – nice to show all integers
+                cbar.set_ticks(np.arange(int(vmin), int(vmax) + 1))
+            else:
+                # Larger range – use a sensible number of ticks
+                cbar.locator = ticker.MaxNLocator(nbins=5)  # 5–7 is usually good
+                cbar.update_ticks()
 
     else:  # Categorical case: Use legend
         unique_values = np.unique(values.astype(str))

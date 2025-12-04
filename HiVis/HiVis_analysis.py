@@ -62,7 +62,7 @@ class AnalysisVisium:
             * by (str) - return a dataframe, each column is a value in "by" (for example cluster), rows are genes. \
             If None, will return the mean expression of every gene. 
             * layer (str) - which layer in adata to use.
-            * normilize (bool) - normilize the values to the sum of each group. if False, values will be the sum of each category.
+            * normalize (bool) - normalize the values to the sum of each group. if False, values will be the sum of each category.
             
         **Returns** the gene expression for each group (pd.DataFrame)
         '''
@@ -334,7 +334,7 @@ class AnalysisAgg:
             * by (str) - return a dataframe, each column is a value in "by" (for example cluster), rows are genes. \
             If None, will return the mean expression of every gene. 
             * layer (str) - which layer in adata to use.
-            * normilize (bool) - normilize the values to the sum of each group. if False, values will be the sum of each category.
+            * normalize (bool) - normalize the values to the sum of each group. if False, values will be the sum of each category.
             
         **Returns** the gene expression for each group (pd.DataFrame)
         '''
