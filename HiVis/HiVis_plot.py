@@ -785,6 +785,7 @@ class PlotAgg:
                 values = values.astype(float)
             if np.issubdtype(values.dtype, np.number):
                 if not show_zeros:
+                    values = values.astype(float)
                     values[values==0] = np.nan
                 if values is None:
                     raise KeyError(f"No values in [{what}]")
