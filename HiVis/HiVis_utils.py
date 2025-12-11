@@ -1067,3 +1067,21 @@ def load_and_prepare_data(matrix_file, gene_file, barcode_file, coord_file, imag
 
     return adata, full_res_image, high_res_image, low_res_image, geojson
 
+def rescale_img_and_adata(adata,  microns_per_pixel, img, fluorescence, down_factor=1, high_res_scale=0.25, low_res_scale=0.01):
+    if down_factor != 1:
+        from skimage.measure import block_reduce
+        downscaled_img = block_reduce(img, block_size=(down_factor, down_factor, 1), func=np.mean)
+        adata.obs["pxl_row_in_fullres"] = adata.obs["pxl_row_in_fullres"] / down_factor
+        adata.obs["pxl_col_in_fullres"] = adata.obs["pxl_col_in_fullres"] / down_factor
+        microns_per_pixel_down = microns_per_pixel * down_factor
+    else:
+        microns_per_pixel_down = microns_per_pixel
+        downscaled_img = img
+    res = create_rescaled_images(downscaled_img, high_res_scale=high_res_scale, low_res_scale=low_res_scale)
+    high_res_image, low_res_image, high_res_scale, low_res_scale = res
+    
+    high_res_image =fluorescence_to_RGB(high_res_image, colors=list(fluorescence.values()))
+    low_res_image = fluorescence_to_RGB(low_res_image, colors=list(fluorescence.values()))
+    
+    return downscaled_img, high_res_image, low_res_image, microns_per_pixel_down
+

@@ -8,23 +8,23 @@ import dill
 import gc
 import warnings
 from pathlib import Path
-
 from tqdm import tqdm
 from copy import deepcopy
+
 # Data libraries
 import json
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 from shapely import wkt, affinity
-
+from scipy import sparse
 import anndata as ad
 
 # Plotting libraries
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from PIL import Image
-
+import tifffile
 
 from . import HiVis_utils
 from .Aggregation import Aggregation
@@ -127,6 +127,314 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
     return HiVis(adata, image_fullres, image_highres, image_lowres, scalefactor_json, 
                     name, path_output, properties, agg=None, fluorescence=fluorescence, plot_qc=plot_qc)
 
+def new_merfish(path, bin_size_um, name, path_output, fluorescence, properties=None, downscale_factor=4):
+    def load_manifest(manifest_path):
+        with open(manifest_path, "r") as f:
+            manifest = json.load(f)
+        microns_per_pixel = float(manifest["microns_per_pixel"])
+        return manifest, microns_per_pixel
+
+    def get_microns_per_pixel(manifest_path):
+        manifest, microns_per_pixel = load_manifest(manifest_path)
+        return microns_per_pixel
+
+    def merfish_transcripts_to_anndata(transcripts_csv, manifest_path, bin_size_um=2.0, z_plane=0):
+        manifest, microns_per_pixel = load_manifest(manifest_path)
+        bbox_microns = manifest["bbox_microns"]
+        x_min, y_min, x_max, y_max = bbox_microns
+
+        df = pd.read_csv(transcripts_csv)
+
+        if "x" not in df.columns or "y" not in df.columns:
+            raise ValueError("Expected columns 'global_x' and 'global_y' in transcripts file.")
+        if "gene" not in df.columns:
+            raise ValueError("Expected column 'gene' in transcripts file.")
+
+        if "global_z" in df.columns:
+            df = df[df["global_z"] == z_plane]
+
+        df["x_um"] = df["global_x"]
+        df["y_um"] = df["global_y"]
+
+        df["x_rel_um"] = df["x_um"] - x_min
+        df["y_rel_um"] = df["y_um"] - y_min
+
+        df = df[(df["x_rel_um"] >= 0) & (df["x_rel_um"] <= (x_max - x_min)) & (df["y_rel_um"] >= 0) & (df["y_rel_um"] <= (y_max - y_min))]
+
+        df["bin_x"] = (df["x_rel_um"] / bin_size_um).astype(int)
+        df["bin_y"] = (df["y_rel_um"] / bin_size_um).astype(int)
+
+        grouped = df.groupby(["bin_x", "bin_y", "gene"]).size().reset_index(name="count")
+
+        matrix = grouped.pivot_table(index=["bin_x", "bin_y"], columns="gene", values="count", fill_value=0)
+        matrix = matrix.sort_index(axis=0)
+        matrix = matrix.sort_index(axis=1)
+
+        bin_indices = np.array(matrix.index.tolist())
+        bin_x = bin_indices[:, 0]
+        bin_y = bin_indices[:, 1]
+
+        x_center_rel_um = (bin_x + 0.5) * bin_size_um
+        y_center_rel_um = (bin_y + 0.5) * bin_size_um
+        um_x = x_center_rel_um + x_min
+        um_y = y_center_rel_um + y_min
+
+        pxl_x = x_center_rel_um / microns_per_pixel
+        pxl_y = y_center_rel_um / microns_per_pixel
+
+        pxl_col_in_fullres = pxl_x
+        pxl_row_in_fullres = pxl_y
+
+        obs_index = pd.Index(["bin_x{}_y{}".format(i, j) for i, j in zip(bin_x, bin_y)], name="bin_id")
+        obs = pd.DataFrame({"um_x": um_x, "um_y": um_y, "pxl_row_in_fullres": pxl_row_in_fullres, "pxl_col_in_fullres": pxl_col_in_fullres}, index=obs_index)
+
+        var = pd.DataFrame(index=matrix.columns)
+
+        X = sparse.csr_matrix(matrix.values)
+
+        adata = ad.AnnData(X=X, obs=obs, var=var)
+        adata = adata[:,~adata.var_names.str.startswith("Blank")].copy()
+        return adata
+
+
+    def load_merfish_images(manifest_path, images_dir, stains, z_plane=0):
+        manifest, microns_per_pixel = load_manifest(manifest_path)
+        available = manifest.get("mosaic_files", [])
+
+        image_paths = []
+        for stain in stains:
+            found_path = None
+            for entry in available:
+                if entry.get("stain") == stain and int(entry.get("z", 0)) == z_plane:
+                    found_path = os.path.join(images_dir, entry["file_name"])
+                    break
+            if found_path is None:
+                raise ValueError("Could not find mosaic file for stain '{}' at z={}".format(stain, z_plane))
+            image_paths.append(found_path)
+
+        channels = []
+        for path in image_paths:
+            img = tifffile.imread(path)
+            if img.ndim == 2:
+                img2d = img
+            elif img.ndim == 3:
+                img2d = img[0]
+            else:
+                raise ValueError("Unexpected image shape {} for file {}".format(img.shape, path))
+            channels.append(img2d)
+
+        if len(channels) == 0:
+            raise ValueError("No images loaded for stains {}".format(stains))
+
+        stacked = np.stack(channels, axis=-1)
+        return stacked, microns_per_pixel
+    
+    transcripts_csv = os.path.join(path, "detected_transcripts.csv")
+    manifest_path = os.path.join(path, "images/manifest.json")
+    images_dir = os.path.join(path, "images")
+
+    high_res_scale = 0.25
+    low_res_scale = 0.01
+
+    adata = merfish_transcripts_to_anndata(transcripts_csv, manifest_path, bin_size_um=bin_size_um, z_plane=0)
+
+    img, microns_per_pixel = load_merfish_images(manifest_path, images_dir, 
+                                                list(fluorescence.keys()), z_plane=0)
+    
+    # Rescale the image if its too large
+    downscaled_img, high_res_image, low_res_image, microns_per_pixel_down = rescale_img_and_adata(adata,img,
+                                                                        microns_per_pixel, down_factor=downscale_factor, 
+                                                                        high_res_scale=high_res_scale, low_res_scale=low_res_scale)
+        
+    scalefactor_json = {"microns_per_pixel":microns_per_pixel_down,
+                        "bin_size_um":bin_size_um,
+                        "tissue_hires_scalef": high_res_scale,
+                        "tissue_lowres_scalef": low_res_scale}
+    if properties is None:
+        properties = {}
+    mito_name_prefix = "MT-" if properties.get("organism") == "human" else "mt-"
+    HiVis.HiVis_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
+    
+    return HiVis.HiVis(adata, downscaled_img, high_res_image, low_res_image, scalefactor_json, 
+                 name=name, path_output=path_output,properties=properties, agg=None, fluorescence=fluorescence)
+
+
+def new_xenium(path, bin_size_um, name, path_output, fluorescence, properties=None, downscale_factor=4):
+    from spatialdata_io import xenium
+    def load_xenium_image(xenium_outs_path):
+        xenium_outs_path = Path(xenium_outs_path)
+        morph_path = xenium_outs_path / "morphology_focus"
+        if not morph_path.exists():
+            raise FileNotFoundError(f"Cannot find morphology_focus in {xenium_outs_path}")
+
+        # 1. microns-per-pixel from experiment.xenium
+        meta_path = xenium_outs_path / "experiment.xenium"
+        if not meta_path.exists():
+            raise FileNotFoundError(f"Cannot find experiment.xenium in {xenium_outs_path}")
+
+        with open(meta_path, "r") as f:
+            meta = json.load(f)
+        microns_per_pixel = meta["pixel_size"]
+
+        # 2. list morphology OME-TIFFs
+        tiff_paths = sorted(morph_path.glob("*.ome.tif*"))
+        if not tiff_paths:
+            raise FileNotFoundError(f"No OME-TIFFs found in {morph_path}")
+
+        selected_imgs = []
+        selected_channel_names = []
+
+        # 3. iterate over files, parse channel name, and load
+        for path in tiff_paths:
+            name = path.name
+
+            # Strip ".ome.tif" or ".ome.tiff"
+            base = name.split(".ome")[0]  # e.g. "ch0000_dapi" or "ch0001_atp1a1_cd45_e-cadherin"
+            parts = base.split("_", 1)
+            if len(parts) < 2:
+                print(f"Warning: could not parse channel from filename '{name}', skipping.")
+                continue
+
+            channel_name = parts[1]  # everything after first "_"
+
+            # Load the image
+            arr = tifffile.imread(path)
+
+            # Convert to 2D Y x X
+            if arr.ndim == 2:
+                img_yx = arr
+            elif arr.ndim == 3:
+                # Assumption: first axis is an extra dimension (e.g. scale); use first plane
+                img_yx = arr[0]
+            else:
+                raise ValueError(
+                    f"Unexpected number of dimensions ({arr.ndim}) for file {name}; "
+                    "expected 2D or 3D."
+                )
+
+            # Check shape consistency across channels
+            if selected_imgs:
+                if img_yx.shape != selected_imgs[0].shape:
+                    raise ValueError(
+                        f"Image shape mismatch for file {name}: {img_yx.shape} "
+                        f"vs {selected_imgs[0].shape} from previous file(s)."
+                    )
+
+            selected_imgs.append(img_yx)
+            selected_channel_names.append(channel_name)
+
+        if not selected_imgs:
+            raise ValueError(
+                "No images were loaded. All files failed channel parsing or there were none."
+            )
+
+        # 4. stack into Y x X x C
+        img_yxc = np.stack(selected_imgs, axis=-1)
+
+        print(f"\nFinal image shape (Y, X, C): {img_yxc.shape}")
+        print("Channels included (in C order):")
+        for i, ch in enumerate(selected_channel_names):
+            print(f"  C[{i}] -> {ch}")
+
+        return img_yxc, microns_per_pixel
+
+    def xenium_sdata_to_anndata(sdata, xenium_outs_path, bin_size_um=2.0, z_plane=None, qv_threshold=20.0, only_assigned_to_cells=False):
+        xenium_outs_path = Path(xenium_outs_path)
+
+        # 1. Extract transcripts table
+        pts = sdata.points["transcripts"]
+        df = pts.compute() if hasattr(pts, "compute") else pts
+        ignore_rows = df["feature_name"].str.startswith("NegControl") | df["feature_name"].str.startswith("Unassigned")
+        df = df.loc[~ignore_rows]
+
+        # 2. Rename required columns directly
+        df = df.rename(columns={"x": "x_um", "y": "y_um", "z": "z_um", "feature_name": "gene"})
+
+        # 3. Filters
+        if qv_threshold is not None and "qv" in df.columns:
+            df = df[df["qv"] >= qv_threshold]
+        if z_plane is not None:
+            df = df[np.isclose(df["z_um"], z_plane)]
+        if only_assigned_to_cells and "cell_id" in df.columns:
+            df = df[df["cell_id"].notna() & (df["cell_id"] != -1)]
+
+        # 4. Bounding box only for relative coordinates
+        x_min = df["x_um"].min()
+        y_min = df["y_um"].min()
+
+        df["x_rel_um"] = df["x_um"] - x_min
+        df["y_rel_um"] = df["y_um"] - y_min
+
+        # 5. Assign bins
+        df["bin_x"] = (df["x_rel_um"] / bin_size_um).astype(int)
+        df["bin_y"] = (df["y_rel_um"] / bin_size_um).astype(int)
+
+        # 6. Aggregate counts
+        grouped = df.groupby(["bin_x", "bin_y", "gene"]).size().reset_index(name="count")
+        matrix = grouped.pivot_table(index=["bin_x", "bin_y"], columns="gene", values="count", fill_value=0)
+        matrix = matrix.sort_index(axis=0).sort_index(axis=1)
+
+        # 7. Compute bin centers
+        bin_indices = np.array(matrix.index.tolist())
+        bin_x = bin_indices[:, 0]
+        bin_y = bin_indices[:, 1]
+
+        x_center_rel_um = (bin_x + 0.5) * bin_size_um
+        y_center_rel_um = (bin_y + 0.5) * bin_size_um
+
+        um_x = x_center_rel_um + x_min
+        um_y = y_center_rel_um + y_min
+
+        # 8. Read microns-per-pixel
+        with open(xenium_outs_path / "experiment.xenium", "r") as f:
+            exp_meta = json.load(f)
+        microns_per_pixel = exp_meta["pixel_size"]
+
+        pxl_x = x_center_rel_um / microns_per_pixel
+        pxl_y = y_center_rel_um / microns_per_pixel
+
+        # 9. Build AnnData
+        obs_index = pd.Index([f"bin_x{i}_y{j}" for i, j in zip(bin_x, bin_y)], name="bin_id")
+        obs = pd.DataFrame({"um_x": um_x, "um_y": um_y, "pxl_row_in_fullres": pxl_y, "pxl_col_in_fullres": pxl_x}, index=obs_index)
+        var = pd.DataFrame(index=matrix.columns)
+        X = sparse.csr_matrix(matrix.values)
+
+        adata = ad.AnnData(X=X, obs=obs, var=var)
+        adata.uns["bin_size_um"] = bin_size_um
+        adata.uns["microns_per_pixel"] = microns_per_pixel
+
+        return adata
+    # Load data
+    sdata = xenium(path,cells_boundaries=False,cells_as_circles =False,
+                                  nucleus_boundaries=False,nucleus_labels=False,cells_labels =False,aligned_images =False,
+                                  cells_table =False)
+    adata = xenium_sdata_to_anndata(sdata, path, bin_size_um=bin_size_um)
+    mask = ~adata.var_names.str.startswith(("NegControl", "Unassigned")).astype(bool)
+    adata = adata[:, mask].copy()
+
+    # Load images    
+    img, microns_per_pixel = load_xenium_image(path)
+
+    high_res_scale = 0.25
+    low_res_scale = 0.01
+
+    downscaled_img, high_res_image, low_res_image, microns_per_pixel_down = HiVis_utils.rescale_img_and_adata(adata,
+                                                                    microns_per_pixel, img,down_factor=downscale_factor,
+                                                                    fluorescence=fluorescence,
+                                                                    high_res_scale=high_res_scale, low_res_scale=low_res_scale)
+    
+    scalefactor_json = {"microns_per_pixel":microns_per_pixel_down,
+                        "bin_size_um":bin_size_um,
+                        "tissue_hires_scalef": high_res_scale,
+                        "tissue_lowres_scalef": low_res_scale}
+    if properties is None:
+        properties = {}
+    mito_name_prefix = "MT-" if properties.get("organism") == "human" else "mt-"
+    HiVis.HiVis_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
+
+
+    return HiVis.HiVis(adata, downscaled_img, high_res_image, low_res_image, scalefactor_json, 
+             name=name, path_output=path_output,properties=properties, agg=None, fluorescence=fluorescence)
 
 class HiVis:
     '''
