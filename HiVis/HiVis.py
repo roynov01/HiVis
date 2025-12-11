@@ -242,8 +242,9 @@ def new_merfish(path, bin_size_um, name, path_output, fluorescence, properties=N
                                                 list(fluorescence.keys()), z_plane=0)
     
     # Rescale the image if its too large
-    downscaled_img, high_res_image, low_res_image, microns_per_pixel_down = rescale_img_and_adata(adata,img,
-                                                                        microns_per_pixel, down_factor=downscale_factor, 
+    downscaled_img, high_res_image, low_res_image, microns_per_pixel_down = HiVis_utils.rescale_img_and_adata(adata,
+                                                                        microns_per_pixel, img, down_factor=downscale_factor, 
+                                                                        fluorescence=fluorescence,
                                                                         high_res_scale=high_res_scale, low_res_scale=low_res_scale)
         
     scalefactor_json = {"microns_per_pixel":microns_per_pixel_down,
