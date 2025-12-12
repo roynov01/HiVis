@@ -254,9 +254,9 @@ def new_merfish(path, bin_size_um, name, path_output, fluorescence, properties=N
     if properties is None:
         properties = {}
     mito_name_prefix = "MT-" if properties.get("organism") == "human" else "mt-"
-    HiVis.HiVis_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
+    HiVis_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
     
-    return HiVis.HiVis(adata, downscaled_img, high_res_image, low_res_image, scalefactor_json, 
+    return HiVis(adata, downscaled_img, high_res_image, low_res_image, scalefactor_json, 
                  name=name, path_output=path_output,properties=properties, agg=None, fluorescence=fluorescence)
 
 
@@ -431,10 +431,10 @@ def new_xenium(path, bin_size_um, name, path_output, fluorescence, properties=No
     if properties is None:
         properties = {}
     mito_name_prefix = "MT-" if properties.get("organism") == "human" else "mt-"
-    HiVis.HiVis_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
+    HiVis_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
 
 
-    return HiVis.HiVis(adata, downscaled_img, high_res_image, low_res_image, scalefactor_json, 
+    return HiVis(adata, downscaled_img, high_res_image, low_res_image, scalefactor_json, 
              name=name, path_output=path_output,properties=properties, agg=None, fluorescence=fluorescence)
 
 class HiVis:

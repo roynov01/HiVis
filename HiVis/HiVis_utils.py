@@ -553,6 +553,9 @@ def _edit_adata(adata, scalefactor_json, mito_name_prefix):
         adata.obs["nUMI_log10"] = np.log10(adata.obs["nUMI"])
         adata.var["nUMI_gene_log10"] = np.log10(adata.var["nUMI_gene"])
         adata.obs["mito_percent_log10"] = np.log10((adata.obs["mito_sum"] / adata.obs["nUMI"]) * 100)
+    for col in ['in_tissue', 'array_row', 'array_col']:
+        if col not in adata.obs.columns:
+            adata.obs[col] = 1
     return adata
 
 
