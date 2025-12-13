@@ -249,6 +249,7 @@ def new_merfish(path, bin_size_um, name, path_output, fluorescence, properties=N
         
     scalefactor_json = {"microns_per_pixel":microns_per_pixel_down,
                         "bin_size_um":bin_size_um,
+                        "spot_diameter_fullres": bin_size_um/microns_per_pixel_down,
                         "tissue_hires_scalef": high_res_scale,
                         "tissue_lowres_scalef": low_res_scale}
     if properties is None:
@@ -339,7 +340,7 @@ def new_xenium(path, bin_size_um, name, path_output, fluorescence, properties=No
 
         return img_yxc, microns_per_pixel
 
-    def xenium_sdata_to_anndata(sdata, xenium_outs_path, bin_size_um=2.0, z_plane=None, qv_threshold=20.0, only_assigned_to_cells=False):
+    def xenium_sdata_to_anndata(sdata, xenium_outs_path, bin_size_um, z_plane=None, qv_threshold=20.0, only_assigned_to_cells=False):
         xenium_outs_path = Path(xenium_outs_path)
 
         # 1. Extract transcripts table
@@ -426,6 +427,7 @@ def new_xenium(path, bin_size_um, name, path_output, fluorescence, properties=No
     
     scalefactor_json = {"microns_per_pixel":microns_per_pixel_down,
                         "bin_size_um":bin_size_um,
+                        "spot_diameter_fullres": bin_size_um/microns_per_pixel_down,
                         "tissue_hires_scalef": high_res_scale,
                         "tissue_lowres_scalef": low_res_scale}
     if properties is None:
@@ -440,7 +442,7 @@ def new_xenium(path, bin_size_um, name, path_output, fluorescence, properties=No
 class HiVis:
     '''
     Main class. Stores the data and images of the VisiumHD, enables plotting via HiVis.plot, \
-    and can store Aggregation instances in HiVis.agg.
+    analysis via HiVis.analysis, and can store Aggregation instances in HiVis.agg.
     
     To make a new class, call the new() function.
     '''
