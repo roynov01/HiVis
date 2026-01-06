@@ -48,7 +48,9 @@ with downsample=1.
 
 <u>Import into HiVis</u><br>
 Classifier can be imported into Python with [HiVis.add_mask()](https://hivis.readthedocs.io/latest/items.html#HiVis.HiVis.HiVis.add_mask).
-This assigns annotation for each bin.
+This assigns annotation for each bin. 
+
+Note; if using a very high resolution classifier (not recommended), apply the classifier with the groovy scripts in the next sections, this will output the exact coverege of classes for each bin, rather than categorical class.
 
 ## 3. Segmentation scripts - overview and parameters
 
