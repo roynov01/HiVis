@@ -439,6 +439,158 @@ def new_xenium(path, bin_size_um, name, path_output, fluorescence, properties=No
     return HiVis(adata, downscaled_img, high_res_image, low_res_image, scalefactor_json, 
              name=name, path_output=path_output,properties=properties, agg=None, fluorescence=fluorescence)
 
+def new_stereoseq(path_transcripts, path_image, bin_size_um, name, path_output, fluorescence, 
+                  microns_per_pixel=0.5, properties=None, downscale_factor=1, flip_img=True, exp_col="MIDCounts"):
+    """
+    Loads Stereoseq data into HiVis.
+    
+    Parameters:
+        path_transcripts (str): Path to the gene count table (csv/tsv).
+        path_image (str): Path to the fullres TIFF image.
+        bin_size_um (float): Desired bin size in microns.
+        name (str): Sample name.
+        path_output (str): Output directory.
+        fluorescence (dict): Dictionary of channel names.
+        microns_per_pixel (float): Resolution of the input image (default 0.5 for standard Stereo-seq).
+        properties (dict): Optional metadata (e.g., organism).
+        downscale_factor (int): Factor to downscale the image for visualization.
+        flip_img (bool) - flip by 270 degrees and mirror the image.
+        exp_col (str): Name of column in the data which stores the count
+        
+    Returns: HiVis object
+    """
+
+    def stereoseq_transcripts_to_anndata(transcripts_path, bin_size_um, microns_per_pixel):
+        # 1. Load Data
+        # Try reading as tab-separated first (common for stereoseq), fallback to comma
+        try:
+            df = pd.read_csv(transcripts_path, sep='\t')
+            if "x" not in df.columns: # If loading failed or it's actually comma sep
+                df = pd.read_csv(transcripts_path, sep=',')
+        except:
+            df = pd.read_csv(transcripts_path)
+
+        # 2. Validate Columns
+        required_cols = ["x", "y", "geneID", exp_col]
+        for col in required_cols:
+            if col not in df.columns:
+                raise ValueError(f"Expected column '{col}' in transcripts file. Found: {df.columns}")
+
+        # 3. Calculate Bounding Box dynamically from data
+        x_min = df["x"].min()
+        y_min = df["y"].min()
+
+        # 4. Convert to Microns
+        df["x_um"] = df["x"] * microns_per_pixel
+        df["y_um"] = df["y"] * microns_per_pixel
+        
+        # Calculate relative coordinates from the top-left of the bounding box
+        min_x_um = x_min * microns_per_pixel
+        min_y_um = y_min * microns_per_pixel
+        
+        df["x_rel_um"] = df["x_um"] - min_x_um
+        df["y_rel_um"] = df["y_um"] - min_y_um
+
+        # 5. Binning
+        # Assign each transcript to a grid bin
+        df["bin_x"] = (df["x_rel_um"] / bin_size_um).astype(int)
+        df["bin_y"] = (df["y_rel_um"] / bin_size_um).astype(int)
+
+        # 6. Aggregation
+        grouped = df.groupby(["bin_x", "bin_y", "geneID"])[exp_col].sum().reset_index(name="count")
+
+        # 7. Create Matrix
+        matrix = grouped.pivot_table(index=["bin_x", "bin_y"], columns="geneID", values="count", fill_value=0)
+        matrix = matrix.sort_index(axis=0)
+        matrix = matrix.sort_index(axis=1)
+
+        # 8. Create Spatial Coordinates for AnnData
+        bin_indices = np.array(matrix.index.tolist())
+        bin_x = bin_indices[:, 0]
+        bin_y = bin_indices[:, 1]
+
+        # Center of the bin in relative microns
+        x_center_rel_um = (bin_x + 0.5) * bin_size_um
+        y_center_rel_um = (bin_y + 0.5) * bin_size_um
+        
+        # Absolute microns (if needed later)
+        um_x = x_center_rel_um + min_x_um
+        um_y = y_center_rel_um + min_y_um
+
+        # Map back to pixels in the original fullres image
+        pxl_col_in_fullres = x_center_rel_um / microns_per_pixel + x_min
+        pxl_row_in_fullres = y_center_rel_um / microns_per_pixel + y_min
+
+
+        obs_index = pd.Index([f"bin_x{i}_y{j}" for i, j in zip(bin_x, bin_y)], name="bin_id")
+        obs = pd.DataFrame({
+            "um_x": um_x, 
+            "um_y": um_y, 
+            "pxl_row_in_fullres": pxl_row_in_fullres, 
+            "pxl_col_in_fullres": pxl_col_in_fullres
+        }, index=obs_index)
+
+        var = pd.DataFrame(index=matrix.columns)
+        X = sparse.csr_matrix(matrix.values)
+        
+        return ad.AnnData(X=X, obs=obs, var=var)
+
+    def load_stereoseq_image(image_path, flip=False):
+        if not os.path.exists(image_path):
+            raise ValueError(f"Image path does not exist: {image_path}")
+            
+        img = tifffile.imread(image_path)
+        
+        # Ensure we have the right dimensions (Rows, Cols, Channels)
+        # If image is 2D (Gray), make it (R, C, 1) or leave as is depending on downstream needs
+        # The reference code expects (Rows, Cols, Channels) for stacking, 
+        # but typically rescaling functions handle 2D arrays fine or expect 3D.
+        if img.ndim == 2:
+            img = img[:, :, np.newaxis] 
+        elif img.ndim == 3:
+            # Check if channels are first or last (TiffFile usually does (C, H, W) or (H, W, C))
+            # Heuristic: if dim 0 is small (e.g. 3 or 4) and dim 1/2 are large, likely C,H,W
+            if img.shape[0] < 10 and img.shape[1] > 100:
+                img = np.moveaxis(img, 0, -1)
+        if flip:
+            # Rotates -90 degrees and flips
+            img = np.flipud(img)
+            img = np.rot90(img, 3)
+        return img
+    
+    high_res_scale = 0.25
+    low_res_scale = 0.01
+
+    # 1. Create AnnData from Table
+    adata = stereoseq_transcripts_to_anndata(path_transcripts, bin_size_um=bin_size_um, microns_per_pixel=microns_per_pixel)
+
+    # 2. Load Image
+    img = load_stereoseq_image(path_image,flip=flip_img)
+
+    # 3. Rescale image and create lower resolution images
+    downscaled_img, high_res_image, low_res_image, microns_per_pixel_down = HiVis_utils.rescale_img_and_adata(
+        adata,microns_per_pixel, img, down_factor=downscale_factor,fluorescence=fluorescence,
+        high_res_scale=high_res_scale, low_res_scale=low_res_scale)
+        
+    scalefactor_json = {
+        "microns_per_pixel": microns_per_pixel_down,
+        "bin_size_um": bin_size_um,
+        "spot_diameter_fullres": bin_size_um / microns_per_pixel_down,
+        "tissue_hires_scalef": high_res_scale,
+        "tissue_lowres_scalef": low_res_scale
+    }
+
+    if properties is None:
+        properties = {}
+    
+    # Handle mitochondrial prefix
+    mito_name_prefix = "MT-" if properties.get("organism") == "human" else "mt-"
+    HiVis_utils._edit_adata(adata, scalefactor_json, mito_name_prefix)
+    
+    return HiVis(adata, downscaled_img, high_res_image, low_res_image, scalefactor_json, 
+        name=name, path_output=path_output,properties=properties,agg=None, fluorescence=fluorescence)
+
+
 class HiVis:
     '''
     Main class. Stores the data and images of the VisiumHD, enables plotting via HiVis.plot, \
