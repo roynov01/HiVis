@@ -54,7 +54,7 @@ def load(filename, directory=''):
         instance = dill.load(f)
     return instance
 
-def new(path_image_fullres:str, path_input_data:str, path_output:str,
+def new_visiumHD(path_image_fullres:str, path_input_data:str, path_output:str,
              name:str, crop_images=True, properties: dict = None, on_tissue_only=True,min_reads_in_spot=1,
              min_reads_gene=10, fluorescence=False, plot_qc=True):
     '''
@@ -630,7 +630,7 @@ class HiVis:
     Main class. Stores the data and images of the VisiumHD, enables plotting via HiVis.plot, \
     analysis via HiVis.analysis, and can store Aggregation instances in HiVis.agg.
     
-    To make a new class, call the new() function.
+    To make a new class, call the new_visiumHD() function.
     '''
     def __init__(self, adata, image_fullres, image_highres, image_lowres, scalefactor_json, 
                  name, path_output, properties=None, agg=None, fluorescence=False, plot_qc=True):
