@@ -10,7 +10,8 @@ from HiVis import HiVis
 
 
 
-# Data was downloaded from: https://spateo-release.readthedocs.io/en/latest/tutorials/notebooks/1_cell_segmentation/stain_segmentation.html
+# Brain StereoSeq data was downloaded from: https://spateo-release.readthedocs.io/en/latest/tutorials/notebooks/1_cell_segmentation/stain_segmentation.html
+# The data is from Chen et al. 2022 (PMID: 35512705), processed by the STOmics SAW software, available from Qiu et al. 2024 (PMID: 39532097).
 
 path_output = r"output"
 image_file = r"SS200000135IL-D1.ssDNA.tif"
