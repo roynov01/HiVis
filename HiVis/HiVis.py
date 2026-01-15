@@ -128,6 +128,21 @@ def new(path_image_fullres:str, path_input_data:str, path_output:str,
                     name, path_output, properties, agg=None, fluorescence=fluorescence, plot_qc=plot_qc)
 
 def new_merfish(path, bin_size_um, name, path_output, fluorescence, properties=None, downscale_factor=4):
+    '''
+    Load MERFISH data into a HiVis object.
+
+    Parameters:
+        * path (str or pathlib.Path) - Path to the Xenium output directory. Must contain experiment.xenium and a morphology_focus subdirectory with OME-TIFF morphology images.
+        * bin_size_um (float) - Spatial bin size in micrometers used to aggregate transcript counts into a grid.
+        * name (str) - Name to assign to the returned HiVis object.
+        * path_output (str or pathlib.Path) - Output directory passed to the HiVis object for saving results/artifacts.
+        * fluorescence (dict) - Dict of channel names and colors. color can be None. Example {"DAPI":"blue"}
+        * properties (dict, optional) - Metadata passed to the HiVis object.
+        * downscale_factor (int) - Downscaling factor applied when generating the downscaled image (default: 4).
+    
+    Returns:
+        HiVis instance.
+    '''
     def load_manifest(manifest_path):
         with open(manifest_path, "r") as f:
             manifest = json.load(f)
@@ -261,7 +276,26 @@ def new_merfish(path, bin_size_um, name, path_output, fluorescence, properties=N
                  name=name, path_output=path_output,properties=properties, agg=None, fluorescence=fluorescence)
 
 
-def new_xenium(path, bin_size_um, name, path_output, fluorescence, properties=None, downscale_factor=4):
+def new_xenium(path, bin_size_um, name, path_output, fluorescence, properties=None, downscale_factor=1):
+    '''
+    Load 10x Genomics Xenium data into a HiVis object.
+    
+    This function:
+    - Reads Xenium transcript points via spatialdata_io.xenium and aggregates them into a binned count matrix (AnnData) using bin_size_um.
+    - Loads Xenium morphology OME-TIFF images from the morphology_focus directory and stacks them into a single (Y, X, C) array.
+
+    Parameters:
+        * path (str or pathlib.Path) - Path to the Xenium output directory. Must contain experiment.xenium and a morphology_focus subdirectory with OME-TIFF morphology images.
+        * bin_size_um (float) - Spatial bin size in micrometers used to aggregate transcript counts into a grid.
+        * name (str) - Name to assign to the returned HiVis object.
+        * path_output (str or pathlib.Path) - Output directory passed to the HiVis object for saving results/artifacts.
+        * fluorescence - either False for H&E, or a dict of channel names and colors. color can be None. Example {"DAPI":"blue"}
+        * properties (dict, optional) - Metadata passed to the HiVis object.
+        * downscale_factor (int) - Downscaling factor applied when generating the downscaled image.
+    
+    Returns:
+        HiVis instance.
+    '''
     from spatialdata_io import xenium
     def load_xenium_image(xenium_outs_path):
         xenium_outs_path = Path(xenium_outs_path)
