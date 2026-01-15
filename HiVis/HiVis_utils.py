@@ -1014,6 +1014,17 @@ def create_rescaled_images(full_res_image, high_res_scale=0.5, low_res_scale=0.1
     down_factor_lowres = int(1/low_res_scale)
     high_res_image = block_reduce(full_res_image, block_size=(down_factor_highres, down_factor_highres, 1), func=np.mean)
     low_res_image = block_reduce(full_res_image, block_size=(down_factor_lowres, down_factor_lowres, 1), func=np.mean)
+    if np.issubdtype(full_res_image.dtype, np.integer):
+        high_res_image = np.clip(high_res_image / 255.0, 0.0, 1.0)
+        low_res_image = np.clip(low_res_image / 255.0, 0.0, 1.0)
+    else:
+        mx = float(np.nanmax(full_res_image))
+        if mx > 1.0:
+            high_res_image = np.clip(high_res_image / mx, 0.0, 1.0)
+            low_res_image = np.clip(low_res_image / mx, 0.0, 1.0)
+        else:
+            high_res_image = np.clip(high_res_image, 0.0, 1.0)
+            low_res_image = np.clip(low_res_image, 0.0, 1.0)
     return high_res_image, low_res_image, high_res_scale, low_res_scale
 
 
@@ -1082,9 +1093,9 @@ def rescale_img_and_adata(adata,  microns_per_pixel, img, fluorescence, down_fac
         downscaled_img = img
     res = create_rescaled_images(downscaled_img, high_res_scale=high_res_scale, low_res_scale=low_res_scale)
     high_res_image, low_res_image, high_res_scale, low_res_scale = res
-    
-    high_res_image =fluorescence_to_RGB(high_res_image, colors=list(fluorescence.values()))
-    low_res_image = fluorescence_to_RGB(low_res_image, colors=list(fluorescence.values()))
+    if fluorescence:
+        high_res_image =fluorescence_to_RGB(high_res_image, colors=list(fluorescence.values()))
+        low_res_image = fluorescence_to_RGB(low_res_image, colors=list(fluorescence.values()))
     
     return downscaled_img, high_res_image, low_res_image, microns_per_pixel_down
 
