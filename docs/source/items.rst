@@ -1,6 +1,8 @@
 
-.. autofunction:: HiVis.HiVis.new
-
+.. autofunction:: HiVis.HiVis.new_visiumHD
+.. autofunction:: HiVis.HiVis.new_merfish
+.. autofunction:: HiVis.HiVis.new_xenium
+.. autofunction:: HiVis.HiVis.new_stereoseq
 .. autofunction:: HiVis.HiVis.load
 
 HiVis
