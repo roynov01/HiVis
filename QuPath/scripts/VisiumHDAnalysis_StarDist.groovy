@@ -27,23 +27,28 @@
 
 // ===================  Workflow control Parameters  =========================================================
 
-def segmentTissue                 = 1 // 
-def segmentAnatomicalRegions      = 1
-def segmentCells                  = 1 // 
-def filterNucBeforeCellExpansion  = 1
-def AddMeasurementsToCells        = 1
-def loadSpots                     = 1
-def associateSpotsToCells         = 1
-def runPixelClassifierForSpot     = 0
-def runPixelClassifierForCell     = 0 // MAKE SURE THAT AddMeasurementsToCells IS ALSO 1
-def exportCellsAsGeoJson          = 1
-def exportAnnotationsAsGeoJson    = 1
-def saveResultTable               = 1 // export result table to Tab-separated txt file
+def segmentTissue                 = 1 // Segment the entire tissue region automatically using pixel classifier. otherwise draw it manualy  
+def segmentAnatomicalRegions      = 1 // Segment anatomical regions automatically using pixel classifier (inside within Whole Tissue).  
+                                      // otherwise : draw anatomical regions manualy 
+def segmentCells                  = 1 // Segment cells within each anatomical region, by segmenting nuclei with Stardist, followed by expansion
+def filterNucBeforeCellExpansion  = 1 /* While segmenting cells - apply artifact filtering by 
+                                          - segmenting nuclei, 
+                                          - use object classifier to filter out artifacts
+                                          - expand nuclei into cells 
+                                       */
+def AddMeasurementsToCells        = 1  // Add shape and intensity features to cells. usefull when using filterNucBeforeCellExpansion
+def loadSpots                     = 1  // Load the VisiumHD bins position
+def associateSpotsToCells         = 1  // Associate bins to cells
+def runPixelClassifierForSpot     = 0  // Run pixel classifier on bins
+def runPixelClassifierForCell     = 0  // Run pixel classifier on cells. MAKE SURE THAT AddMeasurementsToCells IS ALSO 1
+def exportCellsAsGeoJson          = 1  // Save Cell boudaries into GeoJson file
+def exportAnnotationsAsGeoJson    = 1  // Save anatomical regions boundaries into GeoJson file
+def saveResultTable               = 1  // Export result table to Tab-separated txt file
 
 // ===================  File paths  ==========================================================================
 def resultsSubFolder = 'results' // subfolder for table 
 def scalefactors_json = 'A:/royno/HiVis_proj_v2/datasets/mouse_intestine_scalefactors_json.json' // Use full path
-def csvfile = 'A:/royno/HiVis_proj_v2/datasets/mouse_intestine_tissue_positions.csv' // Use full path
+def csvfile = 'A:/royno/HiVis_proj_v2/datasets/mouse_intestine_tissue_positions.csv'             // Use full path
 
 // ===================  Pixel classifier and anatomical region expansion  ====================================
 def wholeTissueClass = "WholeTissue" 
@@ -73,10 +78,9 @@ var normalize_low_pct  = 1   //lower limit for normalization. Set to 0 to disabl
 var normalize_high_pct = 99  // upper limit for normalization. Set to 100 to disable.
 var param_tilesize     = 1024 //size of tile in pixels for processing. Must be a multiple of 16. Lower values may solve any memory-related errors, but can take longer to process. Default is 1024.
 
-/* AnatomicalRegionsClassNames   and   AnatomicalRegionsExpansionMicrons are related lists that are used to enable 
-   1. Running cell segmentation constarined to the parent anatomical region, so that cells do not grow beyond the borders of the specifc anatomical region 
-      during expansion
-   2. different expansion parameters for different anatomical regions 
+/* AnatomicalRegionsClassNames   and   AnatomicalRegionsExpansionMicrons are related lists that are used to  
+   1. Restrict cell expansion within anatomical regions 
+   2. Use different expansion parameters for different anatomical regions 
    AnatomicalRegionsClassNames       - list the classes of each anatomical region
    AnatomicalRegionsExpansionMicrons - list the maximum nuclei expansion for each region 
  */
