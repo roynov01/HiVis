@@ -47,8 +47,8 @@ def saveResultTable               = 1  // Export result table to Tab-separated t
 
 // ===================  File paths  ==========================================================================
 def resultsSubFolder = 'results' // subfolder for table 
-def scalefactors_json = 'A:/royno/HiVis_proj_v2/datasets/mouse_intestine_scalefactors_json.json' // Use full path
-def csvfile = 'A:/royno/HiVis_proj_v2/datasets/mouse_intestine_tissue_positions.csv'             // Use full path
+def scalefactors_json = '.../scalefactors_json.json' // Use full path
+def csvfile = '.../tissue_positions.csv'             // Use full path
 
 // ===================  Pixel classifier and anatomical region expansion  ====================================
 def wholeTissueClass = "WholeTissue" 
@@ -71,7 +71,7 @@ var cellClassName = "Cell"
 var spotClassName = "Spot"
 
 // Stardist parameters 
-var StarDistPathModel = 'A:/shared/QuPathScriptsAndProtocols/QuPath_StarDistModels/he_heavy_augment.pb'
+var StarDistPathModel = '.../he_heavy_augment.pb' // Use full path
 var clear_existing_detections = false
 var param_threshold    = 0.1 //0.5 //threshold for detection. All cells segmented by StarDist will have a detection probability associated with it, where higher values indicate more certain detections. Floating point, range is 0 to 1. Default 0.5
 var normalize_low_pct  = 1   //lower limit for normalization. Set to 0 to disable
