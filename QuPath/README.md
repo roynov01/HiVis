@@ -149,7 +149,7 @@ Examples: H&E image or fluorescent DAPI-only staining.
   - Until it touches a **neighboring expanding cell**
 
 Nuclei segmentation options:
-- [StarDist](https://github.com/qupath/qupath-extension-stardist))
+- [StarDist](https://github.com/qupath/qupath-extension-stardist)
 - [Cellpose](https://github.com/BIOP/qupath-extension-cellpose)
 - [InstaSeg](https://github.com/instanseg/instanseg)
 
