@@ -50,10 +50,10 @@ def exportAnnotationsAsGeoJson    = 1 // Save anatomical regions boundaries into
 def saveResultTable               = 1 // export result table to Tab-separated txt file
 
 // ===================  File paths  ==========================================================================
-def resultsSubFolder = 'results_tonsil' // subfolder for table 
+def resultsSubFolder = 'results' // subfolder for results 
 
-def scalefactors_json = 'A:/royno/HiVis_proj_v2/datasets/tonsil_scalefactors_json.json' // Use Full path
-def csvfile = 'A:/royno/HiVis_proj_v2/datasets/tonsil_tissue_positions.csv'             // Use Full path
+def scalefactors_json = '.../scalefactors_json.json' // Use Full path
+def csvfile = '.../tissue_positions.csv'             // Use Full path
 
 // ===================  Segmentation parameters  =============================================================
 var cellClassName = "Cell"
@@ -73,28 +73,26 @@ def membraneChannels       = ["Channel 1", "Channel 3"]  // List of membrance ch
 var useCellposeSAM         = 1         // Use SAM (Segment Anything Model) integration in Cellpose
 var CellposeNucModel       = "nuc"     // Model used for nuclei segmentation.
 var CellposeCellModel      = "cyto3"   // Model used for cell segmentation (if useCellposeSAM=0)
-//var CellposeCellModel    = 'A:/royno/Visium_HD_liver/experiment1/qupath_project/models/Custom_model_2025-01-08_17_02.cpm'  // if you use your own model you need to provide full path
+//var CellposeCellModel    = '.../Custom_model.cpm'  // if you use your own model you need to provide full path
 var CellposeCellDiameter   = 15 // Approximate cell diameter in pixels.
 var CellposeNucDiameter    = 15 // Approximate nucleus diameter in pixels.
 
 // Stardist parameters - require installation of QuPath Cellpose Extenstion , and independent cellpose environment installation 
-//var StarDistPathModel = 'A:/shared/QuPathScriptsAndProtocols/QuPath_StarDistModels/dsb2018_heavy_augment.pb'
-var StarDistPathModel = 'A:/royno/HiVis_proj_v2/Qupath6/Models/StarDistModels/dsb2018_heavy_augment.pb' // use Full path
+var StarDistPathModel = '.../dsb2018_heavy_augment.pb' // use Full path
 var param_threshold    = 0.5 // threshold for detection. All cells segmented by StarDist will have a detection probability associated with it, where higher values indicate more certain detections. Floating point, range is 0 to 1. Default 0.5
 var normalize_low_pct  = 1   // lower limit for normalization. Set to 0 to disable
 var normalize_high_pct = 99  // upper limit for normalization. Set to 100 to disable.
 var param_tilesize     = 1024 // size of tile in pixels for processing. Must be a multiple of 16. Lower values may solve any memory-related errors, but can take longer to process. Default is 1024.
 
 // InstaSeg parameters - require installation of QuPath InstaSeg Extenstion 
-//var InstaSegModel           = "A:/ofrag/QuPath-InstaSeg-Models/downloaded/fluorescence_nuclei_and_cells-0.1.0"
-var InstaSegModel             = "A:/royno/HiVis_proj_v2/Qupath6/Models/InstaSegModels/fluorescence_nuclei_and_cells-0.1.0" // use full path 
+var InstaSegModel             = ".../fluorescence_nuclei_and_cells-0.1.0" // use full path 
 def InstaSeg_tileDims         = 1024  // size of tile in pixels for processing. Must be a multiple of 16.
 def InstaSeg_interTilePadding = 32    // overlap of adjacent tiles 
 def InstaSeg_nThreads         = 4     // number of threads used by InstaSeg
 def InstaSeg_device           = "gpu" // Valid values: "gpu", "cpu" 
 
 // ===================  Pixel classifier and anatomical region expansion  ====================================
-def PixelClassifier         = "epithel_region_moderate" // "epithelial_celiac_classifier"
+def PixelClassifier         = "EPITHEL_CLASSIFIER_NAME" 
 
 // Whole tissue classifier
 def wholeTissueClass        = "WholeTissue" 
@@ -104,7 +102,7 @@ def WholeTissue_MinHoleSize = 10000         // Minimal hole size to keep when cr
 
 // Anatomical region classifier
 def ClassNameForAnatomicalRegions    = "WholeTissue" // Annotations which will be further divided into anatomical regions
-def AnatomicalRegionsPixelClassifier = "EPITHEL_CLASSIFIER_NAME" // eg "epithel_non_epithel_ignore_moderate_v1" 
+def AnatomicalRegionsPixelClassifier = "EPITHEL_CLASSIFIER_NAME" 
 def AnatomicalRegions_MinSize        = 500 // Minimal EPITHEL connected-component size (um^2)
 def AnatomicalRegions_MinHoleSize    = 40  // minmal hole size (um^2) to keep when creating EPITHEL regions, samller holes are filled
 
