@@ -47,18 +47,18 @@ def csvfile = 'A:/royno/HiVis_proj_v2/datasets/mouse_intestine_tissue_positions.
 
 // ===================  Pixel classifier and anatomical region expansion  ====================================
 def wholeTissueClass = "WholeTissue" 
-def WholeTissueClassifier   = "WholeTissue_High_v1"    // name of WholeTissue pixel classifier
-def WholeTissue_MinSize     =  10000      // Minimal WholeTissue connected-component size        
-def WholeTissue_MinHoleSize = 3000        // minmal hole size to keep when creating WholeTissue regions, samller holes are filled 
+def WholeTissueClassifier   = "WHOLE_TISSUE_CLASSIFIER_NAME"    // name of WholeTissue pixel classifier
+def WholeTissue_MinSize     =  10000      // Minimal WholeTissue connected-component size (um^2)
+def WholeTissue_MinHoleSize = 3000        // minmal hole size (um^2) to keep when creating WholeTissue regions, samller holes are filled 
 
 // ===================  Parameters for Creation of Anatomical Regions annotations 
 def ClassNameForAnatomicalRegions    = "WholeTissue" 
-def AnatomicalRegionsPixelClassifier = "epithel_non_epithel_ignore_moderate_v1" 
-def AnatomicalRegions_MinSize        = 500 
-def AnatomicalRegions_MinHoleSize    = 40 
+def AnatomicalRegionsPixelClassifier = "EPITHEL_CLASSIFIER_NAME" 
+def AnatomicalRegions_MinSize        = 500 // Minimal EPITHEL connected-component size (um^2)
+def AnatomicalRegions_MinHoleSize    = 40  // minmal hole size (um^2) to keep when creating EPITHEL regions, samller holes are filled 
 
 // ===================  Pixel Classifier Parameters   
-def PixelClassifier = "epithel_non_epithel_ignore_moderate_v1"
+def PixelClassifier = "EPITHEL_CLASSIFIER_NAME" // Name of pixel classifier used for assigning class to visium spots (runPixelClassifierForSpot)
 
 // ===================  Segmentation parameters  =============================================================
 // ===================  Segmentation is based on StarDist + expansion
@@ -73,7 +73,13 @@ var normalize_low_pct  = 1   //lower limit for normalization. Set to 0 to disabl
 var normalize_high_pct = 99  // upper limit for normalization. Set to 100 to disable.
 var param_tilesize     = 1024 //size of tile in pixels for processing. Must be a multiple of 16. Lower values may solve any memory-related errors, but can take longer to process. Default is 1024.
 
-
+/* AnatomicalRegionsClassNames   and   AnatomicalRegionsExpansionMicrons are related lists that are used to enable 
+   1. Running cell segmentation constarined to the parent anatomical region, so that cells do not grow beyond the borders of the specifc anatomical region 
+      during expansion
+   2. different expansion parameters for different anatomical regions 
+   AnatomicalRegionsClassNames       - list the classes of each anatomical region
+   AnatomicalRegionsExpansionMicrons - list the maximum nuclei expansion for each region 
+ */
 AnatomicalRegionsClassNames = ["WholeTissue"]
 AnatomicalRegionsExpansionMicrons  = [7] 
 // or:
@@ -81,7 +87,7 @@ AnatomicalRegionsExpansionMicrons  = [7]
 //AnatomicalRegionsExpansionMicrons  = [7, 2] 
 
 // ===================  Nuc Classifier Parameters   ==========================================================
-def PositiveNegativeNucClassifier = "PositiveNegative_Nuc_v3"
+def PositiveNegativeNucClassifier = "POSITIVE_NEGATIVE_NUCLEI_CLASSIFIER_NAME"
 
 
 
