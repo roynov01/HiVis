@@ -25,16 +25,17 @@
 //
 // ===================  Workflow control Parameters  =========================================================
 
-def segmentTissue               = 1 
-def createAnatomicalRegionsFromPixelClassifier = 1
-def segmentCells                = 1 
-def loadSpots                   = 1
-def associateSpotsToCells       = 1
-def runPixelClassifierForSpot   = 0
-def runPixelClassifierForCell   = 0 
-def AddDistanceMeasurements     = 1
-def measureSpotZonationInCell   = 1
-def exportCellsAndNucsAsGeoJson = 1
+def segmentTissue               = 1 // Segment the entire tissue region automatically using pixel classifier. otherwise draw it manualy
+def segmentAnatomicalRegions    = 1 // Segment anatomical regions automatically using pixel classifier (inside within Whole Tissue).  
+                                    // otherwise : draw anatomical regions manualy 
+def segmentCells                = 1 // Segment cells within each anatomical region, further controlled by Segmentation parameters 
+def loadSpots                   = 1 // Load the VisiumHD bins position
+def associateSpotsToCells       = 1 // Associate bins to cells
+def runPixelClassifierForSpot   = 0 // Run pixel classifier on bins
+def runPixelClassifierForCell   = 0 // Run pixel classifier on cells
+def AddDistanceMeasurements     = 1 // Add spot distances to each anatomical region
+def measureSpotZonationInCell   = 1 // Measure distance from spot to Cel border and Cell Nuclei - for heaptocytes cells only
+def exportCellsAndNucsAsGeoJson = 1 // Save Cell boudaries into GeoJson file
 def saveResultTable             = 1 // export result table to Tab-separated txt file
 
 // ===================  File paths  ==========================================================================
@@ -44,19 +45,19 @@ def csvfile = 'A:/royno/HiVis_proj_v2/datasets/mouse_liver_98_WT_tissue_position
 
 // ===================  Pixel classifier and anatomical region expansion  ====================================
 def wholeTissueClass = "WholeTissue" 
-def BVClass          = "Blood_vessel" // 
-def hepatoClass      = "WholeTissue"  //  
+def BVClass          = "Blood_vessel"  
+def hepatoClass      = "WholeTissue"    
             
 def WholeTissueClassifier   = "Whole Tissue" // name of WholeTissue pixel classifier
-def WholeTissue_MinSize     =  25            // Minimal WholeTissue connected-component size        
-def WholeTissue_MinHoleSize = 50             // minmal hole size to keep when creating WholeTissue regions, samller holes are filled 
+def WholeTissue_MinSize     = 25             // Minimal WholeTissue connected-component size (um^2)
+def WholeTissue_MinHoleSize = 50             // minimal hole size to keep when creating WholeTissue regions, samller holes are filled (um^2)
 
 // ===================  Pixel Classifier for Anatomical regions   ====================================
-def PixelClassifier = "blood_vessels_fullres"
-def minObjectSize   = 10
-def minHoleSize     = 100
-def minEmptyArea    = 400
-def maxEmptyArea    = 500000
+def PixelClassifier = "BLOOD_VESSELS_CLASSIFIER_NAME" // eg: "blood_vessels_fullres"
+def minObjectSize   = 10					// Minimal Blood Vessel segment size (um^2)
+def minHoleSize     = 100					// Minimal hole size to keep when creating Blood Vessel regions, samller holes are filled (um^2)
+def minEmptyArea    = 400					// Minimal Empty region segment size (um^2)
+def maxEmptyArea    = 500000				// Maximal Empty region segment size (um^2)
 
 // ===================  Segmentation parameters  =============================================================
 // Cell detection control 
@@ -75,22 +76,22 @@ var spotClassName = "Spot"
 // Path to costum model 
 def pathModel_cyto = 'A:/royno/Visium_HD_liver/experiment1/qupath_project/models/Custom_model_2025-01-08_17_02.cpm'
 def pathModel_nuc = 'cyto3' // Other models for Cellpose https://cellpose.readthedocs.io/en/latest/models.html
-def nucChannel       = 3
-def membChannel      = 0
-def nucDiameter      = 21
-def membDiameter     = 50
+def nucChannel       = 3    // number of nuclei Channel , starting from 0
+def membChannel      = 0    // number of membrane Channel , starting from 0
+def nucDiameter      = 21   // Approximate hepatocyte nuclei diameter in pixels. 
+def membDiameter     = 50   // Approximate hepatocyte cell diameter in pixels.
 
 // bv cells parameters 
 def use_cellpose_for_bv_cells = 0 // 1=use cellpose, 0=use stardist
-def pathModel_bv_nuc = 'nuc'
-def bvNucDiameter    = 15
+def pathModel_bv_nuc = 'nuc'  // name of pretrained cellpose model used for nuclei detection
+def bvNucDiameter    = 15     // Approximate nuclei diameter in pixels.
 double bvCellExpansionMicrons = 2 //size of cell expansion in microns. 
 //def bv_stardist_modelPath = "A:/shared/QuPathScriptsAndProtocols/QuPath_StarDistModels/dsb2018_heavy_augment.pb"
 def bv_stardist_modelPath = "A:/shared/QuPathScriptsAndProtocols/QuPath_StarDistModels/stardist_for_vishnu_v5.pb"
-def bv_stardist_threshold = 0.3 //0.3
-def bv_MaxNucArea         = 80 
-def bv_MinNucArea         = 10   
-def bv_MinNucIntensity    = 18000 //17000 //17000 //remove any detections with an intensity less than or equal to this value          
+def bv_stardist_threshold = 0.3 // threshold for detection. All cells segmented by StarDist will have a detection probability associated with it, where higher values indicate more certain detections. Floating point, range is 0 to 1. Default 0.5 
+def bv_MaxNucArea         = 80  // Maximal nuclei area (um^2)
+def bv_MinNucArea         = 10  // Minimal nuclei area (um^2)
+def bv_MinNucIntensity    = 18000 // remove any detections with an intensity less than or equal to this value          
 
 
 // =======================================================================================================
@@ -117,9 +118,9 @@ if (segmentTissue) {
 }
 
 // ===================  Segment Anatomical regions  ======================================================
-if (createAnatomicalRegionsFromPixelClassifier) {
+if (segmentAnatomicalRegions) {
 
-    println "[DEBUG] createAnatomicalRegionsFromPixelClassifier start, Number of annotation objects: ${getAnnotationObjects().size()}"
+    println "[DEBUG] segmentAnatomicalRegions start, Number of annotation objects: ${getAnnotationObjects().size()}"
     
     selectObjectsByClassification(wholeTissueClass);
     createAnnotationsFromPixelClassifier(PixelClassifier, minObjectSize, minHoleSize)
@@ -141,7 +142,7 @@ if (createAnatomicalRegionsFromPixelClassifier) {
         mergeSelectedAnnotations()
     }
         
-    println "[DEBUG] createAnatomicalRegionsFromPixelClassifier end, Number of annotation objects: ${getAnnotationObjects().size()}"
+    println "[DEBUG] segmentAnatomicalRegions end, Number of annotation objects: ${getAnnotationObjects().size()}"
 }
 
 
