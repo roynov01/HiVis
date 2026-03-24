@@ -36,15 +36,17 @@
 //
 // ===================  Workflow control Parameters  =========================================================
 
-def segmentTissue                 = 1 // 
-def segmentAnatomicalRegions      = 1
-def segmentCells                  = 1 // 
-def loadSpots                     = 1
-def associateSpotsToCells         = 1
-def runPixelClassifierForSpot     = 0
-def runPixelClassifierForCell     = 0 
-def exportCellsAsGeoJson          = 1
-def exportAnnotationsAsGeoJson    = 1
+def segmentTissue                 = 1 // Segment the entire tissue region automatically using pixel classifier. otherwise draw it manualy 
+def segmentAnatomicalRegions      = 1 // Segment anatomical regions automatically using pixel classifier (inside within Whole Tissue).  
+                                      // otherwise : draw anatomical regions manualy 
+def segmentCells                  = 1 // Segment cells within each anatomical region. 
+                                      // The exact method depend on Segmentation Parameters below
+def loadSpots                     = 1 // Load the VisiumHD bins position
+def associateSpotsToCells         = 1 // Associate bins to cells
+def runPixelClassifierForSpot     = 0 // Run pixel classifier on bins
+def runPixelClassifierForCell     = 0 // Run pixel classifier on cells
+def exportCellsAsGeoJson          = 1 // Save Cell boudaries into GeoJson file
+def exportAnnotationsAsGeoJson    = 1 // Save anatomical regions boundaries into GeoJson file
 def saveResultTable               = 1 // export result table to Tab-separated txt file
 
 // ===================  File paths  ==========================================================================
@@ -58,51 +60,62 @@ var cellClassName = "Cell"
 var nucClassName = "Nuc"
 var spotClassName = "Spot"
 
-def cellSegmentationMethod     = "cellBorders" // "cellBorders" // "expandNuc" "onlyNuc"
-def segmentationAlg            = "cellpose" //"cellpose" // "stardist" "instaseg"
-def nucChannel                 = "Channel 4"                 // Tonsil
-def membraneChannels           = ["Channel 1", "Channel 3"]  // Tonsil
+def cellSegmentationMethod = "cellBorders" // Defines how cell boundaries are determined relative to nuclei.
+                                           // Valid values: "cellBorders", "expandNuc", "onlyNuc"
+def segmentationAlg        = "cellpose"    // Algorithm used for segmentation
+                                           // Valid values: "cellpose", "stardist", "instaseg"
+def nucChannel             = "Channel 4"   // Name of nuclei channel. 
+                                           // valid value for Tonsil example: "Channel 4"
+def membraneChannels       = ["Channel 1", "Channel 3"]  // List of membrance channels names.  
+                                                         // valid value for Tonsil example: ["Channel 1", "Channel 3"]
 
 // Cellpose parameters 
-var useCellposeSAM         = 1 
-var CellposeNucModel       = "nuc" 
-var CellposeCellModel      = "cyto3" 
-//var CellposeCellModel    = 'A:/royno/Visium_HD_liver/experiment1/qupath_project/models/Custom_model_2025-01-08_17_02.cpm'
-var CellposeCellDiameter   = 15 // Tonsil
-var CellposeNucDiameter    = 15 // Tonsil
+var useCellposeSAM         = 1         // Use SAM (Segment Anything Model) integration in Cellpose
+var CellposeNucModel       = "nuc"     // Model used for nuclei segmentation.
+var CellposeCellModel      = "cyto3"   // Model used for cell segmentation (if useCellposeSAM=0)
+//var CellposeCellModel    = 'A:/royno/Visium_HD_liver/experiment1/qupath_project/models/Custom_model_2025-01-08_17_02.cpm'  // if you use your own model you need to provide full path
+var CellposeCellDiameter   = 15 // Approximate cell diameter in pixels.
+var CellposeNucDiameter    = 15 // Approximate nucleus diameter in pixels.
 
-// Stardist parameters 
+// Stardist parameters - require installation of QuPath Cellpose Extenstion , and independent cellpose environment installation 
 //var StarDistPathModel = 'A:/shared/QuPathScriptsAndProtocols/QuPath_StarDistModels/dsb2018_heavy_augment.pb'
 var StarDistPathModel = 'A:/royno/HiVis_proj_v2/Qupath6/Models/StarDistModels/dsb2018_heavy_augment.pb' // use Full path
 var param_threshold    = 0.5 // threshold for detection. All cells segmented by StarDist will have a detection probability associated with it, where higher values indicate more certain detections. Floating point, range is 0 to 1. Default 0.5
-var normalize_low_pct  = 1   //lower limit for normalization. Set to 0 to disable
+var normalize_low_pct  = 1   // lower limit for normalization. Set to 0 to disable
 var normalize_high_pct = 99  // upper limit for normalization. Set to 100 to disable.
-var param_tilesize     = 1024 //size of tile in pixels for processing. Must be a multiple of 16. Lower values may solve any memory-related errors, but can take longer to process. Default is 1024.
+var param_tilesize     = 1024 // size of tile in pixels for processing. Must be a multiple of 16. Lower values may solve any memory-related errors, but can take longer to process. Default is 1024.
 
-// InstaSeg parameters
+// InstaSeg parameters - require installation of QuPath InstaSeg Extenstion 
 //var InstaSegModel           = "A:/ofrag/QuPath-InstaSeg-Models/downloaded/fluorescence_nuclei_and_cells-0.1.0"
 var InstaSegModel             = "A:/royno/HiVis_proj_v2/Qupath6/Models/InstaSegModels/fluorescence_nuclei_and_cells-0.1.0" // use full path 
-def InstaSeg_tileDims         = 1024
-def InstaSeg_interTilePadding = 32
-def InstaSeg_nThreads         = 4
-def InstaSeg_device           = "gpu" 
+def InstaSeg_tileDims         = 1024  // size of tile in pixels for processing. Must be a multiple of 16.
+def InstaSeg_interTilePadding = 32    // overlap of adjacent tiles 
+def InstaSeg_nThreads         = 4     // number of threads used by InstaSeg
+def InstaSeg_device           = "gpu" // Valid values: "gpu", "cpu" 
 
 // ===================  Pixel classifier and anatomical region expansion  ====================================
 def PixelClassifier         = "epithel_region_moderate" // "epithelial_celiac_classifier"
 
 // Whole tissue classifier
 def wholeTissueClass        = "WholeTissue" 
-def WholeTissueClassifier   = "WholeTissue_Tonsil_Moderate_v1"    // name of WholeTissue pixel classifier
-def WholeTissue_MinSize     = 10000         // Minimal WholeTissue connected-component size        
-def WholeTissue_MinHoleSize = 10000         // Minmal hole size to keep when creating WholeTissue regions, samller holes are filled 
+def WholeTissueClassifier   = "WHOLE_TISSUE_CLASSIFIER_NAME"    // name of WholeTissue pixel classifier, for Tonsil example: "WholeTissue_Tonsil_Moderate_v1"
+def WholeTissue_MinSize     = 10000         // Minimal WholeTissue connected-component size (um^2)       
+def WholeTissue_MinHoleSize = 10000         // Minimal hole size to keep when creating WholeTissue regions, samller holes are filled (um^2)
 
 // Anatomical region classifier
 def ClassNameForAnatomicalRegions    = "WholeTissue" // Annotations which will be further divided into anatomical regions
-def AnatomicalRegionsPixelClassifier = "epithel_non_epithel_ignore_moderate_v1" // "epithel_non_epithel_ignore_moderate_v1" //"epithelial_celiac_classifier" //"WholeTissue_High_v1" //"epithelial_celiac_classifier"
-def AnatomicalRegions_MinSize        = 500 
-def AnatomicalRegions_MinHoleSize    = 40 
-AnatomicalRegionsClassNames        = ["WholeTissue"] //["epithel", "non_epithel"]
-AnatomicalRegionsExpansionMicrons  = [5] //[7, 2] // Nuclei expansion parameter for different anatomical regions
+def AnatomicalRegionsPixelClassifier = "EPITHEL_CLASSIFIER_NAME" // eg "epithel_non_epithel_ignore_moderate_v1" 
+def AnatomicalRegions_MinSize        = 500 // Minimal EPITHEL connected-component size (um^2)
+def AnatomicalRegions_MinHoleSize    = 40  // minmal hole size (um^2) to keep when creating EPITHEL regions, samller holes are filled
+
+/* AnatomicalRegionsClassNames   and   AnatomicalRegionsExpansionMicrons are related lists that are used to  
+   1. Restrict cell expansion within anatomical regions 
+   2. Use different expansion parameters for different anatomical regions 
+   AnatomicalRegionsClassNames       - list the classes of each anatomical region
+   AnatomicalRegionsExpansionMicrons - list the maximum nuclei expansion for each region 
+ */
+AnatomicalRegionsClassNames        = ["WholeTissue"] // or for example ["epithel", "non_epithel"]
+AnatomicalRegionsExpansionMicrons  = [5]             // Nuclei expansion parameter for different anatomical regions, for example [7, 2] 
 
 
 
