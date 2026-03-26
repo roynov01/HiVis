@@ -166,7 +166,7 @@ class PlotVisium:
     def spatial(self, what=None, exact=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
                   legend=True, alpha=1, figsize=(7,7), save=False,brightness=1,contrast=1,layer=None,
                   xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=False, pad=False,
-                  show_zeros=False,rasterize=True):
+                  show_zeros=False,rasterize=False):
         '''
         Plots the image, and/or data/metadata (spatial plot)
         
