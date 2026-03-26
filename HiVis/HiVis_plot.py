@@ -16,6 +16,7 @@ import matplotlib.patches as patches
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 import matplotlib.ticker as ticker
+import matplotlib.collections as mc
 from matplotlib.colors import Normalize
 from scipy.interpolate import griddata
 import seaborn as sns
@@ -164,7 +165,8 @@ class PlotVisium:
     
     def spatial(self, what=None, exact=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
                   legend=True, alpha=1, figsize=(7,7), save=False,brightness=1,contrast=1,layer=None,
-                  xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=False, pad=False,show_zeros=False):
+                  xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=False, pad=False,
+                  show_zeros=False,rasterize=True):
         '''
         Plots the image, and/or data/metadata (spatial plot)
         
@@ -187,6 +189,7 @@ class PlotVisium:
             * save (bool) - save the image
             * brightness (float) - increases brigtness, for example 0.2. 
             * contrast (float) - > 1 increases contrast, < 1 decreases.
+            * rasterize - Rasterize elements for smaller figure size
 
         **Returns** ax
         '''
@@ -312,6 +315,19 @@ class PlotVisium:
                 scalebar["color"] = color
             add_scalebar(ax=ax, microns_per_pixel=adjusted_microns_per_pixel, **scalebar)
         
+        if rasterize:
+            # Rasterize for smaller figure size
+            ax.set_rasterization_zorder(0)
+            for p in ax.patches:
+                p.set_zorder(-1) 
+            for im in ax.images:
+                im.set_zorder(-2)
+            for t in ax.texts:
+                t.set_zorder(1)
+            for c in ax.collections:
+                c.set_zorder(-1)
+            
+                
         # Save figure:
         self.current_ax = ax
         if save:
@@ -612,7 +628,7 @@ class PlotAgg:
     
     
     def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", layer=None,
-                  legend=True, alpha=1, figsize=(7,7), save=False, size=1,brightness=1,contrast=1,
+                  legend=True, alpha=1, figsize=(7,7), save=False, size=1,brightness=1,contrast=1,rasterize=False,
                   xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=False,show_zeros=False):
         '''
         Plot a spatial representation of self.adata.
@@ -633,6 +649,7 @@ class PlotAgg:
             * brightness (float) - increases brigtness, for example 0.2. 
             * contrast (float) - > 1 increases contrast, < 1 decreases.
             * figsize, legend, alpha, title, legend_title, axis_labels - cosmetic Parameters  
+            * rasterize - Rasterize elements for smaller figure size
             
         **Returns** ax
         '''
@@ -694,7 +711,17 @@ class PlotAgg:
                           alpha=alpha,cmap=cmap,ax=ax,
                           legend=legend,xlab=None,ylab=None, 
                           legend_title=legend_title,marker="o")
-
+        
+        if rasterize:
+            # Rasterize for smaller figure size
+            ax.set_rasterization_zorder(0)
+            for im in ax.images:
+                im.set_zorder(-2)
+            for t in ax.texts:
+                t.set_zorder(1)
+            for c in ax.collections:
+                c.set_zorder(-1)
+        
         # Save figure:
         self.current_ax = ax
         if save:
@@ -736,7 +763,7 @@ class PlotAgg:
     
     def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, scalebar=True, show_zeros=False,
               figsize=(7,7), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,layer=None,
-              legend=True, ax=None, title=None, legend_title=None, brightness=1,contrast=1,axis_labels=False):
+              legend=True, ax=None, title=None, legend_title=None, brightness=1,contrast=1,axis_labels=False,rasterize=False):
         '''
         Plot a spatial map of the objects. Can color the borders and fill
         
@@ -790,8 +817,6 @@ class PlotAgg:
                     values[values==0] = np.nan
                 if values is None:
                     raise KeyError(f"No values in [{what}]")
-                # if len(values) != len(self.main.adata_cropped):
-                #     raise ValueError("Can only plot OBS or gene expression")
                 self.geometry["temp"] = values
                 if isinstance(cmap, str):
                     cmap_obj = colormaps.get_cmap(cmap)
@@ -814,27 +839,6 @@ class PlotAgg:
                         # Larger range – use a sensible number of ticks
                         cbar.locator = ticker.MaxNLocator(nbins=5)  # 5–7 is usually good
                         cbar.update_ticks()
-            # else: # Categorical case
-            #     self.geometry["temp"] = values
-            #     unique_values = np.unique(values.astype(str))
-            #     unique_values = unique_values[unique_values != 'nan']
-            #     if isinstance(cmap, (str,list)):
-            #         colors = get_colors(unique_values, cmap)
-            #         color_map = {val: colors[i] for i, val in enumerate(unique_values)}  
-            #     elif isinstance(cmap, dict):
-            #         color_map = {val: cmap.get(val,DEFAULT_COLOR) for val in unique_values}
-            #     else:
-            #         raise ValueError("cmap must be a string (colormap name) or a dictionary")
-            #     for val in unique_values: # Plot each category with its color
-            #         values = values.astype(str)
-            #         mask = (self.geometry["temp"].astype(str) == val)
-            #         sub_gdf = self.geometry[mask]
-            #         if sub_gdf.empty:
-            #             continue
-            #         sub_gdf.plot(ax=ax,facecolor=color_map[val],edgecolor="none",alpha=alpha,label=str(val))
-            #     if legend:
-            #         legend_elements = [Patch(facecolor=color_map[val], label=str(val)) for val in unique_values]
-            #         ax.legend(handles=legend_elements, title=legend_title, loc='center left', bbox_to_anchor=(1, 0.5))
             else:  # Categorical case (non-numeric)
             
                 src = None
@@ -882,13 +886,22 @@ class PlotAgg:
                           
             # self.geometry.plot(column="temp",ax=ax,cmap=cmap,legend=legend,alpha=alpha)
             self.geometry.drop(columns="temp", inplace=True)
+        
+        if rasterize:
+            ax.set_rasterization_zorder(0)
+            for c in ax.collections:
+                if isinstance(c, mc.LineCollection):
+                    c.set_zorder(1)   # keep vector
+                else:
+                    c.set_zorder(-1)
+        
         self.current_ax = ax
         if save:
             self.save(f"{what}_CELLS")
         return ax
         
     def umap(self, features=None, basis="X_umap", title=None, size=None,layer=None,legend=True,texts=False,
-              legend_loc='right margin', save=False, ax=None, figsize=(7,7),cmap="viridis", axis_labels=True):
+              legend_loc='right margin', save=False, ax=None, figsize=(7,7),cmap="viridis", axis_labels=True, rasterize=True):
         '''
         Plot a UMAP of self.adata, if present
         
@@ -901,6 +914,7 @@ class PlotAgg:
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * figsize, size, legend, legend_loc, title, legend_title, axis_labels - cosmetic Parameters  
             * save (bool) - svae the plot
+            * rasterize - Rasterize elements for smaller figure size
             
         **Returns** ax
         '''
@@ -958,6 +972,10 @@ class PlotAgg:
         if not axis_labels:
             ax.set_xlabel(None)
             ax.set_ylabel(None)
+        
+        if rasterize:
+            for r in  ax.collections:
+                r.set_rasterized(True)
                 
         self.current_ax = ax
         if save:
@@ -1415,33 +1433,6 @@ def get_colors(values, cmap):
     n = len(unique_values)
     pts = [0.5] if n == 1 else np.linspace(0, 1, n)
     return [to_hex(cmap_obj(p)) for p in pts]
-# def get_colors(values, cmap):
-#     '''return a list of colors, in the length of the unique values, based on cmap'''
-#     from matplotlib.colors import to_hex
-#     if isinstance(values, pd.core.series.Series):
-#         unique_values = values.unique()
-#     else:
-#         arr = np.asarray(values, dtype=object)
-#         unique_values = pd.unique(pd.Series(arr).astype(str))
-#     if isinstance(cmap, str):
-#         cmap_obj = colormaps.get_cmap(cmap)
-#     elif isinstance(cmap, list):
-#         cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-#     else: # dict
-#         cmap = [cmap.get(val, DEFAULT_COLOR) for val in unique_values]
-#         cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-#     cmap_len = cmap_obj.N
-#     num_unique = len(unique_values)
-#     if num_unique == 1:
-#         # Assign a single color (e.g., middle of the colormap)
-#         colors = [cmap_obj(0.5)]
-#     elif num_unique <= cmap_len:
-#         # Map each unique value to a unique color in the colormap
-#         colors = [cmap_obj(i / (num_unique - 1)) for i in range(num_unique)]
-#     else:
-#         # If there are more unique values than colors in the colormap, cycle through the colormap
-#         colors = [cmap_obj(i % cmap_len / (cmap_len - 1)) for i in range(num_unique)]
-#     return colors
 
 
 def set_axis_ticks(ax, length_in_pixels, adjusted_microns_per_pixel, axis='x', num_ticks_desired=6):

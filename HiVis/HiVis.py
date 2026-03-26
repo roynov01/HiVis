@@ -1514,10 +1514,7 @@ class HiVis:
         else:
             raise TypeError(f"Key must be a string, not {type(key).__name__}")
             
-            
 
-        
-    
     def __getitem__(self, what):
         '''Get a vector from data (a gene) or metadata (from obs or var). or subset the object.'''
         item = self.get(what, cropped=False)
@@ -1595,7 +1592,4 @@ class HiVis:
             for agg in self.agg:
                 s += f"[{agg}]\tshape: {self.agg[agg].adata.shape[0]} x {self.agg[agg].adata.shape[1]}\n"
         return s
-    
-
-    
     

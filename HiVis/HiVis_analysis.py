@@ -588,25 +588,12 @@ class AnalysisAgg:
         distances = [0.0]  * len(cur_geoms)
         nearest_ids = [None] * len(cur_geoms)
         
-        
-        # id2idx = {id(g): i for i, g in enumerate(target_list)}  # map geom → row index
-        # for i, poly in enumerate(tqdm(cur_geoms, desc=f"Distances → {target_name}")):
-        #     nearest_geom = tree.nearest(poly)
-        #     distances[i] = poly.distance(nearest_geom)
-        #     nearest_ids[i] = target_agg.adata.obs.index[id2idx[id(nearest_geom)]]
-
-
         for i, poly in enumerate(tqdm(cur_geoms, desc=f"Distances → {target_name}")):
             nearest_idx   = int(tree.nearest(poly))    
             nearest_geom  = target_list[nearest_idx]    
             distances[i]  = poly.distance(nearest_geom)
             nearest_ids[i]= target_agg.adata.obs.index[nearest_idx]
 
-
-
-
         self.main.adata.obs[dist_col_name] = distances
         self.main.adata.obs[nearest_col_name] = nearest_ids
-
-
 

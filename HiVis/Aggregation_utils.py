@@ -153,7 +153,6 @@ def _aggregate_data_cells(adata, group_col="Cell_ID"):
     return cell_data, cells_ids, layers, None
 
 
-
 def _aggregate_data_annotations(adata, group_col):
     '''
     Aggregates expression data for all spots inside each annotation,
@@ -187,27 +186,3 @@ def merge_cells(cells_only,  adata, additional_obs, id_col="Cell_ID"):
         cells_only = cells_only.set_index(id_col)
     adata.obs = adata.obs.join(cells_only[additional_obs],how="left", on=id_col)
     
-
-# def add_spatial_keys(hivis_obj, adata, name):
-#     """
-#     Adds spatial keys to the AnnData object to make it Scanpy/Squidpy spatial plot compatible.
-    
-#     Parameters:
-#         * hivis_obj (HiVis) - that has images and scalefactors json
-#         * adata (AnnData) - AnnData object to which spatial keys will be added.
-#         * name (str) - name of adata, will be concatinated to hivis_obj.name
-    
-#     **Returns:** The updated AnnData object.
-#     """
-#     required_cols = ["pxl_col_in_fullres", "pxl_row_in_fullres"]
-#     if not all(col in adata.obs.columns for col in required_cols):
-#         raise ValueError("Missing required spatial coordinate columns in adata.obs")
-    
-#     adata.obsm["spatial"] = adata.obs[["pxl_col_in_fullres", "pxl_row_in_fullres"]].to_numpy()
-        
-#     adata.uns["spatial"] = {
-#         name: {"images": {"hires": hivis_obj.image_highres,"lowres": hivis_obj.image_lowres},
-#             "scalefactors": hivis_obj.json,
-#             "metadata": hivis_obj.properties}}
-    
-#     return adata
