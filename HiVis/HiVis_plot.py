@@ -234,7 +234,7 @@ class PlotVisium:
 
         if what: 
             values = self.main.get(what, cropped=True, layer=layer)
-            
+
             # Get categorical order
             cat_order = None
             if (what in self.main.adata.obs.columns 
@@ -670,7 +670,7 @@ class PlotAgg:
                 fig, ax = plt.subplots(figsize=figsize)
             
             values = self.main.get(what, cropped=True,layer=layer)
-            
+
             # Get categorical order
             cat_order = None
             if (what in self.main.adata.obs.columns 
@@ -700,7 +700,7 @@ class PlotAgg:
                 rank_lookup = {cat: i for i, cat in enumerate(cat_order)}
                 ranks = np.array([rank_lookup.get(str(v), len(cat_order)) for v in values])
                 order = np.argsort(ranks)        
-                x, y, values = x.iloc[order], y.iloc[order], values.iloc[order]
+                x, y, values = x.iloc[order], y.iloc[order], values[order]
             
             if np.issubdtype(values.dtype, np.number): 
                 argsort_values = np.argsort(values)

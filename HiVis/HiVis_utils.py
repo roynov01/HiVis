@@ -700,6 +700,10 @@ def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_o
     # merge data and metadata
     metadata = metadata[~metadata.index.duplicated(keep='first')]
     metadata.set_index('barcode', inplace=True)
+    
+    overlap = set(adata.obs.columns) & set(metadata.columns)
+    metadata = metadata.drop(columns=list(overlap), errors='ignore')
+    
     adata.obs = adata.obs.join(metadata, how='left')
     return adata
 
