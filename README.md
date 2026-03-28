@@ -1,4 +1,4 @@
-**HiVis** is associated with the following manuscript: [Subcellular mRNA localization patterns across tissues resolved with spatial transcriptomics](https://www.biorxiv.org/content/10.1101/2025.09.07.674688v1)
+**HiVis** is associated with the following manuscript: [Subcellular mRNA localization patterns across tissues resolved with spatial transcriptomics](https://www.biorxiv.org/content/10.1101/2025.09.07.674688v3)
 
 # HD Integrated Visium Interactive Suite (HiVis)
 * **HiVis** is a user-friendly Python tool for analyzing  
@@ -63,6 +63,8 @@ Please refer to the [demo notebooks](https://github.com/roynov01/HiVis/tree/main
 For QuPath, please refer to the [tutorial](https://github.com/roynov01/HiVis/tree/main/QuPath).
 
 Function docstrings are available on [ReadTheDocs](https://hivis.readthedocs.io/latest/).
+
+Code used for data analysis in the paper is available at [the repo](https://github.com/roynov01/HiVis_paper).
 
 ## Contact
 Bug report/feature request via the [GitHub issue tracker](https://github.com/roynov01/HiVis/issues).
