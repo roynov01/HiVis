@@ -22,7 +22,7 @@ to enable easy manual annotation, pixel classification, and single-cell segmenta
 ## Getting started
 ### Installation
 
-[nstallation video tutorial](https://www.youtube.com/watch?v=pIddtticYDU&list=PLfVzHGwTI-Mnydm1EUxPpPv_VTJGjxLtp&index=3).
+[Installation video tutorial](https://www.youtube.com/watch?v=pIddtticYDU&list=PLfVzHGwTI-Mnydm1EUxPpPv_VTJGjxLtp&index=3).
 
 To avoid dependency conflicts, we recommend the use of a 
 dedicated 
