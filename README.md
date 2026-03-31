@@ -22,6 +22,8 @@ to enable easy manual annotation, pixel classification, and single-cell segmenta
 ## Getting started
 ### Installation
 
+[nstallation video tutorial](https://www.youtube.com/watch?v=pIddtticYDU&list=PLfVzHGwTI-Mnydm1EUxPpPv_VTJGjxLtp&index=3).
+
 To avoid dependency conflicts, we recommend the use of a 
 dedicated 
 [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) 
@@ -58,6 +60,8 @@ and/or [Cellpose](https://github.com/BIOP/qupath-extension-cellpose) extensions 
 
 
 ### Usage and Documentation
+For vide tutorial - please refer to the [tutorial playlist](https://www.youtube.com/watch?v=1JsKYBZnvO0&list=PLfVzHGwTI-Mnydm1EUxPpPv_VTJGjxLtp).
+
 Please refer to the [demo notebooks](https://github.com/roynov01/HiVis/tree/main/tutorials).
 
 For QuPath, please refer to the [tutorial](https://github.com/roynov01/HiVis/tree/main/QuPath).
