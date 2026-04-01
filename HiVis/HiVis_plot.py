@@ -900,7 +900,7 @@ class PlotAgg:
             self.save(f"{what}_CELLS")
         return ax
         
-    def umap(self, features=None, basis="X_umap", title=None, size=None,layer=None,legend=True,texts=False,
+    def umap(self, features=None, basis="X_umap", title=None, size=None,layer=None,legend=True,texts=False,vmax=None,
               legend_loc='right margin', save=False, ax=None, figsize=(7,7),cmap="viridis", axis_labels=True, rasterize=True):
         '''
         Plot a UMAP of self.adata, if present
@@ -942,7 +942,7 @@ class PlotAgg:
                     unique_values = categories
                 else:
                     # For non-categorical data, filter out NaNs
-                    filtered_color_values = self.main.adata.obs[features[0]][~pd.isna(self.main[features[0]])]
+                    filtered_color_values = self.main[features[0]][~pd.isna(self.main[features[0]])]
                     colors = get_colors(filtered_color_values, cmap)
                     unique_values = np.unique(filtered_color_values.astype(str))
             else:
@@ -955,10 +955,10 @@ class PlotAgg:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)        
             ax = sc.pl.embedding(self.main.adata, basis=basis, color=features,use_raw=False,size=size,ax=ax,
-                        title=title,show=False,legend_loc=legend_loc,layer=layer)
+                        title=title,show=False,legend_loc=legend_loc,layer=layer,vmax=vmax)
 
         if (texts and len(features) == 1) and (features[0] in self.main.adata.obs):
-            values = self.main.adata.obs[features[0]]
+            values = self.main[features[0]]
             if isinstance(values.dtype, pd.CategoricalDtype) or values.dtype.name == 'category':
                 cluster_coords = self.main.adata.obsm[basis]
                 unique_clusters = values.unique()
