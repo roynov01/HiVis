@@ -1,5 +1,7 @@
 # HD Integrated Visium Interactive Suite (HiVis)
-Project home page is available in [github](https://github.com/roynov01/HiVis)
+Project home page is available in [github](https://github.com/roynov01/HiVis).
+
+Video tutorial is available [here](https://www.youtube.com/watch?v=1JsKYBZnvO0&list=PLfVzHGwTI-Mnydm1EUxPpPv_VTJGjxLtp).
 ![](HiVis.png)
 
 ## Installation
