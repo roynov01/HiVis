@@ -1,4 +1,4 @@
-**HiVis** is associated with the following manuscript: [Subcellular mRNA localization patterns across tissues resolved with spatial transcriptomics](https://www.biorxiv.org/content/10.1101/2025.09.07.674688v3)
+**HiVis** is associated with the following manuscript: [Subcellular mRNA localization patterns across tissues resolved with spatial transcriptomics](https://www.nature.com/articles/s41467-026-72156-7)
 
 # HD Integrated Visium Interactive Suite (HiVis)
 * **HiVis** is a user-friendly Python tool for analyzing  
@@ -74,5 +74,5 @@ Code used for data analysis in the paper is available at [the repo](https://gith
 Bug report/feature request via the [GitHub issue tracker](https://github.com/roynov01/HiVis/issues).
 
 ## Citation
-Novoselsky R*, Golani O*, Barkai T, Kedmi M, Goliand I, Fine M, Kent I, Nachmany I, Itzkovitz S. *Subcellular mRNA localization patterns across tissues resolved with spatial transcriptomics*. *BioRxiv*, 2025.
+Novoselsky R*, Golani O*, Barkai T, Kedmi M, Goliand I, Fine M, Kent I, Nachmany I, Itzkovitz S. *Subcellular mRNA localization patterns across tissues resolved with spatial transcriptomics*. *Nature Communications*, 2026.
 
