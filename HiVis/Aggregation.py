@@ -187,24 +187,24 @@ class Aggregation:
             if what in adata.obs.columns:  # Metadata from OBS
                 column_data = adata.obs[what]
                 if column_data.dtype.name == 'category':
-                    return column_data.astype(str).values
-                return column_data.values
+                    return column_data.astype(str).to_numpy()
+                return column_data.to_numpy()
             elif what in adata.var.index:  # A gene
                 gene_data = adata[:, what].X if layer is None else adata[:, what].layers[layer]
                 return np.array(gene_data.todense().ravel()).flatten()
             elif what in adata.var.columns:  # Gene metadata from VAR
                 column_data = adata.var[what]
                 if column_data.dtype.name == 'category':
-                    return column_data.astype(str).values
-                return column_data.values
+                    return column_data.astype(str).to_numpy()
+                return column_data.to_numpy()
             
             obs_cols_lower = adata.obs.columns.str.lower()
             if what.lower() in obs_cols_lower:
                 col_name = adata.obs.columns[obs_cols_lower.get_loc(what.lower())]
                 column_data = adata.obs[col_name]
                 if column_data.dtype.name == 'category':
-                    return column_data.astype(str).values
-                return column_data.values
+                    return column_data.astype(str).to_numpy()
+                return column_data.to_numpy()
             elif self.viz.organism == "mouse" and (what.lower().capitalize() in adata.var.index):
                 gene_name = what.lower().capitalize()
                 gene_data = adata[:, gene_name].X if layer is None else adata[:, gene_name].layers[layer]
@@ -218,8 +218,8 @@ class Aggregation:
                 col_name = adata.var.columns[var_cols_lower.get_loc(what.lower())]
                 column_data = adata.var[col_name]
                 if column_data.dtype.name == 'category':
-                    return column_data.astype(str).values
-                return column_data.values
+                    return column_data.astype(str).to_numpy()
+                return column_data.to_numpy()
         else:
             # Create a new Aggregation object based on adata subsetting
             return self.subset(what)
