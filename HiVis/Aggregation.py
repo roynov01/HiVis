@@ -506,7 +506,7 @@ class Aggregation:
         if not self.adata.var.columns.empty:
             s += '\n\nvar: '
             s += ', '.join(list(self.adata.var.columns))
-        layers = list(self.adata.layers.keys())
+        layers = [l for l in self.adata.layers.keys() if l is not None]
         if layers:
             s += '\n\nlayers: '
             s += ', '.join(layers)
