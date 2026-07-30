@@ -1374,7 +1374,7 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
         counts, edges, patches = ax.hist(values,bins=bins,color=None if cmap else color)
         
         if cmap is not None:
-            colormap = plt.cm.get_cmap(cmap, len(patches))  # Generate enough colors for all bins
+            colormap = plt.get_cmap(cmap, len(patches))  # Generate enough colors for all bins (plt.cm.get_cmap was removed in matplotlib>=3.9)
             for i, patch in enumerate(patches):
                 patch.set_facecolor(colormap(i))
                 

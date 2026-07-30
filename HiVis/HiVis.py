@@ -794,7 +794,7 @@ class HiVis:
             plt.figure(figsize=(8, 8))
             plt.imshow(mask_array, cmap=cmap)
             num_colors = len(np.unique(mask_array[~np.isnan(mask_array)]))
-            cmap = plt.cm.get_cmap(cmap, num_colors) 
+            cmap = plt.get_cmap(cmap, num_colors)  # plt.cm.get_cmap was removed in matplotlib>=3.9; plt.get_cmap works on both old and new
             legend_elements = [Patch(facecolor=cmap(i), label=f'{i}') for i in range(num_colors)]
             plt.legend(handles=legend_elements, loc='lower right', bbox_to_anchor=(1, 0.5))
             plt.axis('off') 
