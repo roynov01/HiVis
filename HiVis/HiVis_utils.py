@@ -9,6 +9,7 @@ import os
 from tqdm import tqdm
 import math
 import warnings
+import logging
 import scanpy as sc
 import tifffile
 import matplotlib.pyplot as plt
@@ -148,7 +149,28 @@ def validate_exists(file_path):
                 raise FileNotFoundError(f"No such file or directory:\n\t{path}")
     else:
          if not os.path.exists(file_path):
-             raise FileNotFoundError(f"No such file or directory:\n\t{file_path}")    
+             raise FileNotFoundError(f"No such file or directory:\n\t{file_path}")
+
+
+def _find_visium_image(path_input_data, res):
+    '''
+    Finds tissue_{res}_image.png of a VisiumHD bin folder (such as square_002um).
+    Space Ranger >= 3 keeps the images only in outs/spatial, two levels above the bin folder.
+
+    Parameters:
+        * path_input_data (str) - bin folder, such as square_002um
+        * res (str) - "hires" or "lowres"
+
+    **Returns** path of the image (str)
+    '''
+    filename = f"tissue_{res}_image.png"
+    candidates = [os.path.join(path_input_data, "spatial", filename), # older layout
+                  os.path.normpath(os.path.join(path_input_data, "..", "..", "spatial", filename))] # outs/spatial
+    for path in candidates:
+        if os.path.isfile(path): # False for broken symlinks
+            return path
+    searched = "\n\t".join(candidates)
+    raise FileNotFoundError(f"Could not find {filename}. Searched:\n\t{searched}")
 
 
 def dge2(adata, column, group1, group2=None, umi_thresh=0, layer=None,
@@ -428,12 +450,66 @@ def add_spatial_keys(hivis_obj, adata, name):
                            "metadata": hivis_obj.properties}}
     
 
+def read_tiff(path):
+    '''
+    Reads a TIFF. Falls back to a contiguous read for >4GB ImageJ hyperstacks (e.g. QuPath/Fiji exports), \
+    whose IFDs beyond the first are corrupt but whose pixel data is stored contiguously.
+
+    Parameters:
+        * path (str) - path of the TIFF file
+
+    **Returns** image (np.array)
+    '''
+    try:
+        return tifffile.imread(path)
+    except Exception as err:
+        img = _read_imagej_contiguous(path)
+        if img is None:
+            raise err
+        return img
+
+
+def _read_imagej_contiguous(path):
+    '''Reads an uncompressed ImageJ hyperstack as one contiguous block. Returns None if the file is not one.'''
+    tifffile_logger = logging.getLogger("tifffile")
+    log_level = tifffile_logger.level
+    tifffile_logger.setLevel(logging.ERROR) # the corrupt IFDs flood the console with warnings
+    try:
+        with tifffile.TiffFile(path) as tif:
+            if not tif.is_imagej:
+                return None
+            page = tif.pages.first
+            if page.compression != 1 or page.is_tiled: # 1 == COMPRESSION.NONE
+                return None
+            offsets, counts = page.dataoffsets, page.databytecounts
+            if any(offsets[i] + counts[i] != offsets[i + 1] for i in range(len(offsets) - 1)):
+                return None # strips within the first page are not contiguous
+            n = int((tif.imagej_metadata or {}).get("images", 1))
+            shape = (n,) + page.shape # (C, Y, X), or (C, Y, X, S) for RGB pages
+            dtype_file = page.dtype.newbyteorder(tif.byteorder)
+            offset = offsets[0]
+    except Exception:
+        return None
+    finally:
+        tifffile_logger.setLevel(log_level)
+    nbytes = int(np.prod(shape)) * dtype_file.itemsize
+    if offset + nbytes > os.path.getsize(path):
+        return None
+    print("[read_tiff] ImageJ >4GB TIFF detected, reading contiguous data")
+    mm = np.memmap(path, dtype=dtype_file, mode="r", offset=offset, shape=shape)
+    out = np.empty(shape, dtype=page.dtype.newbyteorder("=")) # native byte order
+    for c in range(n): # channel by channel to limit peak RAM
+        out[c] = mm[c]
+    del mm
+    return out
+
+
 def load_images(path_image_fullres, path_image_highres, path_image_lowres):
     '''
     Loads images.
     '''
     print("[Loading images]")
-    image_fullres = tifffile.imread(path_image_fullres)
+    image_fullres = read_tiff(path_image_fullres)
     rgb_dim = image_fullres.shape.index(min(image_fullres.shape)) # Find color channel
     if rgb_dim != 2:  # If the color dimension is not already last
         axes_order = list(range(image_fullres.ndim))  # Default axes order
@@ -665,46 +741,42 @@ def _normalize_channel(channel_data, method="percentile"):
     return normalized
    
 
-def _import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_only):
-    '''Imports data, metadata and image
+def _import_data(metadata_path, path_input_data, on_tissue_only):
+    '''Imports data and metadata
         parameters:
-            * paths - metadata_path is parquet file, path_input_data is folder, 
-                      such as square_002um. path_image_fullres is tif file.
+            * paths - metadata_path is parquet file, path_input_data is folder,
+                      such as square_002um.
             * on_tissue_only - filter spots that are classified to be under tissue?
     '''
-    # load metadata (and save as CSV)
-    print("[Loading metadata]")        
+    # load metadata
+    print("[Loading metadata]")
     metadata = pd.read_parquet(metadata_path)
-    if not os.path.isfile(metadata_path.replace(".parquet",".csv")):
-        print("[Writing metadata to CSV]")  
-        metadata.to_csv(metadata_path.replace(".parquet",".csv"),index=False)
-    del metadata["array_row"]
-    del metadata["array_col"]
-    
+    metadata["barcode"] = metadata["barcode"].astype(str) # StringDtype index won't match obs_names in the join
+    metadata.set_index('barcode', inplace=True)
+    metadata = metadata[~metadata.index.duplicated(keep='first')]
+    # keep the int64 dtypes that tissue_positions.csv used to give (parquet has unsigned ints)
+    int_cols = [col for col in ['in_tissue', 'array_row', 'array_col'] if col in metadata.columns]
+    metadata[int_cols] = metadata[int_cols].astype("int64")
+
     # load data
     print("[Loading data]")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=FutureWarning)
         warnings.filterwarnings("ignore", message="Variable names are not unique. To make them unique")
-        adata = sc.read_visium(path_input_data, source_image_path=path_image_fullres)
-        # adata = squidpy.read.visium(path_input_data, source_image_path=path_image_fullres)
+        adata = sc.read_10x_h5(os.path.join(path_input_data, "filtered_feature_bc_matrix.h5"))
     adata.var_names_make_unique()
-    # del adata.uns["spatial"]
-    
-    # filter spots that are classified to be under tissue
-    if ('in_tissue' in adata.obs.columns) and on_tissue_only: 
-        metadata = metadata.loc[metadata['in_tissue'] == 1,]
-        adata = adata[adata.obs['in_tissue'] == 1]
-        del metadata["in_tissue"] 
-    
+
     # merge data and metadata
-    metadata = metadata[~metadata.index.duplicated(keep='first')]
-    metadata.set_index('barcode', inplace=True)
-    
-    overlap = set(adata.obs.columns) & set(metadata.columns)
-    metadata = metadata.drop(columns=list(overlap), errors='ignore')
-    
+    missing = metadata.index.get_indexer(adata.obs_names) == -1 # much faster than isin for pandas 3 strings
+    if missing.any():
+        raise ValueError(f"{missing.sum()} barcodes in the count matrix are missing from {metadata_path}")
     adata.obs = adata.obs.join(metadata, how='left')
+
+    # filter spots that are classified to be under tissue
+    if ('in_tissue' in adata.obs.columns) and on_tissue_only:
+        on_tissue = adata.obs['in_tissue'] == 1
+        if not on_tissue.all():
+            adata = adata[on_tissue].copy()
     return adata
 
 
@@ -1069,7 +1141,7 @@ def load_and_prepare_data(matrix_file, gene_file, barcode_file, coord_file, imag
     # Load the AnnData, full-res image, and GeoJSON (just like we did before)
     adata, geojson = _load_spatial_data(matrix_file, gene_file, barcode_file, coord_file, image_file, geojson_file)
     
-    full_res_image = tifffile.imread(image_file)
+    full_res_image = read_tiff(image_file)
 
     # Create high-res and low-res images
     high_res_image, low_res_image = create_rescaled_images(full_res_image)

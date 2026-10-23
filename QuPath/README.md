@@ -9,7 +9,7 @@ This tutorial includes:
 5. Segmentation scripts workflow
 
 <span style="color:red">**Important!**</span><br>
-The image that should be used in Qupath is the cropped image that is created when creating a new HiVis object in Python.<br>
+The image that should be used in Qupath is the cropped image that is created when creating a new HiVis object in Python (saved in path_output).<br>
 Alternetaviely, and highly advisible - call [HiVis.export_images()](https://hivis.readthedocs.io/latest/items.html#HiVis.HiVis.HiVis.export_images) - and use the exported fullres_image.tif.<br>
 Similarly, for Qupath scripts, use the tissue_positions.csv file that is exported by [HiVis.export_images()](https://hivis.readthedocs.io/latest/items.html#HiVis.HiVis.HiVis.export_images).
 

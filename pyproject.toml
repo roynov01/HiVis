@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "HiVis"
 authors = [{name = "Roy Novoselsky", email = "roy.novoselsky@weizmann.ac.il"}]
-version = "1.0.4"
+version = "1.0.5"
 license = {file = "LICENSE"}
 readme = {file = "README.md", content-type="text/markdown"}
 classifiers = [
@@ -22,7 +22,7 @@ dependencies = [
 	"matplotlib>=3.10.1",
 	"pandas>=2.2.3",
 	"seaborn>=0.13.2",
-	"scanpy==1.11.0",
+	"scanpy>=1.11.0",
 	"anndata>=0.11.3",
 	"adjustText",
 	"pyarrow>=19.0.1",

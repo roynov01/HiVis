@@ -56,19 +56,21 @@ def load(filename, directory=''):
 
 def new_visiumHD(path_image_fullres:str, path_input_data:str, path_output:str,
              name:str, crop_images=True, properties: dict = None, on_tissue_only=True,min_reads_in_spot=1,
-             min_reads_gene=10, fluorescence=False, plot_qc=True):
+             min_reads_gene=10, fluorescence=False, plot_qc=True, path_image_highres=None, path_image_lowres=None):
     '''
     - Loads images, data and metadata.
     - Initializes the connection from the data and metadata to the images coordinates
     - Adds basic QC to the metadata (nUMI, mitochondrial %)
-    
+
     Parameters:
-        * path_input_fullres_image (str) - path of the full resolution microscopy image
+        * path_image_fullres (str) - path of the full resolution microscopy image. \
+            >4GB ImageJ TIFFs (e.g. QuPath/Fiji exports) are supported; exporting as OME-TIFF from QuPath also works.
         * path_input_data (str) - folder with outs of the Visium. Typically square_002um \
                             (with h5 files and with folders filtered_feature_bc_matrix, spatial)
         * path_output (str) - path where to save plots and files
         * name (str) - name of the instance
-        * crop_images (bool) - crop the regions outside of the spots cover area
+        * crop_images (bool) - crop the regions outside of the spots cover area. \
+            The cropped images and tissue positions are saved in path_output (existing images are not overwritten).
         * properties (dict) - can be any metadata, such as organism, organ, sample_id. \
             Organism is recomended (i.e human or mouse) for case-sensitivity correction and QC of mitochondrial reads.
         * on_tissue_only (bool) - remove spots that are not classified as "on tissue"
@@ -76,42 +78,48 @@ def new_visiumHD(path_image_fullres:str, path_input_data:str, path_output:str,
         * min_reads_gene (int) - filter out gene that is present in less than X spots
         * fluorescence - either False for H&E, or a dict of channel names and colors. color can be None. Example {"DAPI":"blue"}
         * plot_qc (bool) - plot QC when object is being created
-        
+        * path_image_highres (str) - path of tissue_hires_image.png. If None, searches path_input_data/spatial, \
+            then outs/spatial (Space Ranger >= 3 layout)
+        * path_image_lowres (str) - path of tissue_lowres_image.png. If None, searched like path_image_highres
+
     **Returns** HiVis instance
     '''
+    properties = properties or {}
+    path_image_fullres, path_input_data, path_output = os.fspath(path_image_fullres), os.fspath(path_input_data), os.fspath(path_output)
+
     # Validate paths of metadata and images
     if not os.path.exists(path_output):
         os.makedirs(path_output)
-    path_image_highres = path_input_data + "/spatial/tissue_hires_image.png"
-    path_image_lowres = path_input_data + "/spatial/tissue_lowres_image.png"
-    json_path = path_input_data + "/spatial/scalefactors_json.json"
-    metadata_path = path_input_data + "/spatial/tissue_positions.parquet"
+    path_image_highres = os.fspath(path_image_highres) if path_image_highres else HiVis_utils._find_visium_image(path_input_data, "hires")
+    path_image_lowres = os.fspath(path_image_lowres) if path_image_lowres else HiVis_utils._find_visium_image(path_input_data, "lowres")
+    json_path = os.path.join(path_input_data, "spatial", "scalefactors_json.json")
+    metadata_path = os.path.join(path_input_data, "spatial", "tissue_positions.parquet")
     HiVis_utils.validate_exists([path_image_fullres,path_image_highres,path_image_lowres,json_path,metadata_path])
-    
+
     # Load images
     image_fullres, image_highres, image_lowres = HiVis_utils.load_images(path_image_fullres, path_image_highres, path_image_lowres)
-    
+
     # Load scalefactor_json
     with open(json_path) as file:
         scalefactor_json = json.load(file)
-    
+
    # Load data + metadata
-    adata = HiVis_utils._import_data(metadata_path, path_input_data, path_image_fullres, on_tissue_only)
-    
+    adata = HiVis_utils._import_data(metadata_path, path_input_data, on_tissue_only)
+
     if crop_images:
         # Crop images
         adata, image_fullres, image_highres, image_lowres = HiVis_utils._crop_images_permenent(
             adata, image_fullres, image_highres, image_lowres, scalefactor_json)
-        
+
         # Save cropped images
-        path_image_fullres_cropped = path_image_fullres.replace("." + path_image_fullres.split(".")[-1], "_cropped.tif")
-        path_image_highres_cropped = path_image_highres.replace("." + path_image_highres.split(".")[-1], "_cropped.tif")
-        path_image_lowres_cropped = path_image_lowres.replace("." + path_image_lowres.split(".")[-1], "_cropped.tif")
-        HiVis_utils._export_images(path_image_fullres_cropped, path_image_highres_cropped, 
+        path_image_fullres_cropped = os.path.join(path_output, f"{name}_fullres_cropped.tif")
+        path_image_highres_cropped = os.path.join(path_output, f"{name}_highres_cropped.tif")
+        path_image_lowres_cropped = os.path.join(path_output, f"{name}_lowres_cropped.tif")
+        HiVis_utils._export_images(path_image_fullres_cropped, path_image_highres_cropped,
                                       path_image_lowres_cropped,image_fullres,
                                       image_highres, image_lowres,um_per_pxl=scalefactor_json["microns_per_pixel"])
-        cols = ['in_tissue', 'array_row', 'array_col', 'pxl_row_in_fullres','pxl_col_in_fullres']        
-        csv_path = Path(path_image_fullres_cropped).parent / f"{name}_tissue_positions_cropped.csv"
+        cols = ['in_tissue', 'array_row', 'array_col', 'pxl_row_in_fullres','pxl_col_in_fullres']
+        csv_path = os.path.join(path_output, f"{name}_tissue_positions_cropped.csv")
         adata.obs[cols].to_csv(csv_path, index=True, index_label="barcode")
     
     if fluorescence:
@@ -573,8 +581,8 @@ def new_stereoseq(path_transcripts, path_image, bin_size_um, name, path_output, 
         if not os.path.exists(image_path):
             raise ValueError(f"Image path does not exist: {image_path}")
             
-        img = tifffile.imread(image_path)
-        
+        img = HiVis_utils.read_tiff(image_path)
+
         # Ensure we have the right dimensions (Rows, Cols, Channels)
         # If image is 2D (Gray), make it (R, C, 1) or leave as is depending on downstream needs
         # The reference code expects (Rows, Cols, Channels) for stacking, 
