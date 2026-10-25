@@ -1268,6 +1268,9 @@ class HiVis:
         '''
         Saves the instance in pickle format.
         If no path specified, will save in the path_output as the name of the instance.
+        The pickle is first written to path + ".tmp" and only then replaces the previous file, \
+            so a save that fails midway (e.g. on a network drive) keeps the previous version intact. \
+            Needs free disk space for both versions during the save.
         
         **Returns** the path of the file (str)
         '''
@@ -1282,8 +1285,15 @@ class HiVis:
             for agg in self.agg:
                 self.agg[agg].plot.current_ax = None
 
-        with open(path, "wb") as f:
-            dill.dump(self, f)            
+        tmp_path = path + ".tmp"
+        try:
+            with open(tmp_path, "wb") as f:
+                dill.dump(self, f)
+            os.replace(tmp_path, path) # atomic on the same drive
+        except BaseException:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            raise
         return path
     
     @property

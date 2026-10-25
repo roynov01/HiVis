@@ -801,6 +801,7 @@ class PlotAgg:
             fig, ax = plt.subplots(figsize=figsize)
         ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,axis_labels=axis_labels,
                             contrast=contrast,xlim=xlim,ylim=ylim,img_resolution=img_resolution,legend=False,scalebar=scalebar)
+        xlabel, ylabel = ax.get_xlabel(), ax.get_ylabel() # geopandas >= 1.2 labels empty axes "x"/"y" when plotting
         
         if line_color is not None:
             self.geometry.boundary.plot(ax=ax, color=line_color, linewidth=linewidth)
@@ -886,6 +887,8 @@ class PlotAgg:
                           
             # self.geometry.plot(column="temp",ax=ax,cmap=cmap,legend=legend,alpha=alpha)
             self.geometry.drop(columns="temp", inplace=True)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
         
         if rasterize:
             ax.set_rasterization_zorder(0)

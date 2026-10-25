@@ -5,6 +5,7 @@ Created on Thu May 22 14:24:36 2025
 @author: royno
 """
 
+import warnings
 import numpy as np
 import pandas as pd
 import scanpy as sc
@@ -14,9 +15,24 @@ from tqdm import tqdm
 from shapely.strtree import STRtree
 from shapely import wkt, from_wkt
 from shapely.geometry import Point
+from shapely.geometry.base import BaseGeometry
 import matplotlib.pyplot as plt
 
 from . import HiVis_utils
+
+
+def _to_geometries(values):
+    '''
+    Converts geometries stored in obs to a list of shapely geometries.
+    Accepts WKT strings (object dtype in pandas < 3 and older pickles, str dtype in pandas >= 3),
+    shapely geometries, and missing values. Missing and empty geometries are returned as None.
+    '''
+    geoms = []
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            value = from_wkt(value)
+        geoms.append(value if isinstance(value, BaseGeometry) and not value.is_empty else None)
+    return geoms
 
 
 
@@ -300,8 +316,10 @@ class AnalysisVisium:
         dist_col_name = dist_col_name if dist_col_name is not None else f"dist_to_{agg_name}"
         nearest_col_name = nearest_col_name if nearest_col_name is not None else f"nearest_{agg_name}"
 
-        target_geoms = self.main.agg[agg_name].adata.obs.geometry.apply(wkt.loads).tolist()
-        tree = STRtree(target_geoms)
+        target_geoms = _to_geometries(self.main.agg[agg_name].adata.obs["geometry"])
+        if all(geom is None for geom in target_geoms):
+            raise ValueError(f"No geometry in [{agg_name}]. Add it with import_geometry()")
+        tree = STRtree(target_geoms) # None is skipped, and indices refer to target_geoms
 
         x_coords = self.main["um_x"]
         y_coords = self.main["um_y"]
@@ -559,7 +577,8 @@ class AnalysisAgg:
     def compute_distances(self, target_agg, dist_col_name=None, nearest_col_name=None):
         '''
         Compute distances of each object to the nearest object of another Aggregation.
-        
+        Objects without geometry get NaN distance and no nearest object.
+
         Parameters:
             * target_agg - either Aggregation object, or a name (str) that is the key in self.main.viz.agg
             * dist_col_name (str) - Name of column to save distance to. default is dist_to_{agg_name}
@@ -567,32 +586,30 @@ class AnalysisAgg:
         '''
         if isinstance(target_agg, str):
             target_agg = self.main.viz.agg[target_agg]
-        if target_agg is self:
-            raise ValueError("target_agg should be either another Agg object or key in HiVis.agg")
+        if target_agg is self.main:
+            warnings.warn("target_agg is the same Aggregation, all distances will be 0")
 
         target_name = target_agg.name
         dist_col_name = dist_col_name    or f"dist_to_{target_name}"
         nearest_col_name = nearest_col_name or f"nearest_{target_name}"
 
-        def to_geoms(series):
-            if series.dtype == "object" and isinstance(series.iloc[0], str):
-                return series.map(from_wkt)
-            return series
+        cur_geoms = _to_geometries(self.main.adata.obs["geometry"])
+        target_geoms = _to_geometries(target_agg.adata.obs["geometry"])
+        if all(geom is None for geom in target_geoms):
+            raise ValueError(f"No geometry in [{target_name}]. Add it with import_geometry()")
 
-        cur_geoms = to_geoms(self.main.adata.obs.geometry)
-        target_geoms = to_geoms(target_agg.adata.obs.geometry)
-
-        # build STRtree for fast nearest-neighbour look-ups 
-        target_list = target_geoms.tolist()
-        tree  = STRtree(target_list)
-        distances = [0.0]  * len(cur_geoms)
+        # build STRtree for fast nearest-neighbour look-ups. None is skipped, and indices refer to target_geoms
+        tree = STRtree(target_geoms)
+        target_ids = target_agg.adata.obs.index
+        distances = [np.nan] * len(cur_geoms)
         nearest_ids = [None] * len(cur_geoms)
-        
-        for i, poly in enumerate(tqdm(cur_geoms, desc=f"Distances → {target_name}")):
-            nearest_idx   = int(tree.nearest(poly))    
-            nearest_geom  = target_list[nearest_idx]    
-            distances[i]  = poly.distance(nearest_geom)
-            nearest_ids[i]= target_agg.adata.obs.index[nearest_idx]
+
+        for i, geom in enumerate(tqdm(cur_geoms, desc=f"Distances → {target_name}")):
+            if geom is None: # no geometry: distance stays NaN
+                continue
+            nearest_idx = int(tree.nearest(geom))
+            distances[i] = geom.distance(target_geoms[nearest_idx])
+            nearest_ids[i] = target_ids[nearest_idx]
 
         self.main.adata.obs[dist_col_name] = distances
         self.main.adata.obs[nearest_col_name] = nearest_ids
