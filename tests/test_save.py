@@ -3,6 +3,8 @@
 Synthetic tests for HiVis.save. Compares the current implementation with the one from HiVis 1.0.5,
 which opened the target with open(path, "wb") and so truncated the previous pickle before writing:
 a save that failed midway (e.g. OSError on a network drive) left neither the old nor the new version.
+Since 1.1.0, large writes are split into chunks of HiVis_utils.SAVE_CHUNK_BYTES (tests I-L): pickle writes each
+large array in one write(), which failed with "OSError: [Errno 22]" on a network drive when Windows was low on memory.
 
 Run with pytest, or directly: python tests/test_save.py
 """
@@ -10,6 +12,7 @@ Run with pytest, or directly: python tests/test_save.py
 import os
 os.environ.setdefault("TQDM_DISABLE", "1")
 
+import io
 import shutil
 import tempfile
 
@@ -19,7 +22,7 @@ import anndata as ad
 import dill
 from scipy import sparse
 
-from HiVis import HiVis
+from HiVis import HiVis, HiVis_utils
 
 TMP_DIRS = []
 
@@ -179,6 +182,112 @@ def test_H_load_of_orig_pickle():
     viz = make_viz(3.0)
     path = orig_save(viz)
     assert x_value(HiVis.load(path)) == 3.0
+
+
+class small_chunks:
+    '''Within the block, saves split writes into chunks of n bytes (the default is 64 MB, more than the test data)'''
+    def __init__(self, n):
+        self.n = n
+    def __enter__(self):
+        self.orig = HiVis_utils.SAVE_CHUNK_BYTES
+        HiVis_utils.SAVE_CHUNK_BYTES = self.n
+    def __exit__(self, *exc):
+        HiVis_utils.SAVE_CHUNK_BYTES = self.orig
+
+
+class LimitedFile:
+    '''A file whose write() fails like the network drive did for writes larger than limit. Records the write sizes'''
+    def __init__(self, f, limit):
+        self.f, self.limit, self.sizes = f, limit, []
+    def write(self, data):
+        n = memoryview(data).nbytes
+        if n > self.limit:
+            raise OSError(22, "Invalid argument")
+        self.sizes.append(n)
+        return self.f.write(data)
+    def __enter__(self):
+        return self
+    def __exit__(self, *exc):
+        self.f.close()
+
+
+class limited_open:
+    '''Within the block, files that HiVis.save opens are LimitedFile'''
+    def __init__(self, limit):
+        self.limit, self.files = limit, []
+    def __enter__(self):
+        def fake_open(path, mode="r", *args, **kwargs):
+            f = LimitedFile(open(path, mode, *args, **kwargs), self.limit)
+            self.files.append(f)
+            return f
+        HiVis.open = fake_open # shadows the builtin open in the HiVis module
+        return self
+    def __exit__(self, *exc):
+        del HiVis.open
+
+
+def test_I_chunked_same_bytes():
+    '''Split writes give the same file as 1.0.5 (and as an unsplit save)'''
+    viz = make_viz(1.0)
+    d = tempfile.mkdtemp(prefix="hivis_test_"); TMP_DIRS.append(d)
+    p_orig = orig_save(viz, os.path.join(d, "orig.pkl"))
+    with small_chunks(1000):
+        p_new = viz.save(os.path.join(d, "new.pkl"))
+    with open(p_orig, "rb") as f1, open(p_new, "rb") as f2:
+        assert f1.read() == f2.read()
+    assert x_value(HiVis.load(p_new)) == 1.0
+
+
+def test_J_large_writes_are_split():
+    '''Writes larger than the limit fail (like the network drive). 1.0.5 wrote the 120 KB image in one write'''
+    viz = make_viz(1.0)
+    d = tempfile.mkdtemp(prefix="hivis_test_"); TMP_DIRS.append(d)
+    try:
+        with LimitedFile(open(os.path.join(d, "orig.pkl"), "wb"), 4096) as f:
+            dill.dump(viz, f) # how 1.0.5 and 1.0.6 wrote the pickle
+        raised = False
+    except OSError as e:
+        raised = e.errno == 22
+    assert raised, "1.0.5 was expected to write more than 4096 bytes at once"
+    os.remove(os.path.join(d, "orig.pkl"))
+    with small_chunks(1000), limited_open(4096) as files:
+        path = viz.save(os.path.join(d, "new.pkl"))
+    assert max(files.files[0].sizes) <= 1000
+    assert x_value(HiVis.load(path)) == 1.0
+    assert files_in(d) == ["new.pkl"]
+
+
+def test_K_chunked_writer_all_buffer_types():
+    '''Every kind of buffer pickle writes (bytes, memoryview, and PickleBuffer with protocol 5), split or not'''
+    obj = {"img": np.arange(50000, dtype=np.uint16).reshape(100, 500), "x": b"y" * 5000, "s": "small"}
+    for protocol in [4, 5]:
+        expected = dill.dumps(obj, protocol=protocol)
+        for n in [7, 1000, 2**30]:
+            f = io.BytesIO()
+            with small_chunks(n):
+                dill.dump(obj, HiVis_utils._ChunkedWriter(f), protocol=protocol)
+            assert f.getvalue() == expected, (protocol, n)
+    f = io.BytesIO()
+    with small_chunks(10):
+        w = HiVis_utils._ChunkedWriter(f)
+        assert w.write(b"a" * 25) == 25 and w.write(bytearray(b"bc")) == 2
+        assert w.write(memoryview(np.arange(10, dtype=np.int64))) == 80 and w.tell() == 107
+    assert f.getvalue()[:27] == b"a" * 25 + b"bc" and len(f.getvalue()) == 107
+
+
+def test_L_failed_chunked_save_keeps_previous_file():
+    '''A write that still fails keeps the previous pickle, as in 1.0.6'''
+    viz = make_viz(1.0)
+    path = viz.save()
+    with small_chunks(10000), limited_open(4096):
+        try:
+            make_viz(2.0).save(path)
+            raised = False
+        except OSError:
+            raised = True
+    assert raised
+    assert x_value(HiVis.load(path)) == 1.0
+    assert files_in(os.path.dirname(path)) == [os.path.basename(path)]
 
 
 def teardown_module(module=None):

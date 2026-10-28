@@ -28,6 +28,29 @@ import json
 
 
 MAX_RAM = 16 # maximum GB RAM to use for a variable
+SAVE_CHUNK_BYTES = 64 * 2**20 # largest single write when saving a pickle
+
+
+class _ChunkedWriter:
+    '''
+    Wraps a binary file and splits large writes into chunks of SAVE_CHUNK_BYTES. The bytes written are the same. \
+    pickle writes each large array (several GB) in one write(), which can fail on a network drive \
+    with "OSError: [Errno 22] Invalid argument" when Windows is low on memory.
+    '''
+    def __init__(self, file):
+        self.file = file
+
+    def write(self, data):
+        view = memoryview(data)
+        if view.nbytes <= SAVE_CHUNK_BYTES:
+            return self.file.write(data)
+        view = view.cast("B")
+        for start in range(0, view.nbytes, SAVE_CHUNK_BYTES):
+            self.file.write(view[start:start + SAVE_CHUNK_BYTES])
+        return view.nbytes
+
+    def tell(self): # used by dill.detect.trace
+        return self.file.tell()
 
 def update_instance_methods(instance):
     '''reloads the methods in an instance'''

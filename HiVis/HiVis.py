@@ -1298,7 +1298,7 @@ class HiVis:
         tmp_path = path + ".tmp"
         try:
             with open(tmp_path, "wb") as f:
-                dill.dump(self, f)
+                dill.dump(self, HiVis_utils._ChunkedWriter(f))
             os.replace(tmp_path, path) # atomic on the same drive
         except BaseException:
             if os.path.exists(tmp_path):
