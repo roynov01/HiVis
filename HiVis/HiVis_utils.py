@@ -118,7 +118,7 @@ def matnorm(df, axis="col"):
 
     if isinstance(df, pd.DataFrame):
         if axis == "row":
-            row_sums = df.sum(axis=1).to_numpy().reshape(-1, 1)
+            row_sums = df.sum(axis=1).to_numpy(copy=True).reshape(-1, 1) # writable: read-only view in pandas 3
             row_sums[row_sums == 0] = 1  # Avoid division by zero
             return df.div(row_sums, axis=0).astype(np.float32)
         else:
@@ -237,6 +237,11 @@ def dge2(adata, column, group1, group2=None, umi_thresh=0, layer=None,
     else:
         group1_norm = group1_adata.layers[layer]
         group2_norm = group2_adata.layers[layer]
+    if method in ("wilcox", "t_test") and sp.issparse(group1_norm) and sp.issparse(group2_norm):
+        # Genes are sliced one by one below: fast in CSC, slow in CSR. Same values.
+        # The AnnData copies aren't used anymore, freeing them offsets the CSC copies
+        group1_norm, group2_norm = group1_norm.tocsc(), group2_norm.tocsc()
+        del group1_adata, group2_adata
 
     # pre-alloc result columns
     df[group2], df[group1] = np.nan, np.nan
@@ -263,8 +268,9 @@ def dge2(adata, column, group1, group2=None, umi_thresh=0, layer=None,
             df.at[gene, f"pval_{column}"] = np.nan
             continue
 
-        cur_norm1 = group1_norm[:, j].toarray().ravel()
-        cur_norm2 = group2_norm[:, j].toarray().ravel()
+        if method in ("wilcox", "t_test"): # slow on CSR, and fisher_exact doesn't use the normalized values
+            cur_norm1 = group1_norm[:, j].toarray().ravel()
+            cur_norm2 = group2_norm[:, j].toarray().ravel()
 
         # Calculate log2 fold-change
         df.at[gene, f"log2fc_{column}"] = np.log2((mean1[j] + pn) / (mean2[j] + pn))
@@ -363,6 +369,11 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
     else:
         group1_norm = group1_adata.layers[layer]
         group2_norm = group2_adata.layers[layer]
+    if method in ("wilcox", "t_test") and sp.issparse(group1_norm) and sp.issparse(group2_norm):
+        # Genes are sliced one by one below: fast in CSC, slow in CSR. Same values.
+        # The AnnData copies aren't used anymore, freeing them offsets the CSC copies
+        group1_norm, group2_norm = group1_norm.tocsc(), group2_norm.tocsc()
+        del group1_adata, group2_adata
 
     # pre-alloc result columns
     df[group2], df[group1] = np.nan, np.nan
@@ -391,8 +402,9 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
             df.at[gene, f"pval_{column}"] = np.nan
             continue
 
-        cur_norm1 = group1_norm[:, j].toarray().ravel()
-        cur_norm2 = group2_norm[:, j].toarray().ravel()
+        if method in ("wilcox", "t_test"): # slow on CSR, and fisher_exact doesn't use the normalized values
+            cur_norm1 = group1_norm[:, j].toarray().ravel()
+            cur_norm2 = group2_norm[:, j].toarray().ravel()
 
         # Calculate log2 fold-change
         df.at[gene, f"log2fc_{column}"] = np.log2((mean1[j] + pn) / (mean2[j] + pn))

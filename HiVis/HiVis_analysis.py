@@ -146,7 +146,7 @@ class AnalysisVisium:
         return HiVis_utils.cor_genes(self.main.adata, what, self_corr_value, normalize, layer)
     
 
-    def score_genes(self, gene_list:list, score_name:str, z_normalize=False):
+    def score_genes(self, gene_list:list, score_name:str, z_normalize=False, layer=None):
         '''
         Assigns score for each bin, based on a list of genes.
         
@@ -154,10 +154,11 @@ class AnalysisVisium:
             * gene_list (list) - list of genes
             * score_name (str) - name of column that will store the score in self.main.adata.obs
             * z_normalize (bool) - Z transform the score values
+            * layer (str) - which layer in the AnnData to score, e.g. normalized data. If None, will use X
         
         **returns** score values (pd.Series)
         '''
-        sc.tl.score_genes(self.main.adata, gene_list=gene_list, score_name=score_name)
+        sc.tl.score_genes(self.main.adata, gene_list=gene_list, score_name=score_name, layer=layer)
         if z_normalize:
             self.main.adata.obs[score_name] = zscore(self.main.adata.obs[score_name])
         return self.main.adata.obs[score_name]
@@ -399,7 +400,7 @@ class AnalysisAgg:
             * method - ["mode", "median", "mean", "gaussian", "log"]
             * new_col_name (str) - Optional custom name for the output column
             * layer (str) - which layer in the AnnData to use
-            * \**kwargs - Additional Parameters for specific methods (e.g., sigma for gaussian, offset for log).
+            * \\**kwargs - Additional Parameters for specific methods (e.g., sigma for gaussian, offset for log).
             
         **returns** smoothed values (pd.Series)
         '''
@@ -468,7 +469,7 @@ class AnalysisAgg:
         self.main.adata.obs[new_col_name] = smoothed_values
         return smoothed_values
     
-    def score_genes(self, gene_list:list, score_name:str, z_normalize=False):
+    def score_genes(self, gene_list:list, score_name:str, z_normalize=False, layer=None):
         '''
         Assigns score for each object, based on a list of genes.
         
@@ -476,10 +477,11 @@ class AnalysisAgg:
             * gene_list (list) - list of genes
             * score_name (str) - name of column that will store the score in self.main.adata.obs
             * z_normalize (bool) - Z transform the score values
+            * layer (str) - which layer in the AnnData to score, e.g. normalized data. If None, will use X
         
         **returns** score values (pd.Series)
         '''
-        sc.tl.score_genes(self.main.adata, gene_list=gene_list, score_name=score_name)
+        sc.tl.score_genes(self.main.adata, gene_list=gene_list, score_name=score_name, layer=layer)
         if z_normalize:
             self.main.adata.obs[score_name] = zscore(self.main.adata.obs[score_name])
         return self.main.adata.obs[score_name]

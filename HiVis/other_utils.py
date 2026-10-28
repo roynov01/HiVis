@@ -30,7 +30,7 @@ def matnorm(df, axis="col"):
 
     if isinstance(df, pd.DataFrame):
         if axis == "row":
-            row_sums = df.sum(axis=1).to_numpy().reshape(-1, 1)
+            row_sums = df.sum(axis=1).to_numpy(copy=True).reshape(-1, 1) # writable: read-only view in pandas 3
             row_sums[row_sums == 0] = 1  # Avoid division by zero
             return df.div(row_sums, axis=0).astype(np.float32)
         else:
