@@ -6,7 +6,6 @@
 import os
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype
 import scanpy as sc
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -166,7 +165,7 @@ class PlotVisium:
     def spatial(self, what=None, exact=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", 
                   legend=True, alpha=1, figsize=(7,7), save=False,brightness=1,contrast=1,layer=None,
                   xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=False, pad=False,
-                  show_zeros=False,rasterize=False):
+                  show_zeros=False,rasterize=False, vmin=None, vmax=None):
         '''
         Plots the image, and/or data/metadata (spatial plot)
         
@@ -190,12 +189,13 @@ class PlotVisium:
             * brightness (float) - increases brigtness, for example 0.2. 
             * contrast (float) - > 1 increases contrast, < 1 decreases.
             * rasterize - Rasterize elements for smaller figure size
+            * vmin, vmax (float) - color range of numeric values. If None, the plotted values' minimum / maximum
 
         **Returns** ax
         '''
         title = what if title is None else title
         if legend_title is None:
-            legend_title = what.capitalize() if what and what==what.lower else what
+            legend_title = what # not capitalized, as in previous versions
         xlim, ylim, adjusted_microns_per_pixel, img_resolution = self._crop(xlim, ylim, resolution=img_resolution)
         if exact is None:
             if (xlim[1] - xlim[0] + ylim[1] - ylim[0]) <= MAX_SQUARES_TO_DRAW_EXACT:
@@ -272,13 +272,13 @@ class PlotVisium:
                 ax = _plot_squares_exact(x, y, values, size=size,title=title,
                               alpha=alpha,cmap=cmap,ax=ax,
                               legend=legend,xlab=None,ylab=None, 
-                              legend_title=legend_title)
+                              legend_title=legend_title,vmin=vmin,vmax=vmax)
                 ax.set_aspect('equal')
             else:
                 ax = plot_scatter(x, y, values, size=size,title=title,
                               alpha=alpha,cmap=cmap,ax=ax,
                               legend=legend,xlab=None,ylab=None, 
-                              legend_title=legend_title)
+                              legend_title=legend_title,vmin=vmin,vmax=vmax)
         
         # Add legend to fluorescence image
         if self.main.fluorescence and legend and not what and img_resolution=="full":
@@ -387,7 +387,7 @@ class PlotVisium:
             * size (int) - size of spots in scatterplot.
             * save (bool) - svae the plot
             * text, legend, legend_title - cosmetic Parameters
-            * print\_ (bool) - print most correlated genes
+            * print\\_ (bool) - print most correlated genes
             
         **Returns** ax
         '''
@@ -535,8 +535,8 @@ class PlotAgg:
         y_mask = (self.main.adata.obs['um_y'] >= ylim[0]) & (self.main.adata.obs['um_y'] <= ylim[1])
         mask = x_mask & y_mask
     
-        # Crop the adata
-        self.main.adata_cropped = self.main.adata[mask].copy()
+        # Crop the adata (a view, like PlotVisium._crop: a copy would duplicate X, layers and the images in uns)
+        self.main.adata_cropped = self.main.adata[mask]
     
         # Adjust adata coordinates relative to the cropped image
         x_range = xlim[1] - xlim[0]
@@ -559,6 +559,8 @@ class PlotAgg:
         adjusted_microns_per_pixel = microns_per_pixel / scalef        
         xlim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in xlim]
         ylim_pxl = [int(lim/ adjusted_microns_per_pixel) for lim in ylim]
+        # The image is cropped from pixel 0 when the limits go past its edge (PlotVisium._crop), so shift by the same offset
+        xlim_pxl[0], ylim_pxl[0] = max(xlim_pxl[0], 0), max(ylim_pxl[0], 0)
  
         self.pixel_x = self.main.adata_cropped.obs[pxl_col] - xlim_pxl[0]
         self.pixel_y = self.main.adata_cropped.obs[pxl_row] - ylim_pxl[0]
@@ -629,7 +631,8 @@ class PlotAgg:
     
     def spatial(self, what=None, image=True, img_resolution=None, ax=None, title=None, cmap="winter", layer=None,
                   legend=True, alpha=1, figsize=(7,7), save=False, size=1,brightness=1,contrast=1,rasterize=False,
-                  xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=False,show_zeros=False):
+                  xlim=None, ylim=None, scalebar=True, legend_title=None, axis_labels=False,show_zeros=False,
+                  vmin=None, vmax=None):
         '''
         Plot a spatial representation of self.adata.
         
@@ -650,12 +653,13 @@ class PlotAgg:
             * contrast (float) - > 1 increases contrast, < 1 decreases.
             * figsize, legend, alpha, title, legend_title, axis_labels - cosmetic Parameters  
             * rasterize - Rasterize elements for smaller figure size
+            * vmin, vmax (float) - color range of numeric values. If None, the plotted values' minimum / maximum
             
         **Returns** ax
         '''
         title = what if title is None else title
         if legend_title is None:
-            legend_title = what.capitalize() if what and what==what.lower else what
+            legend_title = what # not capitalized, as in previous versions
 
         self._crop(xlim, ylim, resolution=img_resolution)
 
@@ -710,7 +714,7 @@ class PlotAgg:
             ax = plot_scatter(x, y, values, size=size,title=title,
                           alpha=alpha,cmap=cmap,ax=ax,
                           legend=legend,xlab=None,ylab=None, 
-                          legend_title=legend_title,marker="o")
+                          legend_title=legend_title,marker="o",vmin=vmin,vmax=vmax)
         
         if rasterize:
             # Rasterize for smaller figure size
@@ -763,7 +767,8 @@ class PlotAgg:
     
     def cells(self, what=None, image=True, img_resolution=None, xlim=None, ylim=None, scalebar=True, show_zeros=False,
               figsize=(7,7), line_color="black",cmap="viridis", alpha=0.7, linewidth=1,save=False,layer=None,
-              legend=True, ax=None, title=None, legend_title=None, brightness=1,contrast=1,axis_labels=False,rasterize=False):
+              legend=True, ax=None, title=None, legend_title=None, brightness=1,contrast=1,axis_labels=False,rasterize=False,
+              vmin=None, vmax=None):
         '''
         Plot a spatial map of the objects. Can color the borders and fill
         
@@ -782,6 +787,7 @@ class PlotAgg:
             * save (bool) - svae the plot
             * brightness (float) - increases brigtness, for example 0.2. 
             * contrast (float) - > 1 increases contrast, < 1 decreases.
+            * vmin, vmax (float) - color range of numeric values. If None, the plotted values' minimum / maximum
             * figsize, line_color, color_zeros, legend, linewidth, title, legend_title, axis_labels - cosmetic Parameters            
             
         **Returns** ax
@@ -796,7 +802,7 @@ class PlotAgg:
         
         title = what if title is None else title
         if legend_title is None:
-            legend_title = what.capitalize() if what and what==what.lower else what
+            legend_title = what # not capitalized, as in previous versions
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
         ax = self.main.viz.plot.spatial(image=image, ax=ax,brightness=brightness,title=title,axis_labels=axis_labels,
@@ -823,15 +829,18 @@ class PlotAgg:
                     cmap_obj = colormaps.get_cmap(cmap)
                 elif isinstance(cmap, list):
                     cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-                self.geometry.plot(column="temp", ax=ax, cmap=cmap_obj, edgecolor="none",legend=False, alpha=alpha)
+                self.geometry.plot(column="temp", ax=ax, cmap=cmap_obj, edgecolor="none",legend=False, alpha=alpha,
+                                   vmin=vmin, vmax=vmax)
                 if legend:
-                    norm = plt.Normalize(vmin=np.nanmin(values), vmax=np.nanmax(values))
+                    vmin = np.nanmin(values) if vmin is None else vmin
+                    vmax = np.nanmax(values) if vmax is None else vmax
+                    norm = plt.Normalize(vmin=vmin, vmax=vmax)
                     sm = plt.cm.ScalarMappable(cmap=cmap_obj, norm=norm)
                     sm.set_array([])  
                     cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
                     cbar.set_label(legend_title)
-                    vmin, vmax = np.nanmin(values), np.nanmax(values)
-                    is_int = np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int))
+                    with np.errstate(invalid="ignore"): # casting NaN/inf to int warns. They still make is_int False
+                        is_int = np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int))
                 
                     if is_int and (vmax - vmin) <= 10:
                         # Small integer range – nice to show all integers
@@ -845,7 +854,7 @@ class PlotAgg:
                 src = None
                 if what in self.main.adata.obs.columns:
                     src = self.main.adata.obs[what]
-                if src is not None and is_categorical_dtype(src):
+                if src is not None and isinstance(src.dtype, pd.CategoricalDtype):
                     values = pd.Categorical(values,
                                             categories=list(src.cat.categories),
                                             ordered=True)
@@ -938,7 +947,7 @@ class PlotAgg:
             if f'{features[0]}_colors' in self.main.adata.uns:
                 del self.main.adata.uns[f'{features[0]}_colors']
             if isinstance(cmap, (str, list, dict)):
-                if (features[0] in self.main.adata.obs.columns) and pd.api.types.is_categorical_dtype(self.main.adata.obs[features[0]].dtype):
+                if (features[0] in self.main.adata.obs.columns) and isinstance(self.main.adata.obs[features[0]].dtype, pd.CategoricalDtype):
                     # Use the defined categorical ordering
                     categories = self.main.adata.obs[features[0]].cat.categories.astype(str)
                     colors = get_colors(categories, cmap)
@@ -1006,7 +1015,7 @@ class PlotAgg:
             * size (int) - size of spots in scatterplot.
             * save (bool) - svae the plot
             * text, legend, legend_title - cosmetic Parameters
-            * print\_ (bool) - print most correlated genes
+            * print\\_ (bool) - print most correlated genes
             
         **Returns** ax
         '''
@@ -1143,7 +1152,7 @@ def save_fig(path, fig, open_file=False, formats='png', dpi=300,pad_inches=0):
     return path
 
 def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
-                   cmap='winter', figsize=(7,7), alpha=1, legend_title=None, ax=None,marker='s'):
+                   cmap='winter', figsize=(7,7), alpha=1, legend_title=None, ax=None,marker='s', vmin=None, vmax=None):
     '''
     Plots a scatterplot based on coordinates and values.
     Parameters:
@@ -1151,6 +1160,7 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
         * cmap - can be string (name of pellate), list of colors, \
                  or in categorical values case, a dict {"value":"color"}
         * marker - shape of dots. "s" for square, "o" or "." for circle
+        * vmin, vmax (float) - color range of numeric values. If None, the values' minimum / maximum
         * figsize, size, legend, xlab, ylab, title, legend_title - cosmetic Parameters
     '''
     if ax is None:
@@ -1170,12 +1180,14 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
         elif isinstance(cmap, list):
             cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
         scatter = ax.scatter(x, y, c=values, cmap=cmap_obj, marker=marker,
-                              alpha=alpha, s=size,edgecolor='none')
+                              alpha=alpha, s=size,edgecolor='none', vmin=vmin, vmax=vmax)
         if legend:
             cbar = plt.colorbar(scatter, ax=ax, shrink=0.6)
             cbar.set_label(legend_title)
-            vmin, vmax = np.nanmin(values), np.nanmax(values)
-            is_int = np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int))
+            vmin = np.nanmin(values) if vmin is None else vmin
+            vmax = np.nanmax(values) if vmax is None else vmax
+            with np.errstate(invalid="ignore"): # casting NaN/inf to int warns. They still make is_int False
+                is_int = np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int))
         
             if is_int and (vmax - vmin) <= 10:
                 # Small integer range – nice to show all integers
@@ -1330,7 +1342,7 @@ def plot_scatter_signif(df, x_col, y_col,
 
 def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(7,7), ax=None, title=None,
             size=10, colname_exp="expression_mean",colname_qval="qval", 
-            colname_fc="log2fc", n_texts=130, ylab="log2(ratio)",repel=False):
+            colname_fc="log2fc", n_texts=130, ylab="log2(ratio)",repel=False, genes=None, color="gray", color_genes="red"):
     '''
     Plots a MA plot of the output of HiVis.dge().
     Parameters:
@@ -1339,6 +1351,8 @@ def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(7,7), ax=N
         * size, ylab, title, figsize - cosmetic Parameters
         * colname_exp - can be "expression_mean","expression_min","expression_max"
         * n_texts - maximal number of texts to display. above, will only color the dots
+        * genes (list) - genes to color and name, instead of the significant genes (e.g. the top genes up and down)
+        * color, color_genes - colors of the genes, and of the significant genes (or of genes)
     '''
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
@@ -1349,10 +1363,12 @@ def plot_MA(df, qval_thresh=0.25, exp_thresh=0, fc_thresh=0 ,figsize=(7,7), ax=N
         plot["gene"] = plot.index
     signif_genes = plot.loc[plot["signif"]==True,"gene"].tolist()
     text = True if len(signif_genes) < n_texts else False
+    if genes is not None:
+        signif_genes, text = list(genes), True
     ax = plot_scatter_signif(plot, "exp", colname_fc, genes=signif_genes,
                              text=text, title=title,ax=ax,size=size,repel=repel,
                              xlab=f"log10({colname_exp.replace('_',' ')})",
-                             ylab=ylab,y_line=0,color_genes="red", color="gray")
+                             ylab=ylab,y_line=0,color_genes=color_genes, color=color)
     return ax
 
 
@@ -1472,11 +1488,12 @@ def set_axis_ticks(ax, length_in_pixels, adjusted_microns_per_pixel, axis='x', n
 
 
 def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=None, 
-                 cmap='winter', figsize=(7,7), alpha=1, legend_title=None, ax=None):
+                 cmap='winter', figsize=(7,7), alpha=1, legend_title=None, ax=None, vmin=None, vmax=None):
     '''
     Plots sqares in the exact size
     Parameters:
         * cmap - str, name of colormap, or list of colors. if categorical, can also be a dict {"val":"color"}
+        * vmin, vmax (float) - color range of numeric values. If None, the values' minimum / maximum
         * title, legend, ylab, xlab, figsize, alpha, legend_title - cosmetic Parameters
     '''
 
@@ -1498,7 +1515,9 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
             cmap_obj = colormaps.get_cmap(cmap)
         elif isinstance(cmap, list):
             cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-        norm = mcolors.Normalize(vmin=np.nanmin(values), vmax=np.nanmax(values))
+        vmin = np.nanmin(values) if vmin is None else vmin
+        vmax = np.nanmax(values) if vmax is None else vmax
+        norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
 
         # Add rectangles for each data point
         for xi, yi, vi in zip(x, y, values):
@@ -1521,8 +1540,8 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
         if legend:
             cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
             cbar.set_label(legend_title)
-            is_int = np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int))
-            vmin, vmax = np.nanmin(values), np.nanmax(values)
+            with np.errstate(invalid="ignore"): # casting NaN/inf to int warns. They still make is_int False
+                is_int = np.issubdtype(values.dtype, np.integer) or np.allclose(values, values.astype(int))
             if is_int and (vmax - vmin) <= 10:
                 # Small integer range – nice to show all integers
                 cbar.set_ticks(np.arange(int(vmin), int(vmax) + 1))
