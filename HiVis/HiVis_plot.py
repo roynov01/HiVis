@@ -1137,6 +1137,7 @@ class PlotAgg:
 
 def save_fig(path, fig, open_file=False, formats='png', dpi=300,pad_inches=0): 
     '''Save a fig object. format is either str or list'''
+    HiVis_utils.make_parent_dir(path)
     if isinstance(fig, pd.DataFrame):
         if not path.endswith('.csv'):
             path += ".csv"            

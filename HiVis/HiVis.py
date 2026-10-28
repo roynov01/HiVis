@@ -690,7 +690,8 @@ class HiVis:
             for method_name in disable:
                 setattr(self, method_name, _disabled_method)
         if plot_qc and hasattr(self.plot, "spatial"):
-            self.analysis.qc(save=True)
+            self.analysis.qc()
+            self.plot.save(figname="QC", fig=plt.gcf(), formats="png") # qc(save=True) also writes pdf and svg
             plt.show()
             
     def add_agg(self, adata_agg, name):
@@ -983,6 +984,7 @@ class HiVis:
         path = f"{path}/{self.name}_HiVis.h5ad"
         if not os.path.exists(path) or force:
             print("[Writing h5]")
+            HiVis_utils.make_parent_dir(path)
             self.adata.write(path)
         return path
     
@@ -1295,6 +1297,7 @@ class HiVis:
             for agg in self.agg:
                 self.agg[agg].plot.current_ax = None
 
+        HiVis_utils.make_parent_dir(path)
         tmp_path = path + ".tmp"
         try:
             with open(tmp_path, "wb") as f:

@@ -164,6 +164,13 @@ def matnorm(df, axis="col"):
     raise ValueError("df is not a supported type (list, numpy array, sparse matrix, or dataframe)")
         
 
+def make_parent_dir(path):
+    '''Creates the folder of a file path if it doesn't exist. Aggregations make their folder only when something is saved'''
+    folder = os.path.dirname(path)
+    if folder:
+        os.makedirs(folder, exist_ok=True)
+
+
 def validate_exists(file_path):
     '''Validates if a file exists'''
     if isinstance(file_path, (list, tuple)):

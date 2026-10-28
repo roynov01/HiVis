@@ -58,9 +58,7 @@ class Aggregation:
         self.adata = adata_agg
         self.viz = hiviz_instance
         self.name = name 
-        self.path_output = self.viz.path_output + f"/{self.name}"
-        if not os.path.exists(self.path_output):
-            os.makedirs(self.path_output)
+        self.path_output = self.viz.path_output + f"/{self.name}" # made when something is saved into it
         self.plot = HiVis_plot.PlotAgg(self)
         self.analysis = HiVis_analysis.AnalysisAgg(self)
         self.adata_cropped = None
@@ -108,6 +106,7 @@ class Aggregation:
         print(f"SAVING [{self.name}]")
         if not path:
             path = f"{self.path_output}/{self.name}.h5ad"
+        HiVis_utils.make_parent_dir(path)
         self.adata.write(path)
         return path
     
@@ -158,6 +157,7 @@ class Aggregation:
                 os.makedirs(path)
             path = f"{path}/{self.name}.mat"
         print("[Saving mat file]")
+        HiVis_utils.make_parent_dir(path)
         mat = self.adata.X if layer is None else self.adata.layers[layer]
         scipy.io.savemat(path, {"genes": var_names, "mat":mat ,"metadata":obs})
         self.adata.obs.to_csv(path.replace(".mat","metadata.csv"))

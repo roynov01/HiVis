@@ -89,7 +89,7 @@ class failing_dump:
 
 
 def files_in(directory):
-    '''Files only: Aggregation.__init__ creates a folder per aggregation in path_output'''
+    '''Files only: before 1.1.0, Aggregation.__init__ made a folder per aggregation in path_output'''
     return sorted(f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f)))
 
 
