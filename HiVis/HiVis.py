@@ -6,6 +6,7 @@ HD Integrated Visium Interactive Suite (HiVis)
 import os
 import dill
 import gc
+import importlib
 import warnings
 from pathlib import Path
 from tqdm import tqdm
@@ -849,6 +850,8 @@ class HiVis:
             * geojson_path (str) - path to geojson file that was used to create the annotations
         '''        
         aggregation_func = Aggregation_utils._aggregate_data_annotations
+        if isinstance(obs2agg, (list, dict)):
+            obs2agg = obs2agg.copy() # don't add the annotation column to the caller's list/dict
         
         annotation_col = annotation_id_col.replace("_id","")
         if annotation_col != annotation_id_col and annotation_col in self.adata.obs.columns: # Add annotation class to each object
@@ -870,7 +873,7 @@ class HiVis:
             self.agg[name].import_geometry(geojson_path, object_type="annotation")            
         
     
-    def agg_cells(self, input_df, name="SC", obs2add=None, obs2agg=None, geojson_path=None):
+    def agg_cells(self, input_df, name="SC", obs2add=None, obs2agg=None, geojson_path=None, object_type="cell"):
         '''
         Adds Aggregation object to self.agg[name], based on CSV output of Qupath pipeline.
         
@@ -884,7 +887,14 @@ class HiVis:
             * obs2add (list) - which columns from input_df should be copied to the Aggregation.adata.obs
             * nuc_only (bool) - aggregate only spots in nuclei
             * geojson_path (str) - path to geojson file that was exported from Qupath
+            * object_type (str) - "objectType" of the cells in the geojson. "detection" if the cells were exported as detections
         '''
+        geometry = None
+        if geojson_path: # read and check the geojson before the slow aggregation
+            geometry = gpd.read_file(geojson_path)
+            if not (geometry["objectType"] == object_type).any():
+                raise ValueError(f"No entries with object_type={object_type} in {geojson_path}. "
+                                 f"objectType values found: {list(geometry['objectType'].unique())}")
         id_col = f"Cell_ID_{name}"
         input_df.rename(columns={"Object ID":"Cell_ID"}, inplace=True)
         spots_only, cells_only = Aggregation_utils.split_spots_cells(input_df)
@@ -913,8 +923,8 @@ class HiVis:
         # adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
         
         self.add_agg(adata_agg, name=name)
-        if geojson_path:
-            self.agg[name].import_geometry(geojson_path)
+        if geometry is not None:
+            self.agg[name].import_geometry(geometry, object_type=object_type)
      
         
     @property
@@ -1318,7 +1328,7 @@ class HiVis:
         **Returns** new HiVis instance
         '''
         adata = self.adata[what].copy()
-        name = self.name + "_subset" if not self.name.endswith("_subset") else ""
+        name = self.name + "_subset" if not self.name.endswith("_subset") else self.name
         if self.image_fullres is not None:
             image_fullres_crop, image_highres_crop, image_lowres_crop, xlim_pixels_fullres, ylim_pixels_fullres = self.__crop_images(adata, remove_empty_pixels)
             adata_shifted = self.__shift_adata(adata, xlim_pixels_fullres, ylim_pixels_fullres)
@@ -1401,6 +1411,8 @@ class HiVis:
     
     def update(self, agg=False):
         '''Updates the methods in the instance. Should be used after modifying the source code in the class'''
+        for module in (HiVis_utils, Aggregation_utils, other_utils): # not reloaded with the classes
+            importlib.reload(module)
         HiVis_utils.update_instance_methods(self)
         HiVis_utils.update_instance_methods(self.plot)
         HiVis_utils.update_instance_methods(self.analysis)
@@ -1428,7 +1440,7 @@ class HiVis:
             self.adata.obs[name] = self.adata.obs[name].apply(lambda x: values.get(x, x) if pd.notna(x) else x)
             
             # Convert back to original dtype if it was categorical
-            if pd.api.types.is_categorical_dtype(original_dtype):
+            if isinstance(original_dtype, pd.CategoricalDtype):
                 self.adata.obs[name] = self.adata.obs[name].astype('category') 
         elif type_ == "var":
             if name not in self.adata.var.columns:
@@ -1437,7 +1449,7 @@ class HiVis:
             self.adata.var[name] = self.adata.var[name].apply(lambda x: values.get(x, x) if pd.notna(x) else x)
             
             # Convert back to original dtype if it was categorical
-            if pd.api.types.is_categorical_dtype(original_dtype):
+            if isinstance(original_dtype, pd.CategoricalDtype):
                 self.adata.var[name] = self.adata.var[name].astype('category')    
         else:
             raise ValueError("type_ must be either 'obs' or 'var'")

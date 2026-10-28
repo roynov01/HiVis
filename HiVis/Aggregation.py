@@ -8,6 +8,7 @@ import warnings
 import re
 import gc
 import os
+import importlib
 import numpy as np
 import anndata as ad
 from shapely.affinity import scale
@@ -83,16 +84,13 @@ class Aggregation:
     
     def copy(self, new_name=None, new_out_path=False, full=False):
         '''
-        Creates a deep copy of the instance
+        Creates a deep copy of the instance, linked to the same HiVis object.
         if new_name is specified, renames the object and changes the path_output.
         If full is False, the name will be added to the current (previous) name.
         
         **Returns** new Aggregation instance
         '''
-        new = deepcopy(self)
-        new.viz = self.viz
-        gc.collect()
-        new = deepcopy(self)
+        new = deepcopy(self, {id(self.viz): self.viz}) # linked to the same HiVis, which isn't copied
         if new_name:
             new.rename(new_name, new_out_path=new_out_path, full=full)
         return new
@@ -245,9 +243,10 @@ class Aggregation:
         elif isinstance(geojson_path,gpd.GeoDataFrame):
             gdf = geojson_path
         
+        object_types = list(gdf["objectType"].unique())
         gdf = gdf[gdf["objectType"] == object_type]
         if gdf.shape[0] == 0:
-            raise ValueError(f"No entries with object_type={object_type}")
+            raise ValueError(f"No entries with object_type={object_type}. objectType values found: {object_types}")
         if gdf.shape[0] != self.shape[0]:
             print(f"Number of shapes ({gdf.shape[0]}) isn't the same as the number of cells in adata ({self.shape[0]})")
         gdf = gdf.loc[:,["id","geometry"]]
@@ -398,6 +397,7 @@ class Aggregation:
         Updates the methods in the instance. 
         Should be used after modifying the source code in the class
         '''
+        importlib.reload(HiVis_utils) # not reloaded with the classes
         HiVis_utils.update_instance_methods(self)
         HiVis_utils.update_instance_methods(self.plot)
         HiVis_utils.update_instance_methods(self.analysis)
@@ -419,7 +419,7 @@ class Aggregation:
             self.adata.obs[name] = self.adata.obs[name].apply(lambda x: values.get(x, x) if pd.notna(x) else x)
             
             # Convert back to original dtype if it was categorical
-            if pd.api.types.is_categorical_dtype(original_dtype):
+            if isinstance(original_dtype, pd.CategoricalDtype):
                 self.adata.obs[name] = self.adata.obs[name].astype('category') 
         elif type_ == "var":
             if name not in self.adata.var.columns:
@@ -428,7 +428,7 @@ class Aggregation:
             self.adata.var[name] = self.adata.var[name].apply(lambda x: values.get(x, x) if pd.notna(x) else x)
             
             # Convert back to original dtype if it was categorical
-            if pd.api.types.is_categorical_dtype(original_dtype):
+            if isinstance(original_dtype, pd.CategoricalDtype):
                 self.adata.var[name] = self.adata.var[name].astype('category')    
         else:
             raise ValueError("type_ must be either 'obs' or 'var'")

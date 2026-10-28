@@ -29,6 +29,8 @@ def new_adata(adata, aggregate_by, aggregation_func, obs2agg=None, **aggregation
         obs2agg = {}
     if isinstance(obs2agg, list):
         obs2agg = {k:None for k in set(obs2agg)}
+    elif isinstance(obs2agg, dict):
+        obs2agg = dict(obs2agg) # don't add the keys below to the caller's dict
     obs2agg["pxl_row_in_fullres"] = np.mean
     obs2agg["pxl_col_in_fullres"] = np.mean
     obs2agg["nUMI"] = np.sum    
