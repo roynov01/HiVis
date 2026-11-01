@@ -2,6 +2,8 @@
 """
 Synthetic tests for the plotting fixes after 1.1.0. Compares the current implementation with the one from HiVis 1.1.0:
     * plot.hist of a string or categorical column raised TypeError under pandas 3 (str dtype)
+    * a matplotlib Colormap (e.g. ListedColormap) as cmap of numeric values raised UnboundLocalError. Now it is used
+      as it is, and draws the same figure as its name
 
 Run with pytest, or directly: python tests/test_plot_options.py
 """
@@ -176,6 +178,42 @@ def test_B_hist_same_as_orig_for_other_dtypes():
     # nullable numeric dtypes (numpy can't interpret them) are numeric
     values = pd.Series([1, 2, 2, 3, None], dtype="Int64")
     assert HiVis_plot._is_numeric(values.dtype) and not HiVis_plot._is_numeric(pd.Series([True, False]).dtype)
+
+
+# ---------- O37: a Colormap as cmap ----------
+
+def test_C_colormap_same_as_its_name():
+    viz = make_viz()
+    agg = viz.agg["SC"]
+    plots = [lambda cmap: viz.plot.spatial("value", cmap=cmap),
+             lambda cmap: viz.plot.spatial("value", cmap=cmap, xlim=[0, 40], ylim=[0, 40]), # exact squares
+             lambda cmap: viz.plot.spatial("zone", cmap=cmap),
+             lambda cmap: viz.plot.spatial("zone", cmap=cmap, xlim=[0, 40], ylim=[0, 40]),
+             lambda cmap: agg.plot.spatial("score", cmap=cmap),
+             lambda cmap: agg.plot.cells("score", cmap=cmap),
+             lambda cmap: agg.plot.cells("cls", cmap=cmap)]
+    for k, plot in enumerate(plots):
+        for name in ["viridis", "tab10"]:
+            assert np.array_equal(image(plot(colormaps[name])), image(plot(name))), (k, name)
+
+
+def test_D_listed_colormap_and_bad_cmap():
+    viz = make_viz()
+    agg = viz.agg["SC"]
+    zones = ListedColormap(["red", "green", "blue"])
+    ax = agg.plot.cells("count", cmap=zones, line_color=None) # 1, 2, 3
+    colors = {tuple(np.round(c, 3)) for coll in ax.collections for c in coll.get_facecolor()}
+    plt.close("all")
+    assert colors == {(1.0, 0.0, 0.0, 0.7), (0.0, 0.502, 0.0, 0.7), (0.0, 0.0, 1.0, 0.7)}, colors
+    for bad in [None, {"a": "red"}, 3]: # UnboundLocalError in 1.1.0
+        for plot in [lambda: agg.plot.cells("score", cmap=bad), lambda: viz.plot.spatial("value", cmap=bad)]:
+            try:
+                plot()
+                error = None
+            except Exception as e:
+                error = e
+            plt.close("all")
+            assert isinstance(error, ValueError), repr(error)
 
 
 def teardown_module(module=None):

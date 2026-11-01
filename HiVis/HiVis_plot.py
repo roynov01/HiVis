@@ -825,10 +825,7 @@ class PlotAgg:
                 if values is None:
                     raise KeyError(f"No values in [{what}]")
                 self.geometry["temp"] = values
-                if isinstance(cmap, str):
-                    cmap_obj = colormaps.get_cmap(cmap)
-                elif isinstance(cmap, list):
-                    cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+                cmap_obj = _get_cmap(cmap)
                 self.geometry.plot(column="temp", ax=ax, cmap=cmap_obj, edgecolor="none",legend=False, alpha=alpha,
                                    vmin=vmin, vmax=vmax)
                 if legend:
@@ -871,7 +868,7 @@ class PlotAgg:
                 else:
                     ordered_values = present_vals
 
-                if isinstance(cmap, (str, list)):
+                if isinstance(cmap, (str, list, mcolors.Colormap)):
                     colors = get_colors(ordered_values, cmap)
                     color_map = {val: colors[i] for i, val in enumerate(ordered_values)}
                 elif isinstance(cmap, dict):
@@ -1176,10 +1173,7 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
     values = np.asarray(values)
     
     if np.issubdtype(values.dtype, np.number): # Numeric case: Use colorbar
-        if isinstance(cmap, str):
-            cmap_obj = colormaps.get_cmap(cmap)
-        elif isinstance(cmap, list):
-            cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+        cmap_obj = _get_cmap(cmap)
         scatter = ax.scatter(x, y, c=values, cmap=cmap_obj, marker=marker,
                               alpha=alpha, s=size,edgecolor='none', vmin=vmin, vmax=vmax)
         if legend:
@@ -1201,7 +1195,7 @@ def plot_scatter(x, y, values, title=None, size=1, legend=True, xlab=None, ylab=
         unique_values, idx = np.unique(values.astype(str), return_index=True)
         unique_values = unique_values[np.argsort(idx)]
         unique_values = unique_values[unique_values != 'nan']
-        if isinstance(cmap, (str,list)):
+        if isinstance(cmap, (str, list, mcolors.Colormap)):
             colors = get_colors(unique_values, cmap)
             color_map = {val: colors[i] for i, val in enumerate(unique_values)}  
         elif isinstance(cmap, dict):
@@ -1434,6 +1428,17 @@ def _is_numeric(dtype):
     return pd.api.types.is_numeric_dtype(dtype) and not pd.api.types.is_bool_dtype(dtype)
 
 
+def _get_cmap(cmap):
+    '''Colormap of numeric values: a colormap name, a list of colors (interpolated) or a matplotlib Colormap'''
+    if isinstance(cmap, str):
+        return colormaps.get_cmap(cmap)
+    if isinstance(cmap, list):
+        return LinearSegmentedColormap.from_list("custom_cmap", cmap)
+    if isinstance(cmap, mcolors.Colormap):
+        return cmap
+    raise ValueError("cmap must be a colormap name, a list of colors or a matplotlib Colormap")
+
+
 def get_colors(values, cmap):
     """Return a list of colors (one per unique value, in-order)."""
     from matplotlib.colors import to_hex
@@ -1453,7 +1458,7 @@ def get_colors(values, cmap):
         if len(cmap) == len(unique_values):
             return [to_hex(c) for c in cmap]
         cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
-    else:  # string name of colormap
+    else:  # name of colormap, or a Colormap
         cmap_obj = colormaps.get_cmap(cmap)
 
     # sample the colormap for however many categories we have
@@ -1519,10 +1524,7 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
     ax.set_aspect('equal')
     if np.issubdtype(values.dtype, np.number):  # Numeric case: Use colorbar
         # Normalize the values for the colormap
-        if isinstance(cmap, str):
-            cmap_obj = colormaps.get_cmap(cmap)
-        elif isinstance(cmap, list):
-            cmap_obj = LinearSegmentedColormap.from_list("custom_cmap", cmap)
+        cmap_obj = _get_cmap(cmap)
         vmin = np.nanmin(values) if vmin is None else vmin
         vmax = np.nanmax(values) if vmax is None else vmax
         norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
@@ -1561,7 +1563,7 @@ def _plot_squares_exact(x, y, values, title=None, size=1, legend=True, xlab=None
     else:  # Categorical case: Use legend
         unique_values = np.unique(values.astype(str))
         unique_values = unique_values[unique_values != 'nan']
-        if isinstance(cmap, (str,list)):
+        if isinstance(cmap, (str, list, mcolors.Colormap)):
             colors = get_colors(unique_values, cmap)
             color_map = {val: colors[i] for i, val in enumerate(unique_values)}  
         elif isinstance(cmap, dict):
