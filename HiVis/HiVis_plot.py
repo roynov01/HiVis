@@ -371,7 +371,7 @@ class PlotVisium:
     
     def cor(self, what, number_of_genes=10, normalize=True, self_corr_value=np.nan,
             layer=None, cluster=True, ax=None,figsize=(7,7),save=False,
-           size=15,text=True,cmap="copper",legend=True,legend_title=None,print_=False):
+           size=15,text=True,cmap="copper",legend=True,legend_title=None,print_=False,repel=False):
         '''
         Plots correlation of a gene with all genes, or a correlation matrix between list of genes.
         
@@ -389,6 +389,7 @@ class PlotVisium:
             * save (bool) - svae the plot
             * text, legend, legend_title - cosmetic Parameters
             * print\\_ (bool) - print most correlated genes
+            * repel (bool) - only applicable if what is a single gene. Move the gene names apart, so they don't overlap
             
         **Returns** ax
         '''
@@ -412,7 +413,7 @@ class PlotVisium:
                 df.rename(columns={f"cor_qval_{what}":"qval"},inplace=True)
                 
             df["expression_mean_log10"] = np.log10(df["expression_mean"])
-            df["qval_log10"] = -np.log(df["qval"] + df["qval"][df["qval"]>0].min())
+            df["qval_log10"] = -np.log10(df["qval"] + df["qval"][df["qval"]>0].min())
             df.index = df["gene"].values
             df = df.dropna(subset=["expression_mean_log10", "r", "qval_log10"])
             cor_series_clean = df["r"]
@@ -425,7 +426,9 @@ class PlotVisium:
             ax = plot_scatter_signif(df, "expression_mean_log10", "r",genes=top_genes,
                                 title=what,text=text,color="qval_log10",ax=ax,
                                 xlab="log10(mean expression)",size=size,cmap=cmap,
-                                ylab="Spearman correlation",legend=legend,color_genes="black")
+                                ylab="Spearman correlation",legend=legend,color_genes="black",repel=repel)
+            if legend_title is not None and ax.get_legend() is not None:
+                ax.get_legend().set_title(legend_title)
             if print_:
                 print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
         else:
@@ -995,7 +998,7 @@ class PlotAgg:
     
     def cor(self, what, number_of_genes=10, normalize=True, self_corr_value=np.nan,
             layer=None, cluster=True, ax=None,figsize=(7,7),save=False,
-           size=15,text=True,cmap="copper",legend=True,legend_title=None,print_=False):
+           size=15,text=True,cmap="copper",legend=True,legend_title=None,print_=False,repel=False):
         '''
         Plots correlation of a gene with all genes, or a correlation matrix between list of genes.
         
@@ -1014,6 +1017,7 @@ class PlotAgg:
             * save (bool) - svae the plot
             * text, legend, legend_title - cosmetic Parameters
             * print\\_ (bool) - print most correlated genes
+            * repel (bool) - only applicable if what is a single gene. Move the gene names apart, so they don't overlap
             
         **Returns** ax
         '''
@@ -1037,7 +1041,7 @@ class PlotAgg:
                 df.rename(columns={f"cor_qval_{what}":"qval"},inplace=True)
                 
             df["expression_mean_log10"] = np.log10(df["expression_mean"])
-            df["qval_log10"] = -np.log(df["qval"] + df["qval"][df["qval"]>0].min())
+            df["qval_log10"] = -np.log10(df["qval"] + df["qval"][df["qval"]>0].min())
             df.index = df["gene"].values
             df = df.dropna(subset=["expression_mean_log10", "r", "qval_log10"])
             cor_series_clean = df["r"]
@@ -1050,7 +1054,9 @@ class PlotAgg:
             ax = plot_scatter_signif(df, "expression_mean_log10", "r",genes=top_genes,
                                 title=what,text=text,color="qval_log10",ax=ax,
                                 xlab="log10(mean expression)",size=size,cmap=cmap,
-                                ylab="Spearman correlation",legend=legend,color_genes="black")
+                                ylab="Spearman correlation",legend=legend,color_genes="black",repel=repel)
+            if legend_title is not None and ax.get_legend() is not None:
+                ax.get_legend().set_title(legend_title)
             if print_:
                 print(df.loc[df["gene"].isin(top_genes),["r","expression_mean","qval"]].sort_values(by="r", ascending=False))
         else:

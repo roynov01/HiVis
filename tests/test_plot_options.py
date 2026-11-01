@@ -6,6 +6,8 @@ Synthetic tests for the plotting fixes after 1.1.0. Compares the current impleme
       as it is, and draws the same figure as its name
     * scalebar: the documented key length_microns didn't exist (now an alias of length), and a dict passed as scalebar
       got the plot's color added, which then stayed for the next plots that reused it
+    * plot.cor of one gene: "qval_log10" was the natural log (the colors are the same, the legend's values were wrong),
+      it takes repel, and legend_title titles its legend
 
 Run with pytest, or directly: python tests/test_plot_options.py
 """
@@ -247,6 +249,64 @@ def test_F_scalebar_dict_not_modified():
     assert scalebar_color(viz.agg["SC"].plot.cells(image=False, scalebar=scalebar)) == black
     assert scalebar == {"length": 20}
     assert scalebar_color(viz.plot.spatial(image=False, scalebar={"color": "red"})) == to_rgba("red")
+    plt.close("all")
+
+
+# ---------- O34: plot.cor of one gene ----------
+
+def scatter_colors(ax):
+    return np.concatenate([c.get_facecolor() for c in ax.collections if len(c.get_offsets())])
+
+
+def legend_values(ax):
+    return [float(t.get_text().replace("−", "-")) for t in ax.get_legend().get_texts()]
+
+
+def test_G_cor_same_colors_log10_legend():
+    agg = make_viz().agg["SC"]
+    ax = agg.plot.cor("g0")
+    new_colors, values, title = scatter_colors(ax), legend_values(ax), ax.get_legend().get_title().get_text()
+    plt.close("all")
+    # what 1.1.0 drew: the same table, with -ln(q)
+    df = agg.analysis.cor("g0", self_corr_value=np.nan)
+    df = df.rename(columns={"exp_g0": "expression_mean", "cor_qval_g0": "qval"})
+    df["expression_mean_log10"] = np.log10(df["expression_mean"])
+    q = df["qval"] + df["qval"][df["qval"] > 0].min()
+    df["qval_log10"] = -np.log(q)
+    df.index = df["gene"].values
+    df = df.dropna(subset=["expression_mean_log10", "r", "qval_log10"])
+    top = list(df["r"].abs().nlargest(10).index)
+    fig, ax_o = plt.subplots(figsize=(7, 7))
+    ax_o = plot_scatter_signif(df, "expression_mean_log10", "r", genes=top, title="g0", text=True, color="qval_log10",
+                               ax=ax_o, xlab="log10(mean expression)", size=15, cmap="copper",
+                               ylab="Spearman correlation", legend=True, color_genes="black")
+    old_colors, old_values = scatter_colors(ax_o), legend_values(ax_o)
+    plt.close("all")
+    assert np.allclose(new_colors, old_colors, atol=1 / 255), "the points' colors are the same"
+    assert title == "qval_log10"
+    log10_max = (-np.log10(q)).max()
+    assert max(values) <= log10_max * 1.01 < max(old_values), (values, old_values, log10_max) # the legend's values were -ln
+
+
+def test_H_cor_repel_and_legend_title():
+    viz = make_viz()
+    agg = viz.agg["SC"]
+    for cls in [HiVis_plot.PlotVisium, HiVis_plot.PlotAgg]:
+        assert inspect.signature(cls.cor).parameters["repel"].default is False
+    def moved(ax):
+        points = {tuple(np.round(p, 6)) for c in ax.collections for p in c.get_offsets()}
+        return sum(tuple(np.round(t.get_position(), 6)) not in points for t in ax.texts)
+    ax = agg.plot.cor("g0")
+    assert len(ax.texts) == 10 and moved(ax) == 0 # names on their points, as before
+    plt.close("all")
+    ax = agg.plot.cor("g0", repel=True)
+    assert moved(ax) > 0
+    plt.close("all")
+    ax = agg.plot.cor("g0", legend_title="-log10(q)")
+    assert ax.get_legend().get_title().get_text() == "-log10(q)"
+    plt.close("all")
+    ax = agg.plot.cor(["g0", "g1", "g5"], legend_title="r") # the heatmap's colorbar, as before
+    assert ax.figure.axes[-1].get_ylabel() == "r"
     plt.close("all")
 
 
