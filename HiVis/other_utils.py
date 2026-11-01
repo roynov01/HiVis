@@ -133,7 +133,8 @@ def fix_excel_gene_dates(df, handle_duplicates="mean"):
 def inspect_df(df, col, n_rows=2):
     '''samples a df and return few rows (n_rows)
     from each unique value of col'''
-    subset_df = df.groupby(col).apply(lambda x: x.sample(min(len(x), n_rows))).reset_index(drop=True)
+    # selecting all the columns keeps col in each group (pandas 3 leaves the grouping columns out of apply)
+    subset_df = df.groupby(col)[list(df.columns)].apply(lambda x: x.sample(min(len(x), n_rows))).reset_index(drop=True)
     return subset_df
 
 

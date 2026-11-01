@@ -1388,7 +1388,7 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, layout='constrained')
 
-    if np.issubdtype(values.dtype, np.number):
+    if _is_numeric(values.dtype):
         if not show_zeroes:
             values = values[values > 0]
         counts, edges, patches = ax.hist(values,bins=bins,color=None if cmap else color)
@@ -1426,6 +1426,13 @@ def plot_histogram(values, bins=10, show_zeroes=False, xlim=None, title=None, fi
     ax.set_ylabel(ylab)
     ax.set_xlabel(xlab)
     return ax
+
+def _is_numeric(dtype):
+    '''np.issubdtype(dtype, np.number), also for pandas dtypes that numpy can't interpret (e.g. str in pandas 3)'''
+    if isinstance(dtype, np.dtype):
+        return np.issubdtype(dtype, np.number)
+    return pd.api.types.is_numeric_dtype(dtype) and not pd.api.types.is_bool_dtype(dtype)
+
 
 def get_colors(values, cmap):
     """Return a list of colors (one per unique value, in-order)."""

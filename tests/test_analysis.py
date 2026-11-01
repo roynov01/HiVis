@@ -6,6 +6,7 @@ Synthetic tests for the 1.1.0 analysis fixes. Compares the current implementatio
     * docstrings with "\\_" and "\\**" no longer raise SyntaxWarning, and their text is unchanged
     * matnorm(DataFrame, axis="row") failed under pandas 3 (read-only array)
     * dge with wilcox / t_test slices the genes from CSC copies instead of CSR (same p-values, faster)
+    * after 1.1.0: other_utils.inspect_df lost the grouping column under pandas 3
 
 Run with pytest, or directly: python tests/test_analysis.py
 """
@@ -491,6 +492,32 @@ def test_K_dge_wilcox_keeps_input_and_matches_orig():
             assert all((adata.layers[k] != v).nnz == 0 for k, v in layers.items())
             pd.testing.assert_frame_equal(adata.obs, obs)
             pd.testing.assert_frame_equal(adata.var, var)
+
+
+# ---------- pandas 3: other_utils.inspect_df ----------
+
+def orig_inspect_df(df, col, n_rows=2):
+    '''other_utils.inspect_df from HiVis 1.1.0'''
+    subset_df = df.groupby(col).apply(lambda x: x.sample(min(len(x), n_rows))).reset_index(drop=True)
+    return subset_df
+
+
+def test_N_inspect_df_keeps_group_column():
+    df = pd.DataFrame({"v": range(9), "k": list("bbacccaab"), "w": list("xyzxyzxyz")}, index=[f"r{i}" for i in range(9)])
+    np.random.seed(0) # sample() draws from numpy's global generator
+    expected = pd.concat([g.sample(min(len(g), 2)) for _, g in df.groupby("k")]).reset_index(drop=True)
+    np.random.seed(0)
+    result = other_utils.inspect_df(df, "k")
+    pd.testing.assert_frame_equal(result, expected)
+    assert list(result.columns) == ["v", "k", "w"]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore") # pandas 2 warns that the grouping columns are included
+        np.random.seed(0)
+        orig = orig_inspect_df(df, "k")
+    if int(pd.__version__.split(".")[0]) >= 3:
+        assert list(orig.columns) == ["v", "w"] # the bug: the grouping column is left out
+    else:
+        pd.testing.assert_frame_equal(orig, expected)
 
 
 def teardown_module(module=None):
