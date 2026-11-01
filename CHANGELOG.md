@@ -2,6 +2,27 @@
 
 Changes to HiVis since 1.0.0, newest first. Version numbers are the ones in `setup.py`, `pyproject.toml` and `HiVis.__version__`.
 
+## Unreleased
+
+Fixes and a few new options after 1.1.0. Existing scripts keep working with the same results, except for the points under "Changed". The tests in `tests/` compare each change with 1.1.0.
+
+### Changed
+- `plot.cor` of one gene colors the points by -log10(q) instead of -ln(q), as its legend title "qval_log10" says. The points' colors are the same. The legend now shows log10 values.
+- A dict passed as `scalebar` is no longer modified. Reusing one dict for several plots used to keep the first plot's color, e.g. white from a fluorescence image on a later plot with `image=False`. Each plot now gets its own default color.
+
+### Added
+- A matplotlib `Colormap` (e.g. `ListedColormap`) as `cmap` in `plot.spatial` and `plot.cells`, for numeric and categorical values. For numeric values it raised `UnboundLocalError`, and other cmap types now raise `ValueError` instead.
+- `repel` in `plot.cor` (HiVis and Aggregation), to move one gene's labels apart. `legend_title` now also titles that plot's legend.
+- `scalebar={"length_microns": ...}`, the key the docstrings documented, as another name for `length`.
+- `agg_cells`, `agg_from_annotations`, `import_geometry` and the `Aggregation` constructor take the geojson as a `pathlib.Path` or a `GeoDataFrame`.
+
+### Fixed
+- pandas 3: `plot.hist` of a string or categorical column raised `TypeError`, and `other_utils.inspect_df` left out the grouping column.
+- Docstrings: the `scalebar` keys of `plot.spatial` and `plot.cells` (`length`, not `length_microns`; `text_offset` defaults to `None`). Plot coordinates are pixels of the image resolution used, so plots drawn on one ax need the same `img_resolution`, `xlim` and `ylim`. `dge2` is `dge` as it was before 2025-08-28.
+
+### Performance
+- `dge` with `fisher_exact`: about 20x faster, 35 s instead of about 12 minutes for 30,000 cells x 19,000 genes. The results are identical. Each gene's total counts come from one column sum where it gives exactly the same number. Other genes are summed one by one as before.
+
 ## 1.1.0 (2026-10-28)
 
 Bug fixes, speedups and a few new options. Existing scripts keep working with the same results, except for the points under "Changed". Pickles saved by older versions load as before. The tests in `tests/` compare each change with 1.0.6. The default plots checked (`plot.spatial`, `plot.cells`, `plot_MA`, `qc`) are pixel-identical to 1.0.6.
