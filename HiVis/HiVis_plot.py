@@ -182,7 +182,7 @@ class PlotVisium:
             * xlim, ylim - two values each, in microns, example [50,100]
             * scalebar - either the length in microns (or None for 0.2 of xlim length), or False to not show the scalebar, or a dict with arguments for add_scalebar(), such as:
                 
-                {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035}
+                {length=None, text=True, line_width=4, color='white', text_offset=None, bar_offset=0.02}. length is in microns. The default color is white over a fluorescence image, else black
             * pad (float) - scale the size of dots
             * alpha (float) - transparency of scatterplot. value between 0 and 1
             * save (bool) - save the image
@@ -311,6 +311,7 @@ class PlotVisium:
         elif scalebar is None or isinstance(scalebar, (int,float)):
             add_scalebar(ax=ax,microns_per_pixel=adjusted_microns_per_pixel,length=scalebar,color=color)
         elif isinstance(scalebar, dict):
+            scalebar = dict(scalebar) # adding the color to the caller's dict would keep it for the next plots
             if not "color" in scalebar:
                 scalebar["color"] = color
             add_scalebar(ax=ax, microns_per_pixel=adjusted_microns_per_pixel, **scalebar)
@@ -645,7 +646,7 @@ class PlotAgg:
             * xlim, ylim - two values each, in microns. example: xlim=[50,100]
             * scalebar - either the length in microns (or None for 0.2 of xlim length), or False to not show the scalebar, or a dict with arguments for add_scalebar(), such as:
                 
-                {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035}
+                {length=None, text=True, line_width=4, color='white', text_offset=None, bar_offset=0.02}. length is in microns. The default color is white over a fluorescence image, else black
             * save (bool) - save the plot
             * layer (str) - which layer in adata to use
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
@@ -781,7 +782,7 @@ class PlotAgg:
             * xlim, ylim - two values each, in microns [50,100]
             * scalebar - either the length in microns (or None for 0.2 of xlim length), or False to not show the scalebar, or a dict with arguments for add_scalebar(), such as:
                 
-                {length_microns=None, text=True, line_width=4, color='white', text_offset=0.035}
+                {length=None, text=True, line_width=4, color='white', text_offset=None, bar_offset=0.02}. length is in microns. The default color is white over a fluorescence image, else black
             * ax (optional) - matplotlib ax, if not passed, new figure will be created with size=figsize
             * layer (str) - which layer in adata to use.
             * save (bool) - svae the plot
@@ -1768,7 +1769,9 @@ def plot_spatial_3d(agg, what, color=None, cmap="hot", axis_labels=True, ax=None
 
 
 def add_scalebar(ax, microns_per_pixel, length=None, text=True,bar_offset=0.02,
-                 line_width=4, color='white', text_offset=None):
+                 line_width=4, color='white', text_offset=None, length_microns=None):
+    if length_microns is not None: # the name of length in the docs of earlier versions
+        length = length_microns
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
     x0, x1 = sorted(xlim)

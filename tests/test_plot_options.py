@@ -4,6 +4,8 @@ Synthetic tests for the plotting fixes after 1.1.0. Compares the current impleme
     * plot.hist of a string or categorical column raised TypeError under pandas 3 (str dtype)
     * a matplotlib Colormap (e.g. ListedColormap) as cmap of numeric values raised UnboundLocalError. Now it is used
       as it is, and draws the same figure as its name
+    * scalebar: the documented key length_microns didn't exist (now an alias of length), and a dict passed as scalebar
+      got the plot's color added, which then stayed for the next plots that reused it
 
 Run with pytest, or directly: python tests/test_plot_options.py
 """
@@ -214,6 +216,38 @@ def test_D_listed_colormap_and_bad_cmap():
                 error = e
             plt.close("all")
             assert isinstance(error, ValueError), repr(error)
+
+
+# ---------- O31: scalebar ----------
+
+def test_E_scalebar_docs_and_length_microns():
+    for func in [HiVis_plot.PlotVisium.spatial, HiVis_plot.PlotAgg.spatial, HiVis_plot.PlotAgg.cells]:
+        assert "length_microns" not in func.__doc__ and "{length=None, text=True" in func.__doc__
+    params = inspect.signature(HiVis_plot.add_scalebar).parameters
+    assert list(params)[:8] == ["ax", "microns_per_pixel", "length", "text", "bar_offset", "line_width", "color", "text_offset"]
+    viz = make_viz()
+    expected = image(viz.plot.spatial(scalebar=20))
+    assert np.array_equal(image(viz.plot.spatial(scalebar={"length": 20})), expected)
+    assert np.array_equal(image(viz.plot.spatial(scalebar={"length_microns": 20})), expected) # TypeError in 1.1.0
+    assert not np.array_equal(image(viz.plot.spatial(scalebar=50)), expected)
+
+
+def test_F_scalebar_dict_not_modified():
+    white, black = to_rgba("white"), to_rgba("black")
+    viz = make_viz(fluorescence=True)
+    # the default colors, as before
+    assert scalebar_color(viz.plot.spatial()) == white
+    assert scalebar_color(viz.plot.spatial(image=False)) == black
+    assert scalebar_color(make_viz().plot.spatial()) == black
+    plt.close("all")
+    scalebar = {"length": 20}
+    assert scalebar_color(viz.plot.spatial(scalebar=scalebar)) == white
+    assert scalebar == {"length": 20} # 1.1.0 added "color": "white"
+    assert scalebar_color(viz.plot.spatial(image=False, scalebar=scalebar)) == black # white in 1.1.0
+    assert scalebar_color(viz.agg["SC"].plot.cells(image=False, scalebar=scalebar)) == black
+    assert scalebar == {"length": 20}
+    assert scalebar_color(viz.plot.spatial(image=False, scalebar={"color": "red"})) == to_rgba("red")
+    plt.close("all")
 
 
 def teardown_module(module=None):
