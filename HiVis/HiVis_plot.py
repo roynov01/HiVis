@@ -173,7 +173,7 @@ class PlotVisium:
             * what (str) - what to plot. can be metadata (obs/var colnames or a gene)
             * exact (bool) - plot the squares at the exact size. more time costly
             * image (bool) - plot image
-            * img_resolution - "low","high","full". If None, will determine automatically
+            * img_resolution - "low","high","full". If None, will determine automatically. The axes are in pixels of this resolution, not microns: plots drawn on the same ax need the same img_resolution, xlim and ylim
             * ax - matplotlib ax, if not passed, new figure will be created with size=figsize
             * cmap - colormap to use. can be string, or a list of colors
             * layer (str) - which layer in adata to use
@@ -643,7 +643,7 @@ class PlotAgg:
         Parameters:
             * what (str) - what to color the objects with (fill) - can be column from obs or a gene
             * image (bool) - plot the image underneath the objects
-            * img_resolution - which resolution to use for the image - can be "full","high","low"
+            * img_resolution - which resolution to use for the image - can be "full","high","low". The axes are in pixels of this resolution, not microns: plots drawn on the same ax need the same img_resolution, xlim and ylim
             * brightness, contrast - for image modification
             * cmap - can be string (name of pellate), list of colors, or in categorical values case, a dict {"value":"color"}
             * xlim, ylim - two values each, in microns. example: xlim=[50,100]
@@ -779,7 +779,7 @@ class PlotAgg:
         Parameters:
             * what (str) - what to color the objects with (fill) - can be column from obs or a gene
             * image (bool) - plot the image underneath the objects
-            * img_resolution - which resolution to use for the image - can be "full","high","low"
+            * img_resolution - which resolution to use for the image - can be "full","high","low". The axes are in pixels of this resolution, not microns: plots drawn on the same ax need the same img_resolution, xlim and ylim
             * brightness, contrast - for image modification
             * cmap - can be string (name of pellate), list of colors, or in categorical values case, a dict {"value":"color"}
             * xlim, ylim - two values each, in microns [50,100]
