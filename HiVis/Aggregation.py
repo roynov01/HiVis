@@ -64,7 +64,7 @@ class Aggregation:
         self.adata_cropped = None
         self.tree = None
         
-        if geojson_agg_path:
+        if isinstance(geojson_agg_path, gpd.GeoDataFrame) or geojson_agg_path: # a GeoDataFrame has no truth value
             self.import_geometry(geojson_agg_path,object_type="cell")
 
     
@@ -233,15 +233,17 @@ class Aggregation:
         Adds "geometry" column to self.adata.obs, based on Geojson exported from Qupath.
         
         Parameters:
-            * geojson_path (str) - path to geojson file (can also be a geodataframe)
+            * geojson_path (str or Path) - path to geojson file (can also be a geodataframe)
             * object_type (str) - which "objectType" to merge from the geojson
         '''
         print("[Importing geometry]")
 
-        if isinstance(geojson_path,str):
+        if isinstance(geojson_path, (str, os.PathLike)):
             gdf = gpd.read_file(geojson_path)
         elif isinstance(geojson_path,gpd.GeoDataFrame):
             gdf = geojson_path
+        else:
+            raise TypeError(f"geojson_path must be a path or a GeoDataFrame, not {type(geojson_path).__name__}")
         
         object_types = list(gdf["objectType"].unique())
         gdf = gdf[gdf["objectType"] == object_type]

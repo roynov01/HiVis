@@ -848,7 +848,7 @@ class HiVis:
                         Can be a list of column names. numeric columns will be summed, categorical will be the mode. \
                         Can be a dictionary specifying the aggregation function. \
                         examples: {"value_along_axis":np.median} or {"value_along_axis":[np.median,np.mean]}
-            * geojson_path (str) - path to geojson file that was used to create the annotations
+            * geojson_path (str, Path or GeoDataFrame) - path to geojson file that was used to create the annotations
         '''        
         aggregation_func = Aggregation_utils._aggregate_data_annotations
         if isinstance(obs2agg, (list, dict)):
@@ -870,7 +870,7 @@ class HiVis:
         # adata_agg = Aggregation_utils.add_spatial_keys(self, adata_agg, f"{self.name}_{name}")
         self.add_agg(adata_agg, name=name)
         self.agg[name].adata.obs[f"{annotation_col}_col"] = self.agg[name].adata.obs.index
-        if geojson_path:
+        if isinstance(geojson_path, gpd.GeoDataFrame) or geojson_path: # a GeoDataFrame has no truth value
             self.agg[name].import_geometry(geojson_path, object_type="annotation")            
         
     
@@ -887,15 +887,18 @@ class HiVis:
                         examples: {"value_along_axis":np.median} or {"value_along_axis":[np.median,np.mean]}
             * obs2add (list) - which columns from input_df should be copied to the Aggregation.adata.obs
             * nuc_only (bool) - aggregate only spots in nuclei
-            * geojson_path (str) - path to geojson file that was exported from Qupath
+            * geojson_path (str, Path or GeoDataFrame) - path to geojson file that was exported from Qupath
             * object_type (str) - "objectType" of the cells in the geojson. "detection" if the cells were exported as detections
         '''
         geometry = None
-        if geojson_path: # read and check the geojson before the slow aggregation
+        if isinstance(geojson_path, gpd.GeoDataFrame):
+            geometry = geojson_path
+        elif geojson_path: # read and check the geojson before the slow aggregation
             geometry = gpd.read_file(geojson_path)
-            if not (geometry["objectType"] == object_type).any():
-                raise ValueError(f"No entries with object_type={object_type} in {geojson_path}. "
-                                 f"objectType values found: {list(geometry['objectType'].unique())}")
+        if geometry is not None and not (geometry["objectType"] == object_type).any():
+            source = "the GeoDataFrame" if geometry is geojson_path else geojson_path
+            raise ValueError(f"No entries with object_type={object_type} in {source}. "
+                             f"objectType values found: {list(geometry['objectType'].unique())}")
         id_col = f"Cell_ID_{name}"
         input_df.rename(columns={"Object ID":"Cell_ID"}, inplace=True)
         spots_only, cells_only = Aggregation_utils.split_spots_cells(input_df)

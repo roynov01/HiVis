@@ -8,6 +8,7 @@ from HiVis 1.0.6:
     * agg_cells could not import cells exported as QuPath detections, and found out only after the slow aggregation
     * update() didn't reload HiVis_utils, Aggregation_utils and other_utils
     * update_meta no longer uses is_categorical_dtype (deprecated in pandas)
+    * after 1.1.0: agg_cells, agg_from_annotations and import_geometry take the geojson as a pathlib.Path or a GeoDataFrame
 
 Run with pytest, or directly: python tests/test_hivis_agg.py
 """
@@ -19,6 +20,7 @@ import shutil
 import tempfile
 import warnings
 from copy import deepcopy
+from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
@@ -407,6 +409,74 @@ def test_O_update_reloads_utils():
     plt.close("all")
     viz.agg_from_annotations("vessel_id", "vessels")
     assert viz.agg["vessels"].shape[0] == 2
+
+
+# ---------- O22: the geojson as a pathlib.Path or a GeoDataFrame ----------
+
+def annotations_geojson():
+    '''The vessels' outlines (fullres pixels), as exported from QuPath annotations'''
+    path = os.path.join(tempfile.mkdtemp(prefix="hivis_test_"), "vessels.geojson")
+    TMP_DIRS.append(os.path.dirname(path))
+    gpd.GeoDataFrame({"id": ["v1", "v2"], "objectType": "annotation"},
+                     geometry=[box(-5, -5, 95, 95), box(-5, 95, 95, 195)]).to_file(path, driver="GeoJSON")
+    return path
+
+
+def test_P_agg_cells_geojson_path_or_geodataframe():
+    path = qupath_geojson("cell")
+    viz_s = make_viz()
+    viz_s.agg_cells(qupath_csv(), name="cells", obs2agg=["value"], geojson_path=path)
+    assert viz_s.agg["cells"].adata.obs["geometry"].notna().all()
+    for geojson in [Path(path), gpd.read_file(path)]:
+        viz = make_viz()
+        viz.agg_cells(qupath_csv(), name="cells", obs2agg=["value"], geojson_path=geojson) # GeoDataFrame: ValueError in 1.1.0
+        assert_agg_equal(viz_s.agg["cells"], viz.agg["cells"])
+    viz = make_viz()
+    try:
+        viz.agg_cells(qupath_csv(), name="cells", geojson_path=gpd.read_file(qupath_geojson("detection")))
+        message = None
+    except ValueError as e:
+        message = str(e)
+    assert message and "the GeoDataFrame" in message and "detection" in message, message
+    assert "cells" not in viz.agg
+
+
+def test_Q_agg_from_annotations_geojson_path_or_geodataframe():
+    path = annotations_geojson()
+    viz_s = make_viz()
+    viz_s.agg_from_annotations("vessel_id", "vessels", geojson_path=path)
+    assert viz_s.agg["vessels"].adata.obs["geometry"].notna().all()
+    for geojson in [Path(path), gpd.read_file(path)]: # Path: UnboundLocalError, GeoDataFrame: ValueError before
+        viz = make_viz()
+        viz.agg_from_annotations("vessel_id", "vessels", geojson_path=geojson)
+        assert_agg_equal(viz_s.agg["vessels"], viz.agg["vessels"])
+    for falsy in [None, ""]: # no geometry, as before
+        viz = make_viz()
+        viz.agg_from_annotations("vessel_id", "vessels", geojson_path=falsy)
+        assert "geometry" not in viz.agg["vessels"].adata.obs
+
+
+def test_R_import_geometry_path_and_bad_type():
+    path = qupath_geojson("cell")
+    agg_s, agg_p = make_viz().agg["SC"], make_viz().agg["SC"]
+    for agg in (agg_s, agg_p):
+        agg.adata.obs.index = ["cA", "cB", "cC"]
+        agg.adata.obs.index.name = "Cell_ID"
+    agg_s.import_geometry(path)
+    agg_p.import_geometry(Path(path))
+    pd.testing.assert_frame_equal(agg_s.adata.obs, agg_p.adata.obs)
+    try:
+        agg_s.import_geometry(42)
+        error = None
+    except Exception as e:
+        error = e
+    assert isinstance(error, TypeError), repr(error) # was UnboundLocalError
+    # the constructor also takes a GeoDataFrame (ValueError before: a DataFrame has no truth value)
+    viz = make_viz()
+    adata = viz.agg["SC"].adata.copy()
+    adata.obs.index = pd.Index(["cA", "cB", "cC"], name="Cell_ID")
+    agg = Aggregation(viz, adata, "cells", geojson_agg_path=gpd.read_file(path))
+    pd.testing.assert_series_equal(agg.adata.obs["geometry"], agg_s.adata.obs["geometry"])
 
 
 def teardown_module(module=None):
