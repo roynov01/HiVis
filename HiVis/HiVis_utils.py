@@ -203,10 +203,42 @@ def _find_visium_image(path_input_data, res):
     raise FileNotFoundError(f"Could not find {filename}. Searched:\n\t{searched}")
 
 
+def _gene_totals(raw):
+    '''
+    Total counts of each gene (column) of a sparse matrix, the values raw[:, j].sum() gives one gene at a time
+    (slicing a column of a CSR matrix scans the whole matrix, so doing it for every gene is slow).
+    Integer values sum to the exact total in any order, as long as the sum of their absolute values fits the
+    float's integer precision (2^24 for float32), so the totals are given only for those genes.
+    
+    **Returns** (totals, exact) - the totals, of the type raw[:, j].sum() returns, and a bool array of the genes
+    whose total is exact. The others must be summed with raw[:, j].sum()
+    '''
+    n_genes = raw.shape[1]
+    exact = np.zeros(n_genes, dtype=bool)
+    if n_genes == 0:
+        return np.zeros(0), exact
+    sum_type = type(raw[:, 0].sum())
+    if not issubclass(sum_type, (np.integer, np.floating)):
+        return np.zeros(n_genes), exact
+    values = raw.data
+    for start in range(0, values.size, 2**24): # in chunks, not to copy all the values at once
+        if not np.all(np.mod(values[start:start + 2**24], 1) == 0): # fractions, NaN or inf
+            return np.zeros(n_genes, dtype=sum_type), exact
+    totals = np.asarray(raw.sum(axis=0, dtype=np.float64)).ravel()
+    abs_totals = totals if values.size == 0 or values.min() >= 0 else np.asarray(abs(raw).sum(axis=0, dtype=np.float64)).ravel()
+    limit = 2.0 ** 53 # integers in float64, as summed here
+    if issubclass(sum_type, np.floating):
+        limit = min(limit, 2.0 ** (np.finfo(sum_type).nmant + 1))
+    exact = abs_totals <= limit
+    return totals.astype(sum_type), exact
+
 def dge2(adata, column, group1, group2=None, umi_thresh=0, layer=None,
         method="fisher_exact", alternative="two-sided", inplace=False):
     '''
     Runs differential gene expression analysis between two groups.
+    This is dge() as it was before 2025-08-28 (commit 05a01e1, "fixed dge()"), when it was renamed dge2.
+    Unlike dge(), its expression_mean is a single number (the mean over all the genes of both groups),
+    which is also the pseudocount of log2fc, so its log2fc values are closer to 0.
     Values will be saved in self.var: expression_mean, log2fc, pval
     parameters:
         * column - which column in obs has the groups classification
@@ -272,6 +304,12 @@ def dge2(adata, column, group1, group2=None, umi_thresh=0, layer=None,
         # The AnnData copies aren't used anymore, freeing them offsets the CSC copies
         group1_norm, group2_norm = group1_norm.tocsc(), group2_norm.tocsc()
         del group1_adata, group2_adata
+    totals1 = totals2 = None
+    exact1 = exact2 = np.zeros(df.shape[0], dtype=bool)
+    if method == "fisher_exact" and sp.issparse(group1_adata_raw) and sp.issparse(group2_adata_raw):
+        # Summing each gene from CSR is slow: take the totals of all genes at once, where they're identical
+        totals1, exact1 = _gene_totals(group1_adata_raw)
+        totals2, exact2 = _gene_totals(group2_adata_raw)
 
     # pre-alloc result columns
     df[group2], df[group1] = np.nan, np.nan
@@ -307,8 +345,8 @@ def dge2(adata, column, group1, group2=None, umi_thresh=0, layer=None,
 
         # Calculate Pval
         if method == "fisher_exact":
-            g1_counts = group1_adata_raw[:, j].sum()
-            g2_counts = group2_adata_raw[:, j].sum()
+            g1_counts = totals1[j] if exact1[j] else group1_adata_raw[:, j].sum()
+            g2_counts = totals2[j] if exact2[j] else group2_adata_raw[:, j].sum()
 
             table = [
                 [g1_counts,                 g2_counts],
@@ -404,6 +442,12 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
         # The AnnData copies aren't used anymore, freeing them offsets the CSC copies
         group1_norm, group2_norm = group1_norm.tocsc(), group2_norm.tocsc()
         del group1_adata, group2_adata
+    totals1 = totals2 = None
+    exact1 = exact2 = np.zeros(df.shape[0], dtype=bool)
+    if method == "fisher_exact" and sp.issparse(group1_adata_raw) and sp.issparse(group2_adata_raw):
+        # Summing each gene from CSR is slow: take the totals of all genes at once, where they're identical
+        totals1, exact1 = _gene_totals(group1_adata_raw)
+        totals2, exact2 = _gene_totals(group2_adata_raw)
 
     # pre-alloc result columns
     df[group2], df[group1] = np.nan, np.nan
@@ -441,8 +485,8 @@ def dge(adata, column, group1, group2=None, umi_thresh=0, layer=None,
 
         # Calculate Pval
         if method == "fisher_exact":
-            g1_counts = group1_adata_raw[:, j].sum()
-            g2_counts = group2_adata_raw[:, j].sum()
+            g1_counts = totals1[j] if exact1[j] else group1_adata_raw[:, j].sum()
+            g2_counts = totals2[j] if exact2[j] else group2_adata_raw[:, j].sum()
 
             table = [
                 [g1_counts,                 g2_counts],

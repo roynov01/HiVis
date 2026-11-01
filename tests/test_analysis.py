@@ -6,6 +6,8 @@ Synthetic tests for the 1.1.0 analysis fixes. Compares the current implementatio
     * docstrings with "\\_" and "\\**" no longer raise SyntaxWarning, and their text is unchanged
     * matnorm(DataFrame, axis="row") failed under pandas 3 (read-only array)
     * dge with wilcox / t_test slices the genes from CSC copies instead of CSR (same p-values, faster)
+    * after 1.1.0: dge with fisher_exact takes the genes' totals from column sums where they are exact, instead of
+      summing each gene from CSR (same p-values, much faster)
     * after 1.1.0: other_utils.inspect_df lost the grouping column under pandas 3
 
 Run with pytest, or directly: python tests/test_analysis.py
@@ -492,6 +494,72 @@ def test_K_dge_wilcox_keeps_input_and_matches_orig():
             assert all((adata.layers[k] != v).nnz == 0 for k, v in layers.items())
             pd.testing.assert_frame_equal(adata.obs, obs)
             pd.testing.assert_frame_equal(adata.var, var)
+
+
+# ---------- O21: dge with fisher_exact takes the genes' totals from column sums ----------
+
+def make_big_adata(seed=0):
+    '''Counts with a gene whose totals pass 2^24, where float32 sums depend on the order'''
+    rng = np.random.default_rng(seed)
+    n, n_genes = 900, 40
+    X = rng.poisson(rng.uniform(0.05, 3, n_genes), (n, n_genes)).astype(np.float32)
+    X[:, 2] = 0
+    X[:, 10] = rng.integers(50000, 90000, n) # ~2.1e7 per group of 300, ~4.2e7 in the other 600
+    X[:150, 11] = rng.integers(100000, 110000, 150) # ~1.6e7 < 2^24 in group A
+    X[:, 12] = 1
+    X[0, 12] = 2**24 # float32 sums lose some of the ones after it
+    obs = pd.DataFrame({"group": np.repeat(["A", "B", "C"], n // 3)}, index=[f"bin{i}" for i in range(n)])
+    adata = ad.AnnData(X=sparse.csr_matrix(X), obs=obs, var=pd.DataFrame(index=[f"g{i}" for i in range(n_genes)]))
+    adata.layers["int"] = sparse.csr_matrix(X.astype(np.int64))
+    adata.layers["float64"] = sparse.csr_matrix(X.astype(np.float64))
+    adata.layers["norm"] = sparse.csr_matrix(matnorm(X, axis="row")) # not integers: every gene summed as before
+    adata.layers["centered"] = sparse.csr_matrix(X - 1) # negative values
+    return adata
+
+
+def test_L_gene_totals_same_as_per_gene_sums():
+    adata = make_big_adata()
+    X = adata.X
+    totals, exact = HiVis_utils._gene_totals(X)
+    assert not exact[10] and exact[11] and not exact[12] and exact.sum() == X.shape[1] - 2
+    for j in range(X.shape[1]):
+        if exact[j]:
+            old = X[:, j].sum()
+            assert type(totals[j]) is type(old) and totals[j] == old, j
+    # the gene above 2^24: the exact total differs from the float32 sum, so it must be summed as before
+    assert X[:, 12].sum() != np.float32(X[:, 12].sum(dtype=np.float64)) == np.float32(2**24 + X.shape[0] - 1)
+    for layer, n_exact in [("int", 40), ("float64", 40), ("norm", 0), ("centered", 39)]:
+        totals, exact = HiVis_utils._gene_totals(adata.layers[layer])
+        assert exact.sum() == n_exact, (layer, exact.sum())
+        for j in np.flatnonzero(exact):
+            old = adata.layers[layer][:, j].sum()
+            assert type(totals[j]) is type(old) and totals[j] == old, (layer, j)
+    # all the genes of the usual counts come from the column sums
+    assert HiVis_utils._gene_totals(make_adata().X)[1].all()
+
+
+def test_M_dge_fisher_same_as_orig_with_large_totals():
+    for layer in [None, "int", "float64", "norm"]:
+        for group2, umi_thresh in [(None, 0), ("B", 0), (None, 40)]:
+            if umi_thresh and layer == "norm":
+                continue
+            for alternative in ["two-sided", "greater"]:
+                args = dict(column="group", group1="A", group2=group2, umi_thresh=umi_thresh, layer=layer,
+                            method="fisher_exact", alternative=alternative)
+                o = orig_dge(make_big_adata(), **args)
+                n = HiVis_utils.dge(make_big_adata(), **args)
+                pd.testing.assert_frame_equal(n, o, check_exact=True, obj=str(args))
+    for dge in [orig_dge, HiVis_utils.dge]: # negative counts: fisher_exact raises, as before
+        try:
+            dge(make_big_adata(), "group", "A", layer="centered")
+            raised = False
+        except ValueError:
+            raised = True
+        assert raised
+    for layer in [None, "int"]:
+        o = orig_dge2(make_big_adata(), "group", "A", layer=layer)
+        n = HiVis_utils.dge2(make_big_adata(), "group", "A", layer=layer)
+        pd.testing.assert_frame_equal(n, o, check_exact=True)
 
 
 # ---------- pandas 3: other_utils.inspect_df ----------
