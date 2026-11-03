@@ -18,6 +18,7 @@ Fixes and a few new options after 1.1.0. Existing scripts keep working with the 
 
 ### Fixed
 - pandas 3: `plot.hist` of a string or categorical column raised `TypeError`, and `other_utils.inspect_df` left out the grouping column.
+- Subsetting an Aggregation by cell labels or gene names (`agg[labels, :]`, `agg[:, genes]`), or by masks on both axes, failed with anndata 0.13, and with older anndata when the aggregation had layers. Subsets that worked are unchanged, except with anndata 0.13 and positions on both axes (e.g. `agg[[0], [1, 2]]`): X came out dense, so `sub["gene"]` failed, and now stays sparse as with older anndata.
 - Docstrings: the `scalebar` keys of `plot.spatial` and `plot.cells` (`length`, not `length_microns`; `text_offset` defaults to `None`). Plot coordinates are pixels of the image resolution used, so plots drawn on one ax need the same `img_resolution`, `xlim` and `ylim`. `dge2` is `dge` as it was before 2025-08-28.
 
 ### Performance

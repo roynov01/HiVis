@@ -9,6 +9,7 @@ from HiVis 1.0.6:
     * update() didn't reload HiVis_utils, Aggregation_utils and other_utils
     * update_meta no longer uses is_categorical_dtype (deprecated in pandas)
     * after 1.1.0: agg_cells, agg_from_annotations and import_geometry take the geojson as a pathlib.Path or a GeoDataFrame
+    * after 1.1.0: Aggregation.subset by cell labels or gene names failed with a layer, and with anndata 0.13 always
 
 Run with pytest, or directly: python tests/test_hivis_agg.py
 """
@@ -477,6 +478,95 @@ def test_R_import_geometry_path_and_bad_type():
     adata.obs.index = pd.Index(["cA", "cB", "cC"], name="Cell_ID")
     agg = Aggregation(viz, adata, "cells", geojson_agg_path=gpd.read_file(path))
     pd.testing.assert_series_equal(agg.adata.obs["geometry"], agg_s.adata.obs["geometry"])
+
+
+# ---------- O42: Aggregation.subset by labels ----------
+
+def orig_subset(self, what=(slice(None), slice(None))):
+    '''Aggregation.subset from HiVis 1.1.0 (the same since 1.0.5)'''
+    what = tuple(idx.to_numpy() if hasattr(idx, "to_numpy") else idx for idx in what)
+    adata = self.adata[what].copy()
+    adata.var = adata.var.loc[:,~adata.var.columns.str.startswith(("cor_","exp_"))]
+    adata.var = adata.var.drop(columns=[col for col in["residual","cv","expression_mean","cv_log10","mean_log"] if col in adata.var.columns])
+
+    for layer in self.adata.layers.keys():
+        adata.layers[layer] = self.adata.layers[layer][what].copy()
+    return Aggregation(self.viz, adata, name=self.name)
+
+
+def assert_matrix_identical(a, b):
+    assert type(a) is type(b) and a.dtype == b.dtype and a.shape == b.shape, (type(a), type(b), a.dtype, b.dtype, a.shape, b.shape)
+    if sparse.issparse(a):
+        a, b = a.toarray(), b.toarray()
+    assert np.array_equal(a, b)
+
+
+def assert_subset_identical(a, b):
+    assert_agg_equal(a, b)
+    assert_matrix_identical(a.adata.X, b.adata.X)
+    keys = [k for k in a.adata.layers.keys() if k is not None] # anndata 0.13 lists X as the layer None
+    assert keys == [k for k in b.adata.layers.keys() if k is not None]
+    for k in keys:
+        assert_matrix_identical(a.adata.layers[k], b.adata.layers[k])
+
+
+def by_positions(agg, rows, cols):
+    '''The subset with the old code, by positions, one axis at a time'''
+    if rows is not None:
+        agg = orig_subset(agg, (np.array(rows), slice(None)))
+    if cols is not None:
+        agg = orig_subset(agg, (slice(None), np.array(cols)))
+    return agg
+
+
+def test_S_subset_same_as_orig_and_by_labels():
+    obs_mask, var_mask = np.array([True, False, True]), np.array([True, True, False])
+    pairs = (np.array([1]), np.array([0, 2])) # positions on both axes, which scipy takes as (row, col) pairs
+    cases = [ # (what, the same subset by positions (rows, cols))
+        ((obs_mask, slice(None)), ([0, 2], None)),
+        ((pd.Series(obs_mask), slice(None)), ([0, 2], None)),
+        ((slice(None), var_mask), (None, [0, 1])),
+        ((obs_mask, var_mask), ([0, 2], [0, 1])),
+        ((np.array([2, 0]), slice(None)), ([2, 0], None)),
+        (([0, 2], slice(None)), ([0, 2], None)),
+        ((np.array([-1]), slice(None)), ([2], None)),
+        ((1, slice(None)), ([1], None)),
+        ((slice(0, 2), slice(1, 3)), ([0, 1], [1, 2])),
+        (pairs, ([1], [0, 2])),
+    ]
+    label_cases = [ # failed in 1.1.0 with a layer, and with anndata 0.13 also without (it lists X as the layer None)
+        ((np.array(["a1", "a3"]), slice(None)), ([0, 2], None)),
+        ((["a3", "a1"], slice(None)), ([2, 0], None)),
+        ((pd.Index(["a2"]), slice(None)), ([1], None)),
+        ((pd.Index(["a2", "a3"], name="agg_id"), slice(None)), ([1, 2], None)),
+        ((slice(None), ["g2", "g0"]), (None, [2, 0])),
+        ((slice(None), "g1"), (None, [1])),
+        ((["a1", "a2"], ["g0", "g1"]), ([0, 1], [0, 1])),
+    ]
+    for with_layers in (False, True):
+        agg = make_viz().agg["SC"]
+        if with_layers:
+            X = agg.adata.X
+            agg.adata.layers["log"] = X.log1p()
+            agg.adata.layers["counts"] = X.astype(np.int64)
+            agg.adata.layers["dense"] = X.toarray().astype(np.float64) * 0.5
+        for i, (what, (rows, cols)) in enumerate(cases + label_cases):
+            is_label = i >= len(cases)
+            sub = agg[what]
+            assert_subset_identical(sub, by_positions(agg, rows, cols))
+            try:
+                old = orig_subset(agg, what)
+            except Exception:
+                assert is_label or i >= 3, what # masks always worked
+                continue
+            if what is pairs and not sparse.issparse(old.adata.X):
+                # anndata 0.13 without layers: the old code replaced X with scipy's indexing by pairs, which is dense
+                # (sub["g0"] then failed). The values are the same, and X stays sparse as with anndata <= 0.12
+                assert np.array_equal(np.asarray(old.adata.X), sub.adata.X.toarray())
+                old.adata.X = sparse.csr_matrix(old.adata.X)
+            assert_subset_identical(sub, old) # where the old code worked, the same result
+            assert not (with_layers and is_label), what # labels failed with layers
+    assert agg.adata.layers["dense"].shape == (3, 3) # the parent is unchanged
 
 
 def teardown_module(module=None):
