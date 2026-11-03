@@ -2,7 +2,7 @@
 
 Changes to HiVis since 1.0.0, newest first. Version numbers are the ones in `setup.py`, `pyproject.toml` and `HiVis.__version__`.
 
-## Unreleased
+## 1.1.1 (2026-11-03)
 
 Fixes and a few new options after 1.1.0. Existing scripts keep working with the same results, except for the points under "Changed". The tests in `tests/` compare each change with 1.1.0.
 

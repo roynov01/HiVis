@@ -68,6 +68,8 @@ For QuPath, please refer to the [tutorial](https://github.com/roynov01/HiVis/tre
 
 Function docstrings are available on [ReadTheDocs](https://hivis.readthedocs.io/latest/).
 
+The changes in each version are listed in the [changelog](https://github.com/roynov01/HiVis/blob/main/CHANGELOG.md).
+
 Code used for data analysis in the paper is available at [the repo](https://github.com/roynov01/HiVis_paper).
 
 ## Contact
